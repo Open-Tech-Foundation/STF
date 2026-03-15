@@ -17,7 +17,10 @@ type DTXTValue interface{}
 type Parser struct {
 	input []byte
 	pos   int
+	depth int
 }
+
+const maxDepth = 32
 
 // NewParser creates a new DTXT parser
 func NewParser(input string) *Parser {
@@ -115,6 +118,12 @@ func (p *Parser) parseValue() (DTXTValue, error) {
 
 func (p *Parser) parseObject() (map[string]DTXTValue, error) {
 	p.advance() // skip '{'
+	p.depth++
+	if p.depth > maxDepth {
+		return nil, fmt.Errorf("ERR_NESTING_DEPTH: exceeded %d levels", maxDepth)
+	}
+	defer func() { p.depth-- }()
+
 	obj := make(map[string]DTXTValue)
 
 	p.skipWhitespace()
@@ -153,6 +162,12 @@ func (p *Parser) parseObject() (map[string]DTXTValue, error) {
 
 func (p *Parser) parseArray() ([]DTXTValue, error) {
 	p.advance() // skip '['
+	p.depth++
+	if p.depth > maxDepth {
+		return nil, fmt.Errorf("ERR_NESTING_DEPTH: exceeded %d levels", maxDepth)
+	}
+	defer func() { p.depth-- }()
+
 	arr := make([]DTXTValue, 0)
 
 	p.skipWhitespace()

@@ -20,6 +20,7 @@ pub enum DTXTError {
     UnknownConstructor(String),
     InvalidConstructorPayload(String),
     NestedConstructor,
+    NestingDepth,
     TrailingData(usize),
 }
 
@@ -38,6 +39,7 @@ impl fmt::Display for DTXTError {
             DTXTError::UnknownConstructor(s) => write!(f, "ERR_UNKNOWN_CONSTRUCTOR: {}", s),
             DTXTError::InvalidConstructorPayload(s) => write!(f, "ERR_INVALID_CONSTRUCTOR_PAYLOAD: {}", s),
             DTXTError::NestedConstructor => write!(f, "ERR_NESTED_CONSTRUCTOR"),
+            DTXTError::NestingDepth => write!(f, "ERR_NESTING_DEPTH"),
             DTXTError::TrailingData(pos) => write!(f, "ERR_SYNTAX (trailing data) at {}", pos),
         }
     }
@@ -61,13 +63,17 @@ pub enum DTXTValue<'a> {
 pub struct DTXTParser<'a> {
     input: &'a [u8],
     pos: usize,
+    depth: usize,
 }
+
+const MAX_DEPTH: usize = 32;
 
 impl<'a> DTXTParser<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
             input: input.as_bytes(),
             pos: 0,
+            depth: 0,
         }
     }
 
@@ -144,6 +150,11 @@ impl<'a> DTXTParser<'a> {
 
     fn parse_object(&mut self) -> Result<FxHashMap<&'a str, DTXTValue<'a>>, DTXTError> {
         self.advance(); // skip '{'
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            return Err(DTXTError::NestingDepth);
+        }
+        
         let mut map = FxHashMap::default();
 
         self.skip_whitespace();
@@ -169,11 +180,17 @@ impl<'a> DTXTParser<'a> {
         }
 
         self.advance(); // skip '}'
+        self.depth -= 1;
         Ok(map)
     }
 
     fn parse_array(&mut self) -> Result<Vec<DTXTValue<'a>>, DTXTError> {
         self.advance(); // skip '['
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            return Err(DTXTError::NestingDepth);
+        }
+        
         let mut arr = Vec::new();
 
         self.skip_whitespace();
@@ -188,6 +205,7 @@ impl<'a> DTXTParser<'a> {
         }
 
         self.advance(); // skip ']'
+        self.depth -= 1;
         Ok(arr)
     }
 
@@ -416,11 +434,17 @@ struct PyDTXTParser<'py, 'a> {
     py: Python<'py>,
     input: &'a [u8],
     pos: usize,
+    depth: usize,
 }
 
 impl<'py, 'a> PyDTXTParser<'py, 'a> {
     fn new(py: Python<'py>, input: &'a str) -> Self {
-        Self { py, input: input.as_bytes(), pos: 0 }
+        Self {
+            py,
+            input: input.as_bytes(),
+            pos: 0,
+            depth: 0,
+        }
     }
 
     #[inline(always)]
@@ -521,6 +545,10 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
 
     fn parse_object(&mut self) -> PyResult<Bound<'py, PyDict>> {
         self.advance(); // {
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("ERR_NESTING_DEPTH"));
+        }
         let dict = PyDict::new(self.py);
         self.skip_whitespace();
         while self.current() != Some(b'}') {
@@ -533,11 +561,16 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
             if self.current() == Some(b',') { self.advance(); self.skip_whitespace(); }
         }
         self.advance(); // }
+        self.depth -= 1;
         Ok(dict)
     }
 
     fn parse_array(&mut self) -> PyResult<Bound<'py, PyList>> {
         self.advance(); // [
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("ERR_NESTING_DEPTH"));
+        }
         let list = PyList::empty(self.py);
         self.skip_whitespace();
         while self.current() != Some(b']') {
@@ -546,6 +579,7 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
             if self.current() == Some(b',') { self.advance(); self.skip_whitespace(); }
         }
         self.advance(); // ]
+        self.depth -= 1;
         Ok(list)
     }
 

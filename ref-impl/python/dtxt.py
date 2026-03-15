@@ -42,9 +42,12 @@ class DTXTLexer:
         self.tokens.append(('EOF', None))
 
 class DTXTParser:
+    MAX_DEPTH = 32
+    
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
+        self.depth = 0
 
     def peek(self):
         return self.tokens[self.pos]
@@ -94,6 +97,10 @@ class DTXTParser:
 
     def parse_object(self):
         self.consume('BRACE_OPEN')
+        self.depth += 1
+        if self.depth > self.MAX_DEPTH:
+            raise DTXTError("ERR_NESTING_DEPTH: exceeded 32 levels")
+            
         obj = {}
         while self.peek()[0] != 'BRACE_CLOSE':
             # Keys are identifiers (KEY)
@@ -116,10 +123,15 @@ class DTXTParser:
                 raise DTXTError(f"Expected ',' or '}}' in object, got {self.peek()[0]}")
         
         self.consume('BRACE_CLOSE')
+        self.depth -= 1
         return obj
 
     def parse_array(self):
         self.consume('BRACKET_OPEN')
+        self.depth += 1
+        if self.depth > self.MAX_DEPTH:
+            raise DTXTError("ERR_NESTING_DEPTH: exceeded 32 levels")
+            
         arr = []
         while self.peek()[0] != 'BRACKET_CLOSE':
             value = self.parse_value()
@@ -131,6 +143,7 @@ class DTXTParser:
                 raise DTXTError(f"Expected ',' or ']' in array, got {self.peek()[0]}")
                 
         self.consume('BRACKET_CLOSE')
+        self.depth -= 1
         return arr
 
     def parse_constructor(self, full_value):

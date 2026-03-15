@@ -47,9 +47,9 @@ DTXT is designed specifically for **SIMD-accelerated parsing**.
 
 | Metric (30k entries) | **DTXT** | Sonic (JSON) | Standard JSON |
 | :--- | :--- | :--- | :--- |
-| **Payload Size** | **5.13 MB** | 6.28 MB | 6.28 MB |
-| **Parsing Time** | 60.60 ms | **45.20 ms** | 88.80 ms |
-| **Serialization** | 41.40 ms | **37.00 ms** | 97.00 ms |
+| **Payload Size** | **5.16 MB** | 6.31 MB | 6.31 MB |
+| **Parsing Time** | 67.60 ms | **47.20 ms** | 90.60 ms |
+| **Serialization** | 49.20 ms | **39.40 ms** | 103.80 ms |
 
 **Analysis**:
 - **Efficiency by Design**: DTXT is **18% smaller** than Sonic-produced JSON without any compression.

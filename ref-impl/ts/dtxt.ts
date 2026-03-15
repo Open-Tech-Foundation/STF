@@ -138,6 +138,8 @@ export class DTXTLexer {
 export class DTXTParser {
     private tokens: Token[];
     private pos: number = 0;
+    private depth: number = 0;
+    private readonly MAX_DEPTH = 32;
 
     constructor(tokens: Token[]) {
         this.tokens = tokens;
@@ -185,7 +187,12 @@ export class DTXTParser {
     }
 
     private parseObject(): { [key: string]: DTXTValue } {
-        this.pos++; // consume '{'
+        this.pos++; // skip {
+        this.depth++;
+        if (this.depth > this.MAX_DEPTH) {
+            throw new DTXTError("ERR_NESTING_DEPTH: exceeded 32 levels");
+        }
+
         const obj: { [key: string]: DTXTValue } = {};
 
         while (this.tokens[this.pos].kind !== 'BRACE_CLOSE') {
@@ -206,13 +213,17 @@ export class DTXTParser {
                 throw new DTXTError(`Expected ',' or '}', got ${this.tokens[this.pos].kind} after value for key '${key}'`);
             }
         }
-
-        this.pos++; // consume '}'
+        this.pos++; // skip }
+        this.depth--;
         return obj;
     }
 
     private parseArray(): DTXTValue[] {
-        this.pos++; // consume '['
+        this.pos++; // skip [
+        this.depth++;
+        if (this.depth > this.MAX_DEPTH) {
+            throw new DTXTError("ERR_NESTING_DEPTH: exceeded 32 levels");
+        }
         const arr: DTXTValue[] = [];
 
         while (this.tokens[this.pos].kind !== 'BRACKET_CLOSE') {
