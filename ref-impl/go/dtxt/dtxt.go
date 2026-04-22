@@ -47,15 +47,11 @@ func (p *Parser) skipWhitespace() {
 		switch ch {
 		case ' ', '\t', '\r', '\n':
 			p.advance()
-		case '/':
-			if p.pos+1 < len(p.input) && p.input[p.pos+1] == '/' {
-				// Skip comment
-				p.pos += 2
-				for p.pos < len(p.input) && p.current() != '\n' {
-					p.advance()
-				}
-			} else {
-				return
+		case '#':
+			// Skip comment
+			p.pos += 1
+			for p.pos < len(p.input) && p.current() != '\n' {
+				p.advance()
 			}
 		default:
 			return

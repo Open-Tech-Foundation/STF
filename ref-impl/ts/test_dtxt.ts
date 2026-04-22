@@ -3,7 +3,7 @@ import * as assert from 'assert';
 
 function testSpecExample() {
     const specExample = `
-// DTXT example
+# DTXT example
 {
   name: \`Sample\`,
   created: D(2026-01-15),

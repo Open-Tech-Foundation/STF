@@ -8,7 +8,7 @@ import binascii
 
 def test_spec_example():
     spec_example = """
-// DTXT example
+# DTXT example
 {
   name: `Sample`,
   created: D(2026-01-15),
@@ -48,7 +48,7 @@ def test_spec_example():
     print("Round trip successful")
 
 def test_comments_and_whitespace():
-    dtxt_text = "{ // comment\n  a: 1, \n /* not supported */ \n b: 2 }"
+    dtxt_text = "{ # comment\n  a: 1, \n /* not supported */ \n b: 2 }"
     # The lexer should fail on /* if not supported, but the spec only mentions //
     # My lexer will treat /* as mismatch if it's not handled.
     try:

@@ -8,7 +8,7 @@ class DTXTError(Exception):
 
 class DTXTLexer:
     TOKEN_SPEC = [
-        ('COMMENT',   r'//.*'),
+        ('COMMENT',   r'#.*'),
         ('STRING',    r'`[^`]*`'),
         ('CONSTRUCTOR', r'[A-Za-z0-9_]+\([^() \t\n\r]*\)'),
         ('BRACE_OPEN', r'\{'),

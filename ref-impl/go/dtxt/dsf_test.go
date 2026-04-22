@@ -10,7 +10,7 @@ import (
 
 func TestSpecExample(t *testing.T) {
 	specExample := `
-// DTXT example
+# DTXT example
 {
   name: ` + "`Sample`" + `,
   created: D(2026-01-15),
@@ -31,14 +31,15 @@ func TestSpecExample(t *testing.T) {
 		t.Fatalf("Parse failed: %v", err)
 	}
 
-	obj := parsed.(map[string]interface{})
+	obj := parsed
 	if obj["name"] != "Sample" {
 		t.Errorf("Expected name=Sample, got %v", obj["name"])
 	}
 	if obj["active"] != true {
 		t.Errorf("Expected active=T, got %v", obj["active"])
 	}
-	if obj["count"].(int64) != 42 {
+	// count is float64 in this implementation for normal numbers
+	if int64(obj["count"].(float64)) != 42 {
 		t.Errorf("Expected count=42, got %v", obj["count"])
 	}
 

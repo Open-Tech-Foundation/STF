@@ -42,7 +42,7 @@ export type DTXTValue =
 
 // Optimized lexer with single-pass tokenization
 export class DTXTLexer {
-    private readonly regex = /\/\/.*|`[^`]*`|[A-Za-z0-9_]+\([^() \t\n\r]*\)|[{}[\]:,]|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_])|\bT\b|\bF\b|\bN\b|[A-Za-z0-9_]+|[ \t\r\n]+|./g;
+    private readonly regex = /#.*|`[^`]*`|[A-Za-z0-9_]+\([^() \t\n\r]*\)|[{}[\]:,]|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_])|\bT\b|\bF\b|\bN\b|[A-Za-z0-9_]+|[ \t\r\n]+|./g;
 
     tokens: Token[] = [];
 
@@ -61,7 +61,7 @@ export class DTXTLexer {
 
             // Skip whitespace and comments
             if (ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') continue;
-            if (ch === '/' && value[1] === '/') continue;
+            if (ch === '#') continue;
 
             let kind: TokenKind;
 

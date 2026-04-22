@@ -12,7 +12,7 @@ Migrating from JSON to DTXT is straightforward but requires attention to literal
 | **Null** | `null` | `N` |
 | **Keys** | `"key"` (quoted) | `key` (unquoted) |
 | **Strings** | `"string"` | `` `string` `` |
-| **Comments** | N/A | `// comment` |
+| **Comments** | N/A | `# comment` |
 | **Commas** | No trailing | Trailing allowed |
 
 ## Step-by-Step Migration

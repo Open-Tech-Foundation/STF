@@ -226,7 +226,7 @@
   },
   {
     "name": "Comments: Single Line",
-    "input": "// comment\n{ a: 1 } // trailing",
+    "input": "# comment\n{ a: 1 } # trailing",
     "expected": {
       "a": 1
     }

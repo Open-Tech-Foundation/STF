@@ -96,8 +96,8 @@ impl<'a> DTXTParser<'a> {
         while i < len {
             match bytes[i] {
                 b' ' | b'\t' | b'\r' | b'\n' => i += 1,
-                b'/' if i + 1 < len && bytes[i + 1] == b'/' => {
-                    i += 2;
+                b'#' => {
+                    i += 1;
                     if let Some(next_nl) = memchr(b'\n', &bytes[i..]) {
                         i += next_nl + 1;
                     } else {
@@ -465,8 +465,8 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
         while i < len {
             match bytes[i] {
                 b' ' | b'\t' | b'\r' | b'\n' => i += 1,
-                b'/' if i + 1 < len && bytes[i + 1] == b'/' => {
-                    i += 2;
+                b'#' => {
+                    i += 1;
                     if let Some(next_nl) = memchr(b'\n', &bytes[i..]) {
                         i += next_nl + 1;
                     } else {
@@ -644,7 +644,7 @@ fn dumps(obj: PyObject) -> PyResult<String> {
     // But since the goal is speed and we already have a reference python dumps, 
     // we could keep Python dumps as is and only use Rust for loads.
     // However, to be complete:
-    Ok(format!("// Serialized from Rust\n{:?}", obj)) // Placeholder
+    Ok(format!("# Serialized from Rust\n{:?}", obj)) // Placeholder
 }
 
 #[pymodule]

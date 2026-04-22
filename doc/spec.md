@@ -65,11 +65,11 @@ Canonical output **SHOULD** normalize line endings to `\n`.
 ## 4. Comments
 
 * DTXT supports **single-line comments** only.
-* A comment begins with `//` and continues until the end of the line.
+* A comment begins with `#` and continues until the end of the line.
 
 ```dtxt
-// This is a comment
-key: 123, // trailing comment
+# This is a comment
+key: 123, # trailing comment
 ```
 
 ---
@@ -122,8 +122,8 @@ A DTXT document **MUST** consist of a single object enclosed in `{}`.
 
 ```dtxt
 {
-  user.name: 1,   // ❌ invalid
-  "user": 2,      // ❌ invalid
+  user.name: 1,   # ❌ invalid
+  "user": 2,      # ❌ invalid
 }
 ```
 
@@ -423,7 +423,7 @@ Implementations MAY provide configuration to increase these limits for specific 
 ## 20. Example
 
 ```dtxt
-// DTXT example
+# DTXT example
 {
   name: `Sample`,
   created: D(2026-01-15),
@@ -476,7 +476,7 @@ id_char       = letter | digit | "_" ;
 
 ws            = { whitespace | comment } ;
 whitespace    = " " | "\t" | "\n" | "\r" ;
-comment       = "//" { char_not_newline } "\n" ;
+comment       = "#" { char_not_newline } "\n" ;
 
 (* Character classes *)
 letter            = "A" | ... | "Z" | "a" | ... | "z" ;

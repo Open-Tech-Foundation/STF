@@ -21,7 +21,7 @@ A project of the [Open Tech Foundation](https://github.com/Open-Tech-Foundation)
 - **Backtick Strings**: No more escaping double quotes.
 - **Explicit Literals**: `T`, `F`, `N` for True, False, and Null.
 - **Constructor Literals**: Native support for Dates `D()`, BigNumbers `BN()`, and Binary `B()`.
-- **Single-line Comments**: Use `//` for notes and documentation.
+- **Single-line Comments**: Use `#` for notes and documentation.
 - **Fast Parsing**: Designed for direct byte-level processing.
 
 ## Documentation
