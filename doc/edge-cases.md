@@ -22,6 +22,12 @@ Keys are case-sensitive.
 { Key: 1, key: 2 } # VALID (distinct keys)
 ```
 
+### 1.4 Hyphens (Kebab-Case)
+Identifiers **MAY** contain hyphens.
+```dtxt
+{ content-type: `text`, max-retries: 3, -flag: T, 123-abc: F } # VALID
+```
+
 ## 2. Numbers
 
 ### 2.1 Precision and Range
@@ -35,16 +41,26 @@ Normal numbers in DTXT follow IEEE 754 double-precision semantics by default. Fo
 ## 3. Strings
 
 ### 3.1 Multi-line Strings
-Literals newlines are preserved.
+Literal newlines are preserved in raw strings (backticks), but are **INVALID** in interpreted strings (double quotes).
 ```dtxt
 {
-  msg: `Line 1
-Line 2`
+  raw: `Line 1
+Line 2`,           # VALID
+  interp: "Line 1
+Line 2"            # INVALID
 }
 ```
 
-### 3.2 Backticks
-Backticks are **forbidden** inside string literals in version 1.0. There is no escape mechanism.
+### 3.2 Backticks and Escapes
+Backticks are **forbidden** inside raw string literals. There is no escape mechanism.
+To use escapes or include backticks, interpreted strings MUST be used.
+```dtxt
+{
+  raw: `hello \n world`,    # Literal backslash and 'n'
+  interp: "hello \n world", # Newline character
+  has_backtick: "`hi`"      # VALID
+}
+```
 
 ## 4. Constructors
 
@@ -64,6 +80,12 @@ Payloads **MUST NOT** contain whitespace.
 Constructors **MUST NOT** be nested.
 ```dtxt
 { x: BN(BN(123)) } # INVALID
+```
+
+### 4.4 Strict Validation
+Payloads **MUST** strictly conform to their specified formats. `D(...)` must be a valid ISO-8601 string.
+```dtxt
+{ d1: D(not-a-date) } # INVALID (must fail to parse)
 ```
 
 ## 5. Structural Constraints

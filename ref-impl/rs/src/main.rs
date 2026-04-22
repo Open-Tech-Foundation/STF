@@ -34,12 +34,12 @@ fn generate_large_data<'a>(
         let mut nested = FxHashMap::default();
         nested.insert("a", DTXTValue::Number(1.0));
         nested.insert("b", DTXTValue::Bool(false));
-        nested.insert("c", DTXTValue::String("nested string"));
+        nested.insert("c", DTXTValue::String(std::borrow::Cow::Borrowed("nested string")));
         meta.insert("nested", DTXTValue::Object(nested));
 
         let mut entry = FxHashMap::default();
         entry.insert("id", DTXTValue::Number(i as f64));
-        entry.insert("uid", DTXTValue::String(&uids[i]));
+        entry.insert("uid", DTXTValue::String(std::borrow::Cow::Borrowed(&uids[i])));
         entry.insert("isActive", DTXTValue::Bool(i % 2 == 0));
         entry.insert("score", DTXTValue::Number(rand::random::<f64>() * 1000.0));
         entry.insert("tags", DTXTValue::Array(tags.to_vec()));
@@ -48,8 +48,8 @@ fn generate_large_data<'a>(
     }
 
     let mut root = FxHashMap::default();
-    root.insert("title", DTXTValue::String("DTXT vs JSON (Rust)"));
-    root.insert("description", DTXTValue::String("Benchmark for base format overhead"));
+    root.insert("title", DTXTValue::String(std::borrow::Cow::Borrowed("DTXT vs JSON (Rust)")));
+    root.insert("description", DTXTValue::String(std::borrow::Cow::Borrowed("Benchmark for base format overhead")));
     root.insert("entries", DTXTValue::Array(entries));
 
     root
@@ -63,7 +63,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Pre-generate strings to satisfy lifetimes
     let uids: Vec<String> = (0..DATASET_SIZE).map(|i| format!("user-{}", i)).collect();
     let tag_strs = vec!["data", "benchmark", "storage", "json", "dtxt"];
-    let tags: Vec<DTXTValue> = tag_strs.iter().map(|&s| DTXTValue::String(s)).collect();
+    let tags: Vec<DTXTValue> = tag_strs.iter().map(|&s| DTXTValue::String(std::borrow::Cow::Borrowed(s))).collect();
 
     let raw_data = generate_large_data(DATASET_SIZE, &uids, &tags);
     let root_value = DTXTValue::Object(raw_data);

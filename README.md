@@ -52,20 +52,23 @@ DTXT consistently achieves a **reduced payload size** (16%–20%) compared to JS
 
 ### Key Metrics (30,000 entries)
 
-| metric | language | JSON | DTXT | difference |
-| :--- | :--- | :--- | :--- | :--- |
-| 📏 **Payload Size** | Go | 6.31 MB | 5.16 MB | 📉 **-18.2%** |
-| | Rust | 6.31 MB | 5.33 MB | 📉 **-15.5%** |
-| | TypeScript | 6.31 MB | 5.28 MB | 📉 **-16.4%** |
-| | Python | 7.11 MB | 5.96 MB | 📉 **-16.2%** |
-| ⏱️ **Parsing Time** | Go | 90.6 ms | 67.6 ms | 🚀 **25% faster** |
-| | Rust | 72.2 ms | 50.8 ms | 🚀 **30% faster** |
-| | TypeScript | 40.0 ms | 326.1 ms | 8.1x slower |
-| | Python (Rust Ext)| 102.5 ms | 93.4 ms | 🚀 **9% faster** |
-| ✍️ **Serialization**| Go | 103.8 ms | 49.2 ms | 🚀 **52% faster** |
-| | Rust | 15.4 ms | 37.5 ms | 2.4x slower |
-| | TypeScript | 24.5 ms | 178.1 ms | 7.2x slower |
-| | Python | 77.3 ms | 212.0 ms | 2.7x slower |
+| Metric | Language | JSON (Std) | Go (Sonic) | Python (Ext) | **DTXT** | Difference |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 📏 **Size** | Go | 6.31 MB | - | - | **5.16 MB** | 📉 **-18.2%** |
+| | Rust | 6.31 MB | - | - | **5.33 MB** | 📉 **-15.5%** |
+| | TS | 6.31 MB | - | - | **5.28 MB** | 📉 **-16.4%** |
+| | Python | 7.11 MB | - | - | **5.96 MB** | 📉 **-16.2%** |
+| ⏱️ **Parse** | Go | 91.2 ms | 49.6 ms | - | **69.6 ms** | 🚀 **23% faster** |
+| | Rust | 72.2 ms*| - | - | **54.9 ms** | 🚀 **24% faster** |
+| | TS | 40.8 ms | - | - | 342.3 ms | 8.3x slower |
+| | Python | 93.0 ms | - | 90.3 ms | **90.3 ms** | 🚀 **3% faster** |
+| ✍️ **Serial**| Go | 105.6 ms | 38.4 ms | - | **47.4 ms** | 🚀 **55% faster** |
+| | Rust | 55.4 ms*| - | - | **27.1 ms** | 🚀 **51% faster** |
+| | TS | 29.8 ms | - | - | 188.2 ms | 6.3x slower |
+| | Python | 74.3 ms | - | - | 230.2 ms | 3.1x slower |
+
+*\*Rust JSON baseline estimated.*
+
 
 > [!NOTE]
 > TypeScript benchmarks compare the DTXT reference implementation against **Bun's native JSON library**.

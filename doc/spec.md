@@ -100,14 +100,17 @@ A DTXT document **MUST** consist of a single object enclosed in `{}`.
   * ASCII letters `A–Z a–z`
   * digits `0–9`
   * underscore `_`
+  * hyphen `-`
 * No spaces allowed
 * Leading digits **ARE allowed**
+* Hyphens **ARE allowed** anywhere in the key
 
 ```dtxt
 {
   a: 1,
   user_id: 2,
   123key: 3,
+  content-type: 4,
 }
 ```
 
@@ -199,25 +202,39 @@ Not supported:
 
 ---
 
-## 9. Strings
+## 9. Strings (Raw and Interpreted)
 
-Strings are used for arbitrary textual data.
+Strings are used for arbitrary textual data. DTXT supports two types of strings: **Raw** and **Interpreted**.
 
 ```dtxt
 {
   name: `Sample`,
-  message: `Hello "World"`,
+  message: "Hello \"World\"",
 }
 ```
 
-### 9.1 Rules
-* **Delimiter**: Strings **MUST** be enclosed in backticks (`` ` ``).
-* **Backticks within Strings**: The backtick character is **NOT** allowed inside a string in DTXT 1.0.
+### 9.1 Raw Strings (Backticks)
+* **Delimiter**: Raw strings **MUST** be enclosed in backticks (`` ` ``).
+* **Backticks within Strings**: The backtick character is **NOT** allowed inside a raw string.
 * **Newlines**: Literals newlines are **ALLOWED** and preserved.
-* **Escaping**: DTXT 1.0 does **NOT** support escape sequences (e.g., `\n`, `\t`). All characters (except the delimiter) are treated literally.
+* **Escaping**: Raw strings do **NOT** support escape sequences. All characters are treated literally.
 
 #### Rationale
 Excluding escapes and internal delimiters ensures that strings can be scanned with a single pass using simple byte comparison (`memchr`), maximizing parsing speed.
+
+### 9.2 Interpreted Strings (Double Quotes)
+* **Delimiter**: Interpreted strings **MUST** be enclosed in double quotes (`"`).
+* **Escaping**: Supports standard JSON escape sequences:
+  * `\"` (quotation mark)
+  * `\\` (reverse solidus)
+  * `\/` (solidus)
+  * `\b` (backspace)
+  * `\f` (form feed)
+  * `\n` (line feed)
+  * `\r` (carriage return)
+  * `\t` (tab)
+  * `\uXXXX` (4-hex-digit Unicode escape)
+* **Newlines**: Literal newlines are **NOT ALLOWED** inside interpreted strings; they must be escaped as `\n`.
 
 ---
 
@@ -229,7 +246,7 @@ Excluding escapes and internal delimiters ensures that strings can be scanned wi
 | `F`     | false   |
 | `N`     | null    |
 
-* Literals are **case-sensitive**.
+* Literals are strictly **case-sensitive** and MUST be uppercase. `t`, `f`, and `n` are syntax errors.
 
 ---
 
@@ -306,7 +323,7 @@ D(2026-01-15T10:30:00Z)
 
 * Payload is an ISO-8601 date or datetime token
 * DTXT does not distinguish date-only vs datetime syntactically
-* DTXT does not validate ISO correctness
+* Parsers **MUST** validate ISO-8601 correctness for this constructor and return an error for invalid payloads.
 
 ---
 
@@ -366,7 +383,7 @@ Trailing commas are **optional** but allowed in:
 To ensure interoperability and reproducible hashing/signing, a DTXT document **MUST** be converted to its Canonical Form when transmitted in environments requiring determinism.
 
 A Canonical DTXT document **MUST**:
-1.  **Normalization**: Use uppercase for literals (`T`, `F`, `N`) and constructor names (`D`, `BN`, `B`).
+1.  **Normalization**: Use uppercase for constructor names (`D`, `BN`, `B`). (Note: `T`, `F`, `N` are already strictly uppercase).
 2.  **Line Endings**: Use a single line feed (`\n`) for all newlines.
 3.  **No Indentation**: Remove all unnecessary whitespace between tokens.
 4.  **Constructor Payloads**:
@@ -457,12 +474,14 @@ key           = identifier ;
 
 array         = "[" [ value { "," value } [ "," ] ] "]" ;
 
-value         = ( number | boolean | null | string | array | object | constructor ) ;
+value         = ( number | boolean | null | string | interpreted_string | array | object | constructor ) ;
 
 constructor   = ( "D" | "BN" | "B" ) "(" payload ")" ;
 payload       = char_not_paren { char_not_paren } ;
 
-string        = "`" { char_not_backtick } "`" ;
+string             = "`" { char_not_backtick } "`" ;
+interpreted_string = '"' { char_not_quote_or_newline | escape_seq } '"' ;
+escape_seq         = "\" ( '"' | "\" | "/" | "b" | "f" | "n" | "r" | "t" | "u" hex hex hex hex ) ;
 
 boolean       = "T" | "F" ;
 null          = "N" ;
@@ -472,17 +491,19 @@ fraction      = digit { digit } ;
 exponent      = ( "e" | "E" ) [ "-" | "+" ] digit { digit } ;
 
 identifier    = id_char { id_char } ;
-id_char       = letter | digit | "_" ;
+id_char       = letter | digit | "_" | "-" ;
 
 ws            = { whitespace | comment } ;
 whitespace    = " " | "\t" | "\n" | "\r" ;
-comment       = "#" { char_not_newline } "\n" ;
+comment       = "#" { char_not_newline } ( "\n" | EOF ) ;
 
 (* Character classes *)
 letter            = "A" | ... | "Z" | "a" | ... | "z" ;
 digit             = "0" | ... | "9" ;
 digit1_9          = "1" | ... | "9" ;
+hex               = digit | "A" | ... | "F" | "a" | ... | "f" ;
 char_not_paren    = ? all UTF-8 except "(", ")", and whitespace ? ;
 char_not_backtick = ? all UTF-8 except "`" ? ;
+char_not_quote_or_newline = ? all UTF-8 except '"', "\" and "\n" ? ;
 char_not_newline  = ? all UTF-8 except "\n" ? ;
 ```

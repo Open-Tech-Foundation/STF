@@ -448,5 +448,25 @@
     "name": "Invalid: String with Backtick",
     "input": "{ s: `oo`ps` }",
     "error": "ERR_INVALID_STRING"
+  },
+  {
+    "name": "Kebab-Case Keys",
+    "input": "{ content-type: `text`, max-retries: 3 }",
+    "expected": {
+      "content-type": "text",
+      "max-retries": 3
+    }
+  },
+  {
+    "name": "Interpreted Strings: Escapes",
+    "input": "{ text: \"hello\\nworld\\\"\" }",
+    "expected": {
+      "text": "hello\nworld\""
+    }
+  },
+  {
+    "name": "Invalid: D() Constructor Payload",
+    "input": "{ date: D(not-a-date) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
   }
 ]

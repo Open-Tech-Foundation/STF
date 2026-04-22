@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt;
 use rustc_hash::FxHashMap;
 use memchr::memchr;
@@ -49,7 +50,7 @@ impl std::error::Error for DTXTError {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DTXTValue<'a> {
-    String(&'a str),
+    String(Cow<'a, str>),
     Number(f64),
     Bool(bool),
     Null,
@@ -128,7 +129,8 @@ impl<'a> DTXTParser<'a> {
         match self.current() {
             Some(b'{') => Ok(DTXTValue::Object(self.parse_object()?)),
             Some(b'[') => Ok(DTXTValue::Array(self.parse_array()?)),
-            Some(b'`') => Ok(DTXTValue::String(self.parse_string()?)),
+            Some(b'`') => Ok(DTXTValue::String(Cow::Borrowed(self.parse_string()?))),
+            Some(b'"') => Ok(DTXTValue::String(Cow::Owned(self.parse_interpreted_string()?))),
             Some(b'-') | Some(b'0'..=b'9') => Ok(DTXTValue::Number(self.parse_number()?)),
             Some(b'T') if self.pos + 1 >= self.input.len() || self.input[self.pos+1] != b'(' => {
                 self.advance();
@@ -217,13 +219,14 @@ impl<'a> DTXTParser<'a> {
         let mut i = start;
         while i < len {
             let ch = bytes[i];
-            if ch.is_ascii_alphanumeric() || ch == b'_' {
+            if ch.is_ascii_alphanumeric() || ch == b'_' || ch == b'-' {
                 i += 1;
             } else {
                 break;
             }
         }
         self.pos = i;
+        if i == start { return Err(DTXTError::InvalidIdentifier(start)); }
         // Unsafe because we assume the input is valid UTF-8 (as per spec) and we only parsed ASCII
         unsafe { Ok(std::str::from_utf8_unchecked(&bytes[start..i])) }
     }
@@ -239,6 +242,26 @@ impl<'a> DTXTParser<'a> {
         } else {
             Err(DTXTError::Unterminated)
         }
+    }
+
+    fn parse_interpreted_string(&mut self) -> Result<String, DTXTError> {
+        let start = self.pos;
+        self.advance(); // skip opening '"'
+        let mut i = self.pos;
+        while i < self.input.len() {
+            match self.input[i] {
+                b'\\' => i += 2,
+                b'"' => {
+                    let end = i + 1;
+                    self.pos = end;
+                    let s = unsafe { std::str::from_utf8_unchecked(&self.input[start..end]) };
+                    return serde_json::from_str(s).map_err(|_| DTXTError::InvalidString(self.pos));
+                }
+                b'\n' => return Err(DTXTError::InvalidString(self.pos)),
+                _ => i += 1,
+            }
+        }
+        Err(DTXTError::Unterminated)
     }
 
     fn parse_number(&mut self) -> Result<f64, DTXTError> {
@@ -270,7 +293,7 @@ impl<'a> DTXTParser<'a> {
     fn parse_constructor(&mut self) -> Result<DTXTValue<'a>, DTXTError> {
         let start = self.pos;
         while let Some(ch) = self.current() {
-            if ch.is_ascii_alphanumeric() || ch == b'_' {
+            if ch.is_ascii_alphanumeric() || ch == b'_' || ch == b'-' {
                 self.advance();
             } else {
                 break;
@@ -304,7 +327,15 @@ impl<'a> DTXTParser<'a> {
         self.advance(); // skip ')'
 
         match type_name {
-            "D" => Ok(DTXTValue::Date(payload)),
+            "D" => {
+                // simple regex validation or parse
+                // let's use the Date validation strategy: check if ISO 8601
+                let valid = payload.len() >= 10 && payload.chars().all(|c| c.is_ascii_digit() || c == '-' || c == 'T' || c == 'Z' || c == ':' || c == '.' || c == '+');
+                if !valid {
+                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                }
+                Ok(DTXTValue::Date(payload))
+            }
             "BN" => {
                 let num = payload.parse::<BigInt>()
                     .map_err(|_| DTXTError::InvalidConstructorPayload(format!("BN({})", payload)))?;
@@ -337,9 +368,13 @@ pub fn stringify(value: &DTXTValue, indent: Option<&str>) -> String {
 fn stringify_value(value: &DTXTValue, out: &mut String, indent: Option<&str>, level: usize) {
     match value {
         DTXTValue::String(s) => {
-            out.push('`');
-            out.push_str(s);
-            out.push('`');
+            if s.contains('`') {
+                out.push_str(&serde_json::to_string(s.as_ref()).unwrap());
+            } else {
+                out.push('`');
+                out.push_str(s);
+                out.push('`');
+            }
         }
         DTXTValue::Number(n) => {
             let mut buf = ryu::Buffer::new();
@@ -485,6 +520,7 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
             Some(b'{') => self.parse_object().map(|v| v.into_any()),
             Some(b'[') => self.parse_array().map(|v| v.into_any()),
             Some(b'`') => self.parse_string().map(|v| v.into_any()),
+            Some(b'"') => self.parse_interpreted_string().map(|v| v.into_any()),
             Some(b'-') | Some(b'0'..=b'9') => self.parse_number(),
             Some(b'T') if self.pos + 1 >= self.input.len() || self.input[self.pos+1] != b'(' => {
                 self.advance(); Ok(true.into_py_any(self.py)?.into_bound(self.py))
@@ -503,7 +539,7 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
     fn parse_constructor_py(&mut self) -> PyResult<Bound<'py, PyAny>> {
         let start = self.pos;
         while let Some(ch) = self.current() {
-            if ch.is_ascii_alphanumeric() || ch == b'_' { self.advance(); } else { break; }
+            if ch.is_ascii_alphanumeric() || ch == b'_' || ch == b'-' { self.advance(); } else { break; }
         }
         let type_name = unsafe { std::str::from_utf8_unchecked(&self.input[start..self.pos]) };
         if self.current() != Some(b'(') {
@@ -590,9 +626,10 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
         let mut i = start;
         while i < len {
             let ch = bytes[i];
-            if ch.is_ascii_alphanumeric() || ch == b'_' { i += 1; } else { break; }
+            if ch.is_ascii_alphanumeric() || ch == b'_' || ch == b'-' { i += 1; } else { break; }
         }
         self.pos = i;
+        if i == start { return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Empty key")); }
         Ok(unsafe { std::str::from_utf8_unchecked(&bytes[start..i]) })
     }
 
@@ -606,6 +643,28 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
         } else {
             Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Unterminated string"))
         }
+    }
+
+    fn parse_interpreted_string(&mut self) -> PyResult<Bound<'py, PyAny>> {
+        let start = self.pos;
+        self.advance(); // "
+        let mut i = self.pos;
+        while i < self.input.len() {
+            match self.input[i] {
+                b'\\' => i += 2,
+                b'"' => {
+                    let end = i + 1;
+                    self.pos = end;
+                    let s = unsafe { std::str::from_utf8_unchecked(&self.input[start..end]) };
+                    let unescaped: String = serde_json::from_str(s)
+                        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("{}", e)))?;
+                    return Ok(unescaped.into_py_any(self.py)?.into_bound(self.py));
+                }
+                b'\n' => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Literal newline in interpreted string")),
+                _ => i += 1,
+            }
+        }
+        Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Unterminated string"))
     }
 
     fn parse_number(&mut self) -> PyResult<Bound<'py, PyAny>> {

@@ -84,6 +84,8 @@ func (p *Parser) parseValue() (DTXTValue, error) {
 		return p.parseArray()
 	case '`':
 		return p.parseString()
+	case '"':
+		return p.parseInterpretedString()
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return p.parseNumber()
 	case 'T':
@@ -189,11 +191,14 @@ func (p *Parser) parseKey() (string, error) {
 	start := p.pos
 	for p.pos < len(p.input) {
 		ch := p.current()
-		if (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' {
+		if (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' {
 			p.advance()
 		} else {
 			break
 		}
+	}
+	if p.pos == start {
+		return "", fmt.Errorf("ERR_INVALID_IDENTIFIER: empty key")
 	}
 	return string(p.input[start:p.pos]), nil
 }
@@ -204,8 +209,37 @@ func (p *Parser) parseString() (string, error) {
 	for p.pos < len(p.input) && p.current() != '`' {
 		p.advance()
 	}
+	if p.pos == len(p.input) {
+		return "", fmt.Errorf("ERR_UNTERMINATED: string")
+	}
 	result := string(p.input[start:p.pos])
 	p.advance() // skip closing '`'
+	return result, nil
+}
+
+func (p *Parser) parseInterpretedString() (string, error) {
+	start := p.pos
+	p.advance() // skip opening '"'
+	for p.pos < len(p.input) {
+		ch := p.current()
+		if ch == '\\' {
+			p.advance()
+			if p.pos < len(p.input) {
+				p.advance()
+			}
+			continue
+		}
+		if ch == '"' {
+			p.advance()
+			break
+		}
+		p.advance()
+	}
+	
+	result, err := strconv.Unquote(string(p.input[start:p.pos]))
+	if err != nil {
+		return "", fmt.Errorf("ERR_INVALID_STRING: %v", err)
+	}
 	return result, nil
 }
 
@@ -256,7 +290,7 @@ func (p *Parser) parseConstructor() (DTXTValue, error) {
 	start := p.pos
 	for p.pos < len(p.input) {
 		ch := p.current()
-		if (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' {
+		if (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' {
 			p.advance()
 		} else {
 			break
@@ -278,9 +312,13 @@ func (p *Parser) parseConstructor() (DTXTValue, error) {
 
 	switch typeName {
 	case "D":
-		t, err := time.Parse(time.RFC3339, payload)
+		t, err := time.Parse(time.RFC3339Nano, payload)
 		if err != nil {
-			return payload, nil
+			t2, err2 := time.Parse("2006-01-02", payload)
+			if err2 != nil {
+				return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid D() payload")
+			}
+			return t2, nil
 		}
 		return t, nil
 	case "BN":
@@ -317,9 +355,13 @@ func Stringify(value DTXTValue, indent string) string {
 func stringifyValue(value DTXTValue, sb *strings.Builder, indent string, level int) {
 	switch v := value.(type) {
 	case string:
-		sb.WriteString("`")
-		sb.WriteString(v)
-		sb.WriteString("`")
+		if strings.Contains(v, "`") {
+			sb.WriteString(strconv.Quote(v))
+		} else {
+			sb.WriteString("`")
+			sb.WriteString(v)
+			sb.WriteString("`")
+		}
 	case float64:
 		sb.WriteString(strconv.FormatFloat(v, 'g', -1, 64))
 	case int:

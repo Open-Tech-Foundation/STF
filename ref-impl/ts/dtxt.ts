@@ -42,7 +42,7 @@ export type DTXTValue =
 
 // Optimized lexer with single-pass tokenization
 export class DTXTLexer {
-    private readonly regex = /#.*|`[^`]*`|[A-Za-z0-9_]+\([^() \t\n\r]*\)|[{}[\]:,]|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_])|\bT\b|\bF\b|\bN\b|[A-Za-z0-9_]+|[ \t\r\n]+|./g;
+    private readonly regex = /#.*|"(?:[^"\\]|\\.)*"|`[^`]*`|[A-Za-z0-9_-]+\([^() \t\n\r]*\)|[{}[\]:,]|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_-])|\bT\b|\bF\b|\bN\b|[A-Za-z0-9_-]+|[ \t\r\n]+|./g;
 
     tokens: Token[] = [];
 
@@ -68,6 +68,7 @@ export class DTXTLexer {
             // Fast character-based dispatch
             switch (ch) {
                 case '`':
+                case '"':
                     kind = 'STRING';
                     break;
                 case '{':
@@ -120,7 +121,7 @@ export class DTXTLexer {
                 default:
                     if (value.includes('(')) {
                         kind = 'CONSTRUCTOR';
-                    } else if (/[A-Za-z0-9_]/.test(ch)) {
+                    } else if (/[A-Za-z0-9_-]/.test(ch)) {
                         kind = 'KEY';
                     } else {
                         throw new DTXTError(`Unexpected character: ${ch} at ${match.index}`);
@@ -164,6 +165,14 @@ export class DTXTParser {
                 return this.parseArray();
             case 'STRING':
                 this.pos++;
+                if (token.value![0] === '"') {
+                    // Double-quoted string with escapes
+                    try {
+                        return JSON.parse(token.value!);
+                    } catch (e) {
+                        throw new DTXTError(`Invalid string escape sequence: ${token.value}`);
+                    }
+                }
                 return token.value!.slice(1, -1);
             case 'NUMBER':
                 this.pos++;
@@ -196,7 +205,11 @@ export class DTXTParser {
         const obj: { [key: string]: DTXTValue } = {};
 
         while (this.tokens[this.pos].kind !== 'BRACE_CLOSE') {
-            const key = this.tokens[this.pos].value!;
+            const keyToken = this.tokens[this.pos];
+            if (keyToken.kind !== 'KEY' && keyToken.kind !== 'BOOL_T' && keyToken.kind !== 'BOOL_F' && keyToken.kind !== 'NULL_N') {
+                throw new DTXTError(`Expected key, got ${keyToken.kind}`);
+            }
+            const key = keyToken.value!;
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
                 throw new DTXTError(`Duplicate key: ${key}`);
             }
@@ -237,6 +250,7 @@ export class DTXTParser {
         }
 
         this.pos++; // consume ']'
+        this.depth--;
         return arr;
     }
 
@@ -246,8 +260,14 @@ export class DTXTParser {
         const payload = fullValue.slice(parenIdx + 1, -1);
 
         if (typeName === 'D') {
+            const ISO_8601_REGEX = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
+            if (!ISO_8601_REGEX.test(payload)) {
+                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid D() payload`);
+            }
             const date = new Date(payload);
-            if (isNaN(date.getTime())) return payload || '';
+            if (isNaN(date.getTime())) {
+                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid D() payload`);
+            }
             return date;
         } else if (typeName === 'BN') {
             if (!payload || !/^-?[0-9]+$/.test(payload)) {

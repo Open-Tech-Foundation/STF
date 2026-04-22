@@ -3,6 +3,8 @@ from datetime import datetime, date
 import decimal
 import binascii
 
+import json
+
 class DTXTError(Exception):
     pass
 
@@ -10,18 +12,19 @@ class DTXTLexer:
     TOKEN_SPEC = [
         ('COMMENT',   r'#.*'),
         ('STRING',    r'`[^`]*`'),
-        ('CONSTRUCTOR', r'[A-Za-z0-9_]+\([^() \t\n\r]*\)'),
+        ('DSTRING',   r'"(?:[^"\\]|\\.)*"'),
+        ('CONSTRUCTOR', r'[A-Za-z0-9_-]+\([^() \t\n\r]*\)'),
         ('BRACE_OPEN', r'\{'),
         ('BRACE_CLOSE', r'\}'),
         ('BRACKET_OPEN', r'\['),
         ('BRACKET_CLOSE', r'\]'),
         ('COLON',     r':'),
         ('COMMA',     r','),
-        ('NUMBER',    r'-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_])'),
+        ('NUMBER',    r'-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_-])'),
         ('BOOL_T',    r'T'),
         ('BOOL_F',    r'F'),
         ('NULL_N',    r'N'),
-        ('KEY',       r'[A-Za-z0-9_]+'),
+        ('KEY',       r'[A-Za-z0-9_-]+'),
         ('WHITESPACE', r'[ \t\r\n]+'),
         ('MISMATCH',  r'.'),
     ]
@@ -75,6 +78,12 @@ class DTXTParser:
         elif kind == 'STRING':
             self.consume()
             return value[1:-1] # Remove backticks
+        elif kind == 'DSTRING':
+            self.consume()
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                raise DTXTError(f"Invalid string escape sequence: {value}")
         elif kind == 'NUMBER':
             self.consume()
             if '.' in value or 'e' in value or 'E' in value:
@@ -162,8 +171,7 @@ class DTXTParser:
                 else:
                     return datetime.strptime(payload, '%Y-%m-%d').date()
             except Exception:
-                # Specs say DTXT doesn't validate ISO correctness but parsers should return native types
-                return payload # Fallback or keep as string if invalid? Let's return payload for now or raise if we want strictness.
+                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid D() payload")
         elif type_name == 'BN':
             if not re.match(r'^-?[0-9]+$', payload):
                  raise DTXTError(f"Invalid BN payload: {payload}")
