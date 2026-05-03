@@ -23,10 +23,12 @@ A project of the [Open Tech Foundation](https://github.com/Open-Tech-Foundation)
 - **Constructor Literals**: Native support for Dates `D()`, BigNumbers `BN()`, and Binary `B()`.
 - **Single-line Comments**: Use `#` for notes and documentation.
 - **Fast Parsing**: Designed for direct byte-level processing.
+- **Optional Schema Validation**: Separate `dtxt-schema` validator keeps core parsing fast.
 
 ## Documentation
 
 -   [DTXT 1.0 Specification (Draft)](doc/spec.md)
+-   [DTXT Schema Specification (Draft)](doc/schema.md)
 -   [Migration Guide (JSON → DTXT)](doc/migration-guide.md)
 -   [Edge Cases & Constraints](doc/edge-cases.md)
 -   [Standardized Error Codes](doc/error-codes.md)

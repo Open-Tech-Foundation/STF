@@ -65,3 +65,65 @@ DTXT is designed specifically for **SIMD-accelerated parsing**.
 | **Extreme Speed** | **DTXT** | Outperforms even native JSON implementations. |
 | **Legacy Support** | JSON | Universal compatibility. |
 | **Documentation-heavy** | YAML/DTXT | Both support comments, but DTXT is safer. |
+
+---
+
+## 5. DTXT Schema vs. JSON Schema
+
+DTXT Schema is a concise, native schema language for DTXT documents. The following comparison highlights key differences with JSON Schema.
+
+| Feature | DTXT Schema | JSON Schema |
+| :--- | :--- | :--- |
+| **Date type** | Native `Date` | `string` + `format: date-time` workaround |
+| **BigInt** | Native `BN` | Missing (no standard support) |
+| **Binary** | Native `Binary` | `string` + `contentEncoding: base64` convention |
+| **Unknown keys** | Errors by default | Allows by default (`additionalProperties`) |
+| **Wildcard keys** | `*: String` typed | `additionalProperties: { "type": "string" }` |
+| **Optional fields** | `String?` inline | `required: [...]` array |
+| **Comments** | Native `#` | Not supported |
+| **Verbosity** | Concise | Verbose |
+
+### 5.1 Example: User Schema
+
+**DTXT Schema:**
+```dtxt
+@schema-def(1.0)
+{
+  name: String,
+  age: Int(min:0)?,
+  email: String,
+  tags: Array<String>,
+  *: Any,
+}
+```
+
+**JSON Schema equivalent:**
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "age": { "type": "integer", "minimum": 0 },
+    "email": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["name", "email"],
+  "additionalProperties": true
+}
+```
+
+### 5.2 Design Philosophy
+
+DTXT Schema prioritizes:
+* **Conciseness** — Schema definitions read like the data they describe
+* **Native types** — No workarounds for dates, big numbers, or binary
+* **Inline optionality** — `?` suffix instead of separate `required` arrays
+* **Typed wildcards** — `*: String` instead of untyped `additionalProperties`
+
+JSON Schema prioritizes:
+* **Expressiveness** — Extensive validation keywords and conditions
+* **Maturity** — Years of development and tooling support
+* **Generality** — Works with any JSON document
+
+DTXT Schema is intentionally simpler and focused on structural typing for DTXT documents.

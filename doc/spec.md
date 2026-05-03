@@ -25,9 +25,9 @@ The formal media type for DTXT is:
 `application/dtxt`
 
 ### 1.2 Non-Goals
-To maintain simplicity and predictability, the following are **NOT** goals of DTXT:
+To maintain simplicity and predictability, the following are **NOT** goals of the core DTXT format:
 * **Programming Logic**: DTXT has no execution semantics, variables, or functions.
-* **Schema Validation**: DTXT provides explicit typing, but does not define a schema language.
+* **Schema Validation**: Schema validation is defined in a separate specification ([DTXT Schema](schema.md)) and is decoupled from core parsing for performance.
 * **Resource Referencing**: DTXT does not support internal references (anchors) or external imports.
 * **Streaming Framing**: DTXT is designed as a discrete document format, not a framing protocol.
 * **Comments as Data**: Comments are purely for documentation and SHOULD BE ignored by processors.
@@ -300,7 +300,6 @@ Rules:
 * Payload:
 
   * MUST be non-empty
-  * MUST NOT contain whitespace
   * MUST NOT contain `(` or `)`
 * No nesting of constructors
 * Constructors are declarative, not executable
@@ -459,14 +458,55 @@ Implementations MAY provide configuration to increase these limits for specific 
 
 ---
 
-## 21. Appendix A: Formal EBNF Grammar
+## 21. Document Directives
+
+Directives provide document-level metadata and configuration. They MUST appear before the root `{}` object.
+
+### 21.1 Syntax
+
+Directives use the following syntax:
+
+```
+@name(value)
+```
+
+Rules:
+* No whitespace between `@name` and `(`
+* Value is a URI or token; MUST NOT contain `(` or `)`
+* Directives MUST appear before the root object
+* Only one of each directive allowed per document
+
+### 21.2 Forward Compatibility
+
+Unknown directives MUST emit a warning but MUST NOT error. This ensures forward compatibility when new directives are introduced.
+
+### 21.3 Defined Directives
+
+#### `@schema(uri)`
+
+Points to a DTXT Schema file for this document.
+
+```dtxt
+@schema(https://example.com/myconfig.schema.dtxt)
+{
+  name: `example`,
+}
+```
+
+The URI value MUST be a valid URI or file path pointing to a `.schema.dtxt` file.
+
+---
+
+## 22. Appendix A: Formal EBNF Grammar
 
 The following is a formal description of DTXT 1.0 using Extended Backus-Naur Form (EBNF).
 
 ```ebnf
 (* DTXT 1.0 Grammar *)
 
-document      = ws object ws ;
+document      = { directive } ws object ws ;
+directive     = "@" identifier "(" directive-value ")" ws ;
+directive-value = { char_not_paren } ;
 
 object        = "{" [ member { "," member } [ "," ] ] "}" ;
 member        = key ws ":" ws value ;
@@ -502,7 +542,7 @@ letter            = "A" | ... | "Z" | "a" | ... | "z" ;
 digit             = "0" | ... | "9" ;
 digit1_9          = "1" | ... | "9" ;
 hex               = digit | "A" | ... | "F" | "a" | ... | "f" ;
-char_not_paren    = ? all UTF-8 except "(", ")", and whitespace ? ;
+char_not_paren    = ? all UTF-8 except "(" and ")" ? ;
 char_not_backtick = ? all UTF-8 except "`" ? ;
 char_not_quote_or_newline = ? all UTF-8 except '"', "\" and "\n" ? ;
 char_not_newline  = ? all UTF-8 except "\n" ? ;
