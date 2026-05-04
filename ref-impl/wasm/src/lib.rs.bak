@@ -3,9 +3,6 @@ use std::fmt;
 use rustc_hash::FxHashMap;
 use memchr::memchr;
 use num_bigint::BigInt;
-use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyString};
-use pyo3::IntoPyObjectExt;
 
 #[cfg(feature = "wasm-pack")]
 use wasm_bindgen::prelude::*;
@@ -553,7 +550,6 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
                 self.advance(); Ok(self.py.None().into_bound(self.py))
             }
             Some(_) => self.parse_constructor_py(),
-            None => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Unexpected EOF")),
         }
     }
 
@@ -564,54 +560,45 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
         }
         let type_name = unsafe { std::str::from_utf8_unchecked(&self.input[start..self.pos]) };
         if self.current() != Some(b'(') {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid identifier: {}", type_name)));
         }
         self.advance(); // (
         let payload_start = self.pos;
         while let Some(ch) = self.current() {
             if ch == b')' { break; }
             if ch == b'(' {
-                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid constructor payload"));
             }
             self.advance();
         }
         let type_name = unsafe { std::str::from_utf8_unchecked(&self.input[start..self.pos]) };
         if self.current() != Some(b'(') {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid identifier: {}", type_name)));
         }
         self.advance(); // (
         let payload_start = self.pos;
         while let Some(ch) = self.current() {
             if ch == b')' { break; }
             if ch.is_ascii_whitespace() || ch == b'(' {
-                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid constructor payload"));
             }
             self.advance();
         }
         if self.current() != Some(b')') {
-             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Unterminated constructor"));
         }
         let payload = unsafe { std::str::from_utf8_unchecked(&self.input[payload_start..self.pos]) };
         if payload.is_empty() {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Empty constructor payload"));
         }
         self.advance(); // )
         
         match type_name {
             "BigNumber" => {
-                let n: i128 = payload.parse().map_err(|_| PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid BigNumber"))?;
                 // Canonicalization: remove leading zeros and normalize -0 to 0
                 let canonicalized = if n == 0 { 0i128 } else { n };
                 Ok(canonicalized.into_py_any(self.py)?.into_bound(self.py))
             }
             "Binary" => {
-                let b = hex::decode(payload).map_err(|_| PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid Binary"))?;
                 Ok(b.into_py_any(self.py)?.into_bound(self.py))
             }
             "Date" => {
                 Ok(payload.into_py_any(self.py)?.into_bound(self.py)) // Simplified
             }
-            _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Unknown constructor: {}", type_name))),
         }
     }
 
@@ -619,7 +606,6 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
         self.advance(); // {
         self.depth += 1;
         if self.depth > MAX_DEPTH {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("ERR_NESTING_DEPTH"));
         }
         let dict = PyDict::new(self.py);
         self.skip_whitespace();
@@ -627,7 +613,6 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
             let key = self.parse_key()?;
             // Check for duplicate key
             if dict.contains(key)? {
-                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("ERR_DUPLICATE_KEY: {}", key)));
             }
             self.skip_whitespace();
             self.advance(); // :
@@ -645,7 +630,6 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
         self.advance(); // [
         self.depth += 1;
         if self.depth > MAX_DEPTH {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("ERR_NESTING_DEPTH"));
         }
         let list = PyList::empty(self.py);
         self.skip_whitespace();
@@ -669,7 +653,6 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
             if ch.is_ascii_alphanumeric() || ch == b'_' || ch == b'-' { i += 1; } else { break; }
         }
         self.pos = i;
-        if i == start { return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Empty key")); }
         Ok(unsafe { std::str::from_utf8_unchecked(&bytes[start..i]) })
     }
 
@@ -681,7 +664,6 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
             self.pos = abs_end + 1;
             Ok(PyString::new(self.py, unsafe { std::str::from_utf8_unchecked(&self.input[start..abs_end]) }))
         } else {
-            Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Unterminated string"))
         }
     }
 
@@ -697,14 +679,11 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
                     self.pos = end;
                     let s = unsafe { std::str::from_utf8_unchecked(&self.input[start..end]) };
                     let unescaped: String = serde_json::from_str(s)
-                        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("{}", e)))?;
                     return Ok(unescaped.into_py_any(self.py)?.into_bound(self.py));
                 }
-                b'\n' => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Literal newline in interpreted string")),
                 _ => i += 1,
             }
         }
-        Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Unterminated string"))
     }
 
     fn parse_number(&mut self) -> PyResult<Bound<'py, PyAny>> {
@@ -718,18 +697,14 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
         
         // Validate: no leading zeros (except for "0" itself)
         if s.len() > 1 && s.starts_with('0') && s.chars().nth(1).map_or(false, |c| c.is_ascii_digit()) {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("ERR_INVALID_NUMBER: {} (leading zero)", s)));
         }
         // Validate: no trailing dot
         if s.ends_with('.') {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("ERR_INVALID_NUMBER: {} (trailing dot)", s)));
         }
         
         if s.contains('.') || s.contains('e') || s.contains('E') {
-            let n: f64 = s.parse().map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("{}", e)))?;
             Ok(n.into_py_any(self.py)?.into_bound(self.py))
         } else {
-            let n: i128 = s.parse().map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("{}", e)))?;
             Ok(n.into_py_any(self.py)?.into_bound(self.py))
         }
     }
@@ -742,7 +717,6 @@ fn loads(py: Python<'_>, input: &str) -> PyResult<PyObject> {
     let result = parser.parse_object()?;
     parser.skip_whitespace();
     if parser.current().is_some() {
-        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Trailing data after root object"));
     }
     Ok(result.into())
 }

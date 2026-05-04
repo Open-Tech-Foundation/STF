@@ -5,30 +5,6 @@ export class DTXTError extends Error {
     }
 }
 
-export type TokenKind =
-    | 'COMMENT'
-    | 'STRING'
-    | 'CONSTRUCTOR'
-    | 'BRACE_OPEN'
-    | 'BRACE_CLOSE'
-    | 'BRACKET_OPEN'
-    | 'BRACKET_CLOSE'
-    | 'COLON'
-    | 'COMMA'
-    | 'NUMBER'
-    | 'BOOL_T'
-    | 'BOOL_F'
-    | 'NULL_N'
-    | 'KEY'
-    | 'WHITESPACE'
-    | 'MISMATCH'
-    | 'EOF';
-
-export interface Token {
-    kind: TokenKind;
-    value: string | null;
-}
-
 export type DTXTValue =
     | string
     | number
@@ -40,248 +16,311 @@ export type DTXTValue =
     | DTXTValue[]
     | { [key: string]: DTXTValue };
 
-// Optimized lexer with single-pass tokenization
-export class DTXTLexer {
-    private readonly regex = /#.*|"(?:[^"\\]|\\.)*"|`[^`]*`|[A-Za-z0-9_-]+\([^()]*\)|[{}[\]:,]|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_-])|\bT\b|\bF\b|\bN\b|[A-Za-z0-9_-]+|[ \t\r\n]+|./g;
-
-    tokens: Token[] = [];
-
-    constructor(text: string) {
-        this.tokenize(text);
-    }
-
-    private tokenize(text: string): void {
-        let match: RegExpExecArray | null;
-        const regex = this.regex;
-        regex.lastIndex = 0; // ensure we start from the beginning
-
-        while ((match = regex.exec(text)) !== null) {
-            const value = match[0];
-            const ch = value[0];
-
-            // Skip whitespace and comments
-            if (ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') continue;
-            if (ch === '#') continue;
-
-            let kind: TokenKind;
-
-            // Fast character-based dispatch
-            switch (ch) {
-                case '`':
-                case '"':
-                    kind = 'STRING';
-                    break;
-                case '{':
-                    kind = 'BRACE_OPEN';
-                    break;
-                case '}':
-                    kind = 'BRACE_CLOSE';
-                    break;
-                case '[':
-                    kind = 'BRACKET_OPEN';
-                    break;
-                case ']':
-                    kind = 'BRACKET_CLOSE';
-                    break;
-                case ':':
-                    kind = 'COLON';
-                    break;
-                case ',':
-                    kind = 'COMMA';
-                    break;
-                case '-':
-                case '0':
-                case '1':
-                case '2':
-                case '3':
-                case '4':
-                case '5':
-                case '6':
-                case '7':
-                case '8':
-                case '9':
-                    // Check if it's truly a number according to our regex
-                    if (/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value)) {
-                        kind = 'NUMBER';
-                    } else if (value.includes('(')) {
-                        kind = 'CONSTRUCTOR';
-                    } else {
-                        kind = 'KEY';
-                    }
-                    break;
-                case 'T':
-                    kind = value === 'T' ? 'BOOL_T' : (value.includes('(') ? 'CONSTRUCTOR' : 'KEY');
-                    break;
-                case 'F':
-                    kind = value === 'F' ? 'BOOL_F' : (value.includes('(') ? 'CONSTRUCTOR' : 'KEY');
-                    break;
-                case 'N':
-                    kind = value === 'N' ? 'NULL_N' : (value.includes('(') ? 'CONSTRUCTOR' : 'KEY');
-                    break;
-                default:
-                    if (value.includes('(')) {
-                        kind = 'CONSTRUCTOR';
-                    } else if (/[A-Za-z0-9_-]/.test(ch)) {
-                        kind = 'KEY';
-                    } else {
-                        throw new DTXTError(`Unexpected character: ${ch} at ${match.index}`);
-                    }
-            }
-
-            this.tokens.push({ kind, value });
-        }
-
-        this.tokens.push({ kind: 'EOF', value: null });
-    }
-}
-
-// Optimized parser with direct token access and minimal function calls
+// Fast character scanning parser
 export class DTXTParser {
-    private tokens: Token[];
+    private input: string;
     private pos: number = 0;
     private depth: number = 0;
     private readonly MAX_DEPTH = 64;
 
-    constructor(tokens: Token[]) {
-        this.tokens = tokens;
+    constructor(text: string) {
+        this.input = text;
     }
 
     parse(): { [key: string]: DTXTValue } {
+        this.skipWhitespaceAndComments();
         const result = this.parseObject();
-        if (this.tokens[this.pos].kind !== 'EOF') {
-            throw new DTXTError(`Trailing data after root object: ${this.tokens[this.pos].kind}`);
+        this.skipWhitespaceAndComments();
+        if (this.pos < this.input.length) {
+            throw new DTXTError(`Trailing data after root object: ${this.input[this.pos]}`);
         }
         return result;
     }
 
-    private parseValue(): DTXTValue {
-        const token = this.tokens[this.pos];
-        const kind = token.kind;
+    private current(): string | null {
+        return this.pos < this.input.length ? this.input[this.pos] : null;
+    }
 
-        switch (kind) {
-            case 'BRACE_OPEN':
-                return this.parseObject();
-            case 'BRACKET_OPEN':
-                return this.parseArray();
-            case 'STRING':
-                this.pos++;
-                if (token.value![0] === '"') {
-                    // Double-quoted string with escapes
-                    try {
-                        return JSON.parse(token.value!);
-                    } catch (e) {
-                        throw new DTXTError(`Invalid string escape sequence: ${token.value}`);
-                    }
+    private advance(): void {
+        this.pos++;
+    }
+
+    private skipWhitespaceAndComments(): void {
+        while (this.pos < this.input.length) {
+            const ch = this.input[this.pos];
+            if (ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') {
+                this.advance();
+            } else if (ch === '#') {
+                while (this.pos < this.input.length && this.input[this.pos] !== '\n') {
+                    this.advance();
                 }
-                return token.value!.slice(1, -1);
-            case 'NUMBER':
-                this.pos++;
-                const val = Number(token.value);
-                return val === 0 ? 0 : val;
-            case 'BOOL_T':
-                this.pos++;
-                return true;
-            case 'BOOL_F':
-                this.pos++;
-                return false;
-            case 'NULL_N':
-                this.pos++;
-                return null;
-            case 'CONSTRUCTOR':
-                this.pos++;
-                return this.parseConstructor(token.value!);
-            default:
-                throw new DTXTError(`Unexpected token: ${kind} (${token.value})`);
+            } else {
+                break;
+            }
         }
     }
 
     private parseObject(): { [key: string]: DTXTValue } {
-        this.pos++; // skip {
+        if (this.current() !== '{') {
+            throw new DTXTError("Expected '{'");
+        }
+        this.advance(); // skip {
         this.depth++;
         if (this.depth > this.MAX_DEPTH) {
-            throw new DTXTError("ERR_NESTING_DEPTH: exceeded 32 levels");
+            throw new DTXTError("ERR_NESTING_DEPTH: exceeded 64 levels");
         }
 
         const obj: { [key: string]: DTXTValue } = {};
 
-        while (this.tokens[this.pos].kind !== 'BRACE_CLOSE') {
-            const keyToken = this.tokens[this.pos];
-            if (keyToken.kind !== 'KEY' && keyToken.kind !== 'BOOL_T' && keyToken.kind !== 'BOOL_F' && keyToken.kind !== 'NULL_N') {
-                throw new DTXTError(`Expected key, got ${keyToken.kind}`);
-            }
-            const key = keyToken.value!;
+        this.skipWhitespaceAndComments();
+        while (this.current() !== '}') {
+            const key = this.parseKey();
+
+            // Check for duplicate key
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
                 throw new DTXTError(`Duplicate key: ${key}`);
             }
-            this.pos++; // consume key
-            if (this.tokens[this.pos].kind !== 'COLON') {
-                throw new DTXTError(`Expected ':', got ${this.tokens[this.pos].kind} after key '${key}'`);
-            }
-            this.pos++; // consume ':'
-            obj[key] = this.parseValue();
 
-            if (this.tokens[this.pos].kind === 'COMMA') {
-                this.pos++;
-            } else if (this.tokens[this.pos].kind !== 'BRACE_CLOSE') {
-                throw new DTXTError(`Expected ',' or '}', got ${this.tokens[this.pos].kind} after value for key '${key}'`);
+            this.skipWhitespaceAndComments();
+            if (this.current() !== ':') {
+                throw new DTXTError(`Expected ':' after key '${key}'`);
+            }
+            this.advance(); // skip :
+
+            const value = this.parseValue();
+            obj[key] = value;
+
+            this.skipWhitespaceAndComments();
+            if (this.current() === ',') {
+                this.advance(); // skip ,
+                this.skipWhitespaceAndComments();
+            } else if (this.current() !== '}') {
+                throw new DTXTError(`Expected ',' or '}' after value for key '${key}'`);
             }
         }
-        this.pos++; // skip }
+
+        this.advance(); // skip }
         this.depth--;
         return obj;
     }
 
     private parseArray(): DTXTValue[] {
-        this.pos++; // skip [
+        if (this.current() !== '[') {
+            throw new DTXTError("Expected '['");
+        }
+        this.advance(); // skip [
         this.depth++;
         if (this.depth > this.MAX_DEPTH) {
-            throw new DTXTError("ERR_NESTING_DEPTH: exceeded 32 levels");
+            throw new DTXTError("ERR_NESTING_DEPTH: exceeded 64 levels");
         }
+
         const arr: DTXTValue[] = [];
 
-        while (this.tokens[this.pos].kind !== 'BRACKET_CLOSE') {
+        this.skipWhitespaceAndComments();
+        while (this.current() !== ']') {
             arr.push(this.parseValue());
 
-            if (this.tokens[this.pos].kind === 'COMMA') {
-                this.pos++;
-            } else if (this.tokens[this.pos].kind !== 'BRACKET_CLOSE') {
-                throw new DTXTError(`Expected ',' or ']', got ${this.tokens[this.pos].kind}`);
+            this.skipWhitespaceAndComments();
+            if (this.current() === ',') {
+                this.advance(); // skip ,
+                this.skipWhitespaceAndComments();
+            } else if (this.current() !== ']') {
+                throw new DTXTError(`Expected ',' or ']'`);
             }
         }
 
-        this.pos++; // consume ']'
+        this.advance(); // skip ]
         this.depth--;
         return arr;
     }
 
-    private parseConstructor(fullValue: string): DTXTValue {
-        const parenIdx = fullValue.indexOf('(');
-        const typeName = fullValue.slice(0, parenIdx);
-        const payload = fullValue.slice(parenIdx + 1, -1);
+    private parseKey(): string {
+        const start = this.pos;
+
+        // Parse key: alphanumeric, underscore, hyphen
+        while (this.pos < this.input.length) {
+            const ch = this.input[this.pos];
+            if (ch === 'T' && (this.pos === start || !this.isKeyChar(this.input[this.pos - 1]))) {
+                // Check if it's just 'T' (true)
+                if (this.pos === start && (this.pos + 1 >= this.input.length || !this.isKeyChar(this.input[this.pos + 1]))) {
+                    // Just 'T' as a key
+                } else {
+                    this.advance();
+                    continue;
+                }
+            } else if (ch === 'F' && (this.pos === start || !this.isKeyChar(this.input[this.pos - 1]))) {
+                if (this.pos === start && (this.pos + 1 >= this.input.length || !this.isKeyChar(this.input[this.pos + 1]))) {
+                    // Just 'F' as a key
+                } else {
+                    this.advance();
+                    continue;
+                }
+            } else if (ch === 'N' && (this.pos === start || !this.isKeyChar(this.input[this.pos - 1]))) {
+                if (this.pos === start && (this.pos + 1 >= this.input.length || !this.isKeyChar(this.input[this.pos + 1]))) {
+                    // Just 'N' as a key
+                } else {
+                    this.advance();
+                    continue;
+                }
+            }
+
+            if (this.isKeyChar(ch)) {
+                this.advance();
+            } else {
+                break;
+            }
+        }
+
+        if (start === this.pos) {
+            throw new DTXTError(`Expected key, got ${this.current()}`);
+        }
+
+        return this.input.slice(start, this.pos);
+    }
+
+    private isKeyChar(ch: string): boolean {
+        return (ch >= 'a' && ch <= 'z') ||
+               (ch >= 'A' && ch <= 'Z') ||
+               (ch >= '0' && ch <= '9') ||
+               ch === '_' || ch === '-';
+    }
+
+    private parseValue(): DTXTValue {
+        this.skipWhitespaceAndComments();
+        const ch = this.current();
+
+        if (ch === '{') return this.parseObject();
+        if (ch === '[') return this.parseArray();
+        if (ch === '`') return this.parseString();
+        if (ch === '"') return this.parseInterpretedString();
+        if (ch === '-' || (ch >= '0' && ch <= '9')) return this.parseNumber();
+        if (ch === 'T' && this.input.slice(this.pos, this.pos + 1) === 'T') {
+            this.advance();
+            return true;
+        }
+        if (ch === 'F' && this.input.slice(this.pos, this.pos + 1) === 'F') {
+            this.advance();
+            return false;
+        }
+        if (ch === 'N' && this.input.slice(this.pos, this.pos + 1) === 'N') {
+            this.advance();
+            return null;
+        }
+        if (ch && this.isAlpha(ch)) return this.parseConstructor();
+        throw new DTXTError(`Unexpected character: ${ch}`);
+    }
+
+    private parseString(): string {
+        this.advance(); // skip `
+        const start = this.pos;
+        while (this.pos < this.input.length && this.input[this.pos] !== '`') {
+            this.advance();
+        }
+        if (this.pos >= this.input.length) {
+            throw new DTXTError("Unterminated string");
+        }
+        const result = this.input.slice(start, this.pos);
+        this.advance(); // skip closing `
+        return result;
+    }
+
+    private parseInterpretedString(): string {
+        this.advance(); // skip "
+        const start = this.pos;
+        while (this.pos < this.input.length && this.input[this.pos] !== '"') {
+            if (this.input[this.pos] === '\\') {
+                this.advance(); // skip \
+            }
+            this.advance();
+        }
+        if (this.pos >= this.input.length) {
+            throw new DTXTError("Unterminated string");
+        }
+        const result = this.input.slice(start, this.pos);
+        this.advance(); // skip closing "
+        try {
+            return JSON.parse(`"${result}"`);
+        } catch (e) {
+            throw new DTXTError(`Invalid string escape sequence: ${result}`);
+        }
+    }
+
+    private parseNumber(): number {
+        const start = this.pos;
+        // Check for leading zero (invalid)
+        if (this.input[this.pos] === '0' && this.pos + 1 < this.input.length && this.input[this.pos + 1] >= '0' && this.input[this.pos + 1] <= '9') {
+            throw new DTXTError(`ERR_INVALID_NUMBER: ${this.input.slice(this.pos, this.pos + 4)} (leading zero)`);
+        }
+
+        while (this.pos < this.input.length) {
+            const ch = this.input[this.pos];
+            if (ch === '.' || ch === '-' || ch === 'e' || ch === 'E' || (ch >= '0' && ch <= '9')) {
+                this.advance();
+            } else {
+                break;
+            }
+        }
+
+        const numStr = this.input.slice(start, this.pos);
+
+        // Check for trailing dot
+        if (numStr.endsWith('.')) {
+            throw new DTXTError(`ERR_INVALID_NUMBER: ${numStr} (trailing dot)`);
+        }
+
+        const num = parseFloat(numStr);
+        return num === 0 && numStr[0] === '-' ? -0 : num;
+    }
+
+    private isAlpha(ch: string): boolean {
+        return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch === '_' || ch === '-';
+    }
+
+    private parseConstructor(): DTXTValue {
+        const start = this.pos;
+        while (this.pos < this.input.length && this.isAlpha(this.input[this.pos])) {
+            this.advance();
+        }
+        const typeName = this.input.slice(start, this.pos);
+
+        if (this.current() !== '(') {
+            throw new DTXTError(`Expected '(' after constructor name at position ${this.pos}`);
+        }
+        this.advance(); // skip (
+
+        const payloadStart = this.pos;
+        while (this.pos < this.input.length && this.input[this.pos] !== ')') {
+            if (this.input[this.pos] === '(') {
+                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid ${typeName}() payload`);
+            }
+            this.advance();
+        }
+        const payload = this.input.slice(payloadStart, this.pos);
+
+        if (this.current() !== ')') {
+            throw new DTXTError("Unterminated constructor");
+        }
+        this.advance(); // skip )
 
         if (typeName === 'Date') {
-            const ISO_8601_REGEX = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
-            if (!ISO_8601_REGEX.test(payload)) {
+            if (!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?$/.test(payload)) {
                 throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
             }
-            const date = new Date(payload);
-            if (isNaN(date.getTime())) {
-                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
-            }
-            return date;
+            return new Date(payload);
         } else if (typeName === 'BigNumber') {
-            if (!payload || !/^-?[0-9]+$/.test(payload)) {
+            const cleaned = payload.replace(/\s/g, '');
+            if (!/^-?\d+$/.test(cleaned)) {
                 throw new DTXTError(`Invalid BigNumber payload: ${payload}`);
             }
-            return BigInt(payload);
+            return BigInt(cleaned);
         } else if (typeName === 'Binary') {
-            if (!payload || !/^[0-9A-Fa-f]*$/.test(payload)) {
+            const cleaned = payload.replace(/\s/g, '');
+            if (cleaned.length % 2 !== 0) {
                 throw new DTXTError(`Invalid Binary(hex) payload: ${payload}`);
             }
-            const len = payload.length;
-            const bytes = new Uint8Array(len >>> 1);
-            for (let i = 0; i < len; i += 2) {
-                bytes[i >>> 1] = parseInt(payload.slice(i, i + 2), 16);
+            const bytes = new Uint8Array(cleaned.length / 2);
+            for (let i = 0; i < cleaned.length; i += 2) {
+                bytes[i / 2] = parseInt(cleaned.slice(i, i + 2), 16);
             }
             return bytes;
         } else {
@@ -290,7 +329,6 @@ export class DTXTParser {
     }
 }
 
-// Optimized stringifier with pre-allocated buffers where possible
 export function stringify(obj: DTXTValue, indent: string | null = null): string {
     const parts: string[] = [];
     const space = indent ? ' ' : '';
@@ -302,16 +340,13 @@ export function stringify(obj: DTXTValue, indent: string | null = null): string 
                 parts.push('[]');
                 return;
             }
-
             parts.push('[', newline);
             const sp = indent ? indent.repeat(level + 1) : '';
-
             for (let i = 0; i < o.length; i++) {
                 parts.push(sp);
                 _stringify(o[i], level + 1);
                 parts.push(',', newline);
             }
-
             if (indent) parts.push(indent.repeat(level));
             parts.push(']');
         } else if (o instanceof Date) {
@@ -336,24 +371,25 @@ export function stringify(obj: DTXTValue, indent: string | null = null): string 
         } else if (typeof o === 'number') {
             parts.push(o.toString());
         } else if (typeof o === 'string') {
-            parts.push('`', o, '`');
+            if (o.includes('`')) {
+                parts.push(JSON.stringify(o));
+            } else {
+                parts.push('`', o, '`');
+            }
         } else if (typeof o === 'object') {
-            const keys = Object.keys(o).sort();
+            const keys = Object.keys(o as object).sort();
             if (keys.length === 0) {
                 parts.push('{}');
                 return;
             }
-
             parts.push('{', newline);
             const sp = indent ? indent.repeat(level + 1) : '';
-
             for (let i = 0; i < keys.length; i++) {
                 const k = keys[i];
                 parts.push(sp, k, ':', space);
                 _stringify((o as any)[k], level + 1);
                 parts.push(',', newline);
             }
-
             if (indent) parts.push(indent.repeat(level));
             parts.push('}');
         } else {
@@ -366,10 +402,10 @@ export function stringify(obj: DTXTValue, indent: string | null = null): string 
 }
 
 export function parse(text: string): { [key: string]: DTXTValue } {
-    const lexer = new DTXTLexer(text);
-    const parser = new DTXTParser(lexer.tokens);
+    const parser = new DTXTParser(text);
     return parser.parse();
 }
+
 export function format(text: string): string {
     return stringify(parse(text), '  ');
 }

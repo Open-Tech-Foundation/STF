@@ -5,7 +5,7 @@ edition = "2021"
 
 [lib]
 name = "dtxt_rs"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "cdylib"]
 
 [[bin]]
 name = "run_conformance"
@@ -16,7 +16,6 @@ name = "benchmark"
 path = "src/main.rs"
 
 [dependencies]
-rand = "0.8"
 ryu = "1.0"
 memchr = "2.7"
 rustc-hash = "2.1"
@@ -27,5 +26,29 @@ num-bigint = "0.4.6"
 hex = "0.4.3"
 num-traits = "0.2.19"
 
+[dependencies.wasm-bindgen]
+version = "0.2"
+optional = true
+
+[dependencies.getrandom]
+version = "0.2"
+features = ["js"]
+optional = true
+
+[dependencies.rand]
+version = "0.8"
+optional = true
+
+[features]
+default = ["rand"]
+wasm-pack = ["dep:wasm-bindgen", "dep:getrandom"]
+
+[dev-dependencies]
+wasm-pack = "0.12"
+
 [profile.dev]
 opt-level = 2
+
+[profile.release]
+opt-level = 3
+lto = true
