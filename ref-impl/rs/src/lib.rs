@@ -67,7 +67,7 @@ pub struct DTXTParser<'a> {
     depth: usize,
 }
 
-const MAX_DEPTH: usize = 32;
+const MAX_DEPTH: usize = 64;
 
 impl<'a> DTXTParser<'a> {
     pub fn new(input: &'a str) -> Self {
@@ -171,7 +171,7 @@ impl<'a> DTXTParser<'a> {
 
             let value = self.parse_value()?;
             if map.insert(key, value).is_some() {
-                return Err(DTXTError::TrailingData(self.pos)); // Should use ERR_DUPLICATE_KEY if we had it
+                return Err(DTXTError::DuplicateKey(key.to_string()));
             }
 
             self.skip_whitespace();
@@ -313,7 +313,7 @@ impl<'a> DTXTParser<'a> {
                 return Err(DTXTError::Unterminated);
             }
             let ch = self.input[self.pos];
-            if ch.is_ascii_whitespace() || ch == b'(' {
+            if ch == b'(' {
                 let bytes = &self.input[payload_start..self.pos];
                 return Err(DTXTError::InvalidConstructorPayload(std::str::from_utf8(bytes).unwrap_or("").to_string()));
             }
@@ -327,28 +327,32 @@ impl<'a> DTXTParser<'a> {
         self.advance(); // skip ')'
 
         match type_name {
-            "D" => {
-                // simple regex validation or parse
-                // let's use the Date validation strategy: check if ISO 8601
-                let valid = payload.len() >= 10 && payload.chars().all(|c| c.is_ascii_digit() || c == '-' || c == 'T' || c == 'Z' || c == ':' || c == '.' || c == '+');
+            "Date" => {
+                // Payload may contain any UTF-8 except ( and )
+                // Validate ISO 8601 - allow spaces in payload
+                let valid = payload.len() >= 10 && payload.chars().all(|c| c.is_ascii_digit() || c == '-' || c == 'T' || c == 'Z' || c == ':' || c == '.' || c == '+' || c == ' ');
                 if !valid {
                     return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
                 }
                 Ok(DTXTValue::Date(payload))
             }
-            "BN" => {
-                let num = payload.parse::<BigInt>()
-                    .map_err(|_| DTXTError::InvalidConstructorPayload(format!("BN({})", payload)))?;
+            "BigNumber" => {
+                // Remove spaces from payload for validation and parsing
+                let cleaned: String = payload.chars().filter(|c| !c.is_whitespace()).collect();
+                let num = cleaned.parse::<BigInt>()
+                    .map_err(|_| DTXTError::InvalidConstructorPayload(format!("BigNumber({})", payload)))?;
                 Ok(DTXTValue::BigInt(num))
             }
-            "B" => {
-                if payload.len() % 2 != 0 {
-                    return Err(DTXTError::InvalidConstructorPayload(format!("B({}) length", payload)));
+            "Binary" => {
+                // Remove spaces from payload for validation and parsing
+                let cleaned: String = payload.chars().filter(|c| !c.is_whitespace()).collect();
+                if cleaned.len() % 2 != 0 {
+                    return Err(DTXTError::InvalidConstructorPayload(format!("Binary({}) length", payload)));
                 }
-                let mut bytes = Vec::with_capacity(payload.len() / 2);
-                for i in (0..payload.len()).step_by(2) {
-                    let byte = u8::from_str_radix(&payload[i..i+2], 16)
-                        .map_err(|_| DTXTError::InvalidConstructorPayload(format!("B({})", payload)))?;
+                let mut bytes = Vec::with_capacity(cleaned.len() / 2);
+                for i in (0..cleaned.len()).step_by(2) {
+                    let byte = u8::from_str_radix(&cleaned[i..i+2], 16)
+                        .map_err(|_| DTXTError::InvalidConstructorPayload(format!("Binary({})", payload)))?;
                     bytes.push(byte);
                 }
                 Ok(DTXTValue::Bytes(bytes))
@@ -384,17 +388,17 @@ fn stringify_value(value: &DTXTValue, out: &mut String, indent: Option<&str>, le
         DTXTValue::Bool(false) => out.push('F'),
         DTXTValue::Null => out.push('N'),
         DTXTValue::BigInt(n) => {
-            out.push_str("BN(");
+            out.push_str("BigNumber(");
             out.push_str(&n.to_string());
             out.push(')');
         }
         DTXTValue::Date(s) => {
-            out.push_str("D(");
+            out.push_str("Date(");
             out.push_str(s);
             out.push(')');
         }
         DTXTValue::Bytes(bytes) => {
-            out.push_str("B(");
+            out.push_str("Binary(");
             for byte in bytes {
                 const HEX: &[u8; 16] = b"0123456789ABCDEF";
                 out.push(HEX[(byte >> 4) as usize] as char);
@@ -549,6 +553,19 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
         let payload_start = self.pos;
         while let Some(ch) = self.current() {
             if ch == b')' { break; }
+            if ch == b'(' {
+                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid constructor payload"));
+            }
+            self.advance();
+        }
+        let type_name = unsafe { std::str::from_utf8_unchecked(&self.input[start..self.pos]) };
+        if self.current() != Some(b'(') {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid identifier: {}", type_name)));
+        }
+        self.advance(); // (
+        let payload_start = self.pos;
+        while let Some(ch) = self.current() {
+            if ch == b')' { break; }
             if ch.is_ascii_whitespace() || ch == b'(' {
                  return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid constructor payload"));
             }
@@ -564,15 +581,17 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
         self.advance(); // )
         
         match type_name {
-            "BN" => {
-                let n: i128 = payload.parse().map_err(|_| PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid BN"))?;
-                Ok(n.into_py_any(self.py)?.into_bound(self.py))
+            "BigNumber" => {
+                let n: i128 = payload.parse().map_err(|_| PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid BigNumber"))?;
+                // Canonicalization: remove leading zeros and normalize -0 to 0
+                let canonicalized = if n == 0 { 0i128 } else { n };
+                Ok(canonicalized.into_py_any(self.py)?.into_bound(self.py))
             }
-            "B" => {
-                let b = hex::decode(payload).map_err(|_| PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid B"))?;
+            "Binary" => {
+                let b = hex::decode(payload).map_err(|_| PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid Binary"))?;
                 Ok(b.into_py_any(self.py)?.into_bound(self.py))
             }
-            "D" => {
+            "Date" => {
                 Ok(payload.into_py_any(self.py)?.into_bound(self.py)) // Simplified
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Unknown constructor: {}", type_name))),
@@ -589,6 +608,10 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
         self.skip_whitespace();
         while self.current() != Some(b'}') {
             let key = self.parse_key()?;
+            // Check for duplicate key
+            if dict.contains(key)? {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("ERR_DUPLICATE_KEY: {}", key)));
+            }
             self.skip_whitespace();
             self.advance(); // :
             let val = self.parse_value()?;
@@ -675,6 +698,16 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
             } else { break; }
         }
         let s = unsafe { std::str::from_utf8_unchecked(&self.input[start..self.pos]) };
+        
+        // Validate: no leading zeros (except for "0" itself)
+        if s.len() > 1 && s.starts_with('0') && s.chars().nth(1).map_or(false, |c| c.is_ascii_digit()) {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("ERR_INVALID_NUMBER: {} (leading zero)", s)));
+        }
+        // Validate: no trailing dot
+        if s.ends_with('.') {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("ERR_INVALID_NUMBER: {} (trailing dot)", s)));
+        }
+        
         if s.contains('.') || s.contains('e') || s.contains('E') {
             let n: f64 = s.parse().map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("{}", e)))?;
             Ok(n.into_py_any(self.py)?.into_bound(self.py))

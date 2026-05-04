@@ -13,14 +13,14 @@ class DTXTLexer:
         ('COMMENT',   r'#.*'),
         ('STRING',    r'`[^`]*`'),
         ('DSTRING',   r'"(?:[^"\\]|\\.)*"'),
-        ('CONSTRUCTOR', r'[A-Za-z0-9_-]+\([^() \t\n\r]*\)'),
+        ('CONSTRUCTOR', r'[A-Za-z0-9_-]+\([^()]*\)'),
         ('BRACE_OPEN', r'\{'),
         ('BRACE_CLOSE', r'\}'),
         ('BRACKET_OPEN', r'\['),
         ('BRACKET_CLOSE', r'\]'),
         ('COLON',     r':'),
         ('COMMA',     r','),
-        ('NUMBER',    r'-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_-])'),
+        ('NUMBER',    r'-?(?:0(?!\d)|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_-])'),
         ('BOOL_T',    r'T'),
         ('BOOL_F',    r'F'),
         ('NULL_N',    r'N'),
@@ -45,7 +45,7 @@ class DTXTLexer:
         self.tokens.append(('EOF', None))
 
 class DTXTParser:
-    MAX_DEPTH = 32
+    MAX_DEPTH = 64
     
     def __init__(self, tokens):
         self.tokens = tokens
@@ -86,6 +86,12 @@ class DTXTParser:
                 raise DTXTError(f"Invalid string escape sequence: {value}")
         elif kind == 'NUMBER':
             self.consume()
+            # Check for leading zero (invalid in DTXT)
+            if re.match(r'^-?0\d+', value):
+                raise DTXTError(f"invalid number: {value} (leading zero)")
+            # Check for trailing dot (invalid in DTXT)
+            if value.endswith('.'):
+                raise DTXTError(f"invalid number: {value} (trailing dot)")
             if '.' in value or 'e' in value or 'E' in value:
                 return float(value)
             return int(value)
@@ -161,26 +167,35 @@ class DTXTParser:
         if not match:
              raise DTXTError(f"Invalid constructor format: {full_value}")
         type_name, payload = match.groups()
-        
-        if type_name == 'D':
-            # ISO 8601
+
+        if type_name == 'Date':
+            # ISO 8601 - allow spaces in payload
             try:
-                # Try full datetime first
-                if 'T' in payload:
-                    return datetime.fromisoformat(payload.replace('Z', '+00:00'))
+                # Try full datetime first (with possible space instead of T)
+                payload_clean = payload.replace(' ', 'T') if ' ' in payload and 'T' not in payload else payload
+                if 'T' in payload_clean:
+                    return datetime.fromisoformat(payload_clean.replace('Z', '+00:00'))
                 else:
                     return datetime.strptime(payload, '%Y-%m-%d').date()
             except Exception:
-                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid D() payload")
-        elif type_name == 'BN':
-            if not re.match(r'^-?[0-9]+$', payload):
-                 raise DTXTError(f"Invalid BN payload: {payload}")
-            return int(payload)
-        elif type_name == 'B':
+                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+        elif type_name == 'BigNumber':
+            # Remove spaces from payload
+            payload_clean = payload.replace(' ', '')
+            if not re.match(r'^-?[0-9]+$', payload_clean):
+                 raise DTXTError(f"Invalid BigNumber payload: {payload}")
+            # Canonicalization: remove leading zeros and normalize -0 to 0
+            result = int(payload_clean)
+            if result == 0:
+                return 0
+            return result
+        elif type_name == 'Binary':
+            # Remove spaces from payload
+            payload_clean = payload.replace(' ', '')
             try:
-                return binascii.unhexlify(payload)
+                return binascii.unhexlify(payload_clean)
             except Exception:
-                raise DTXTError(f"Invalid B(hex) payload: {payload}")
+                raise DTXTError(f"Invalid Binary(hex) payload: {payload}")
         else:
             raise DTXTError(f"Unknown constructor: {type_name}")
 
@@ -230,10 +245,10 @@ def dumps(obj):
             val = obj.isoformat()
             if isinstance(obj, datetime) and obj.tzinfo:
                 val = val.replace('+00:00', 'Z')
-            return f"D({val})"
-        return f"D({obj})"
+            return f"Date({val})"
+        return f"Date({obj})"
     elif isinstance(obj, bytes):
-        return f"B({obj.hex().upper()})"
+        return f"Binary({obj.hex().upper()})"
     else:
         raise DTXTError(f"Unsupported type for serialization: {type(obj)}")
 

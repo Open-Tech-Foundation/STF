@@ -20,7 +20,7 @@ type Parser struct {
 	depth int
 }
 
-const maxDepth = 32
+const maxDepth = 64
 
 // NewParser creates a new DTXT parser
 func NewParser(input string) *Parser {
@@ -310,33 +310,43 @@ func (p *Parser) parseConstructor() (DTXTValue, error) {
 	payload := string(p.input[payloadStart:p.pos])
 	p.advance() // skip ')'
 
-	switch typeName {
-	case "D":
-		t, err := time.Parse(time.RFC3339Nano, payload)
-		if err != nil {
-			t2, err2 := time.Parse("2006-01-02", payload)
-			if err2 != nil {
-				return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid D() payload")
+		switch typeName {
+		case "Date":
+			// Handle payload with spaces
+			// Try different formats
+			formats := []string{
+				"2006-01-02 15:04:05",
+				"2006-01-02T15:04:05Z07:00",
+				"2006-01-02T15:04:05",
+				"2006-01-02",
 			}
-			return t2, nil
+			for _, fmt := range formats {
+				t, err := time.Parse(fmt, payload)
+				if err == nil {
+					return t, nil
+				}
+			}
+			return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+		case "BigNumber":
+			// Remove spaces from payload
+			payloadClean := strings.ReplaceAll(payload, " ", "")
+			n := new(big.Int)
+			_, ok := n.SetString(payloadClean, 10)
+			if !ok {
+				return nil, fmt.Errorf("invalid BigNumber payload: %s", payload)
+			}
+			return n, nil
+		case "Binary":
+			// Remove spaces from payload
+			payloadClean := strings.ReplaceAll(payload, " ", "")
+			bytes, err := hex.DecodeString(payloadClean)
+			if err != nil {
+				return nil, fmt.Errorf("invalid Binary(hex) payload: %s", payload)
+			}
+			return bytes, nil
+		default:
+			return nil, fmt.Errorf("unknown constructor: %s", typeName)
 		}
-		return t, nil
-	case "BN":
-		n := new(big.Int)
-		_, ok := n.SetString(payload, 10)
-		if !ok {
-			return nil, fmt.Errorf("invalid BN payload: %s", payload)
-		}
-		return n, nil
-	case "B":
-		bytes, err := hex.DecodeString(payload)
-		if err != nil {
-			return nil, fmt.Errorf("invalid B(hex) payload: %s", payload)
-		}
-		return bytes, nil
-	default:
-		return nil, fmt.Errorf("unknown constructor: %s", typeName)
-	}
 }
 
 // Parse is a convenience function to parse DTXT strings
@@ -375,11 +385,11 @@ func stringifyValue(value DTXTValue, sb *strings.Builder, indent string, level i
 	case nil:
 		sb.WriteString("N")
 	case *big.Int:
-		sb.WriteString("BN(")
+		sb.WriteString("BigNumber(")
 		sb.WriteString(v.String())
 		sb.WriteString(")")
 	case time.Time:
-		sb.WriteString("D(")
+		sb.WriteString("Date(")
 		str := v.Format(time.RFC3339Nano)
 		if strings.HasSuffix(str, ".000Z") {
 			str = str[:len(str)-5] + "Z"
@@ -387,7 +397,7 @@ func stringifyValue(value DTXTValue, sb *strings.Builder, indent string, level i
 		sb.WriteString(str)
 		sb.WriteString(")")
 	case []byte:
-		sb.WriteString("B(")
+		sb.WriteString("Binary(")
 		sb.WriteString(strings.ToUpper(hex.EncodeToString(v)))
 		sb.WriteString(")")
 	case []DTXTValue:

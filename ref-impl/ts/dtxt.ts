@@ -42,7 +42,7 @@ export type DTXTValue =
 
 // Optimized lexer with single-pass tokenization
 export class DTXTLexer {
-    private readonly regex = /#.*|"(?:[^"\\]|\\.)*"|`[^`]*`|[A-Za-z0-9_-]+\([^() \t\n\r]*\)|[{}[\]:,]|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_-])|\bT\b|\bF\b|\bN\b|[A-Za-z0-9_-]+|[ \t\r\n]+|./g;
+    private readonly regex = /#.*|"(?:[^"\\]|\\.)*"|`[^`]*`|[A-Za-z0-9_-]+\([^()]*\)|[{}[\]:,]|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![A-Za-z0-9_-])|\bT\b|\bF\b|\bN\b|[A-Za-z0-9_-]+|[ \t\r\n]+|./g;
 
     tokens: Token[] = [];
 
@@ -140,7 +140,7 @@ export class DTXTParser {
     private tokens: Token[];
     private pos: number = 0;
     private depth: number = 0;
-    private readonly MAX_DEPTH = 32;
+    private readonly MAX_DEPTH = 64;
 
     constructor(tokens: Token[]) {
         this.tokens = tokens;
@@ -259,24 +259,24 @@ export class DTXTParser {
         const typeName = fullValue.slice(0, parenIdx);
         const payload = fullValue.slice(parenIdx + 1, -1);
 
-        if (typeName === 'D') {
+        if (typeName === 'Date') {
             const ISO_8601_REGEX = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
             if (!ISO_8601_REGEX.test(payload)) {
-                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid D() payload`);
+                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
             }
             const date = new Date(payload);
             if (isNaN(date.getTime())) {
-                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid D() payload`);
+                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
             }
             return date;
-        } else if (typeName === 'BN') {
+        } else if (typeName === 'BigNumber') {
             if (!payload || !/^-?[0-9]+$/.test(payload)) {
-                throw new DTXTError(`Invalid BN payload: ${payload}`);
+                throw new DTXTError(`Invalid BigNumber payload: ${payload}`);
             }
             return BigInt(payload);
-        } else if (typeName === 'B') {
+        } else if (typeName === 'Binary') {
             if (!payload || !/^[0-9A-Fa-f]*$/.test(payload)) {
-                throw new DTXTError(`Invalid B(hex) payload: ${payload}`);
+                throw new DTXTError(`Invalid Binary(hex) payload: ${payload}`);
             }
             const len = payload.length;
             const bytes = new Uint8Array(len >>> 1);
@@ -318,9 +318,9 @@ export function stringify(obj: DTXTValue, indent: string | null = null): string 
             let val = o.toISOString();
             if (val.includes('T00:00:00.000Z')) val = val.split('T')[0];
             else if (val.endsWith('.000Z')) val = val.slice(0, -5) + 'Z';
-            parts.push('D(', val, ')');
+            parts.push('Date(', val, ')');
         } else if (o instanceof Uint8Array) {
-            parts.push('B(');
+            parts.push('Binary(');
             for (let i = 0; i < o.length; i++) {
                 const hex = o[i].toString(16);
                 if (hex.length === 1) parts.push('0');
@@ -328,7 +328,7 @@ export function stringify(obj: DTXTValue, indent: string | null = null): string 
             }
             parts.push(')');
         } else if (typeof o === 'bigint') {
-            parts.push('BN(', o.toString(), ')');
+            parts.push('BigNumber(', o.toString(), ')');
         } else if (o === null) {
             parts.push('N');
         } else if (typeof o === 'boolean') {

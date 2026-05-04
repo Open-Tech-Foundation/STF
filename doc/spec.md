@@ -198,7 +198,7 @@ Not supported:
 
 * Precision is implementation-defined.
 * DTXT does not guarantee arbitrary precision for normal numbers.
-* Use `BN(...)` for exact large integers.
+* Use `BigNumber(...)` for exact large integers.
 
 ---
 
@@ -301,6 +301,7 @@ Rules:
 
   * MUST be non-empty
   * MUST NOT contain `(` or `)`
+  * May contain any UTF-8 character except `(` and `)`
 * No nesting of constructors
 * Constructors are declarative, not executable
 
@@ -313,11 +314,11 @@ DTXT 1.0 enforces a closed set of constructors. Only types defined in this speci
 
 ## 14. Standard Constructor Literals
 
-### 14.1 Date / DateTime — `D(...)`
+### 14.1 Date / DateTime — `Date(...)`
 
 ```dtxt
-D(2026-01-15)
-D(2026-01-15T10:30:00Z)
+Date(2026-01-15)
+Date(2026-01-15T10:30:00Z)
 ```
 
 * Payload is an ISO-8601 date or datetime token
@@ -326,10 +327,10 @@ D(2026-01-15T10:30:00Z)
 
 ---
 
-### 14.2 Big Number — `BN(...)`
+### 14.2 Big Number — `BigNumber(...)`
 
 ```dtxt
-BN(9007199254740993)
+BigNumber(9007199254740993)
 ```
 
 Rules:
@@ -340,14 +341,14 @@ Rules:
 Canonicalization:
 
 * Remove leading zeros
-* `BN(-0)` → `BN(0)`
+* `BigNumber(-0)` → `BigNumber(0)`
 
 ---
 
-### 14.3 Binary — `B(...)`
+### 14.3 Binary — `Binary(...)`
 
 ```dtxt
-B(89504E470D0A1A0A)
+Binary(89504E470D0A1A0A)
 ```
 
 Rules:
@@ -382,26 +383,26 @@ Trailing commas are **optional** but allowed in:
 To ensure interoperability and reproducible hashing/signing, a DTXT document **MUST** be converted to its Canonical Form when transmitted in environments requiring determinism.
 
 A Canonical DTXT document **MUST**:
-1.  **Normalization**: Use uppercase for constructor names (`D`, `BN`, `B`). (Note: `T`, `F`, `N` are already strictly uppercase).
+1.  **Normalization**: Use canonical casing for constructor names (`Date`, `BigNumber`, `Binary`). (Note: `T`, `F`, `N` are already strictly uppercase).
 2.  **Line Endings**: Use a single line feed (`\n`) for all newlines.
 3.  **No Indentation**: Remove all unnecessary whitespace between tokens.
 4.  **Constructor Payloads**:
-    *   `BN(...)`: Remove leading zeros and `+` signs. `BN(-0)` MUST become `BN(0)`.
-    *   `B(...)`: Use uppercase hex digits.
+    *   `BigNumber(...)`: Remove leading zeros and `+` signs. `BigNumber(-0)` MUST become `BigNumber(0)`.
+    *   `Binary(...)`: Use uppercase hex digits.
 5.  **Key Sorting**: Keys within an object **MUST** be sorted lexicographically by their UTF-8 byte values for strictly reproducible output.
 
 ---
 
 ## 17. JSON Interoperability (Recommended)
 
-| DTXT      | JSON         |
-| --------- | ------------ |
-| Number    | number       |
-| `T` / `F` | true / false |
-| `N`       | null         |
-| `D(...)`  | string       |
-| `BN(...)` | string       |
-| `B(...)`  | string       |
+| DTXT            | JSON         |
+| --------------- | ------------ |
+| Number          | number       |
+| `T` / `F`      | true / false |
+| `N`            | null         |
+| `Date(...)`     | string       |
+| `BigNumber(...)`| string       |
+| `Binary(...)`  | string       |
 
 Typed JSON wrappers MAY be used by tooling.
 
@@ -442,12 +443,12 @@ Implementations MAY provide configuration to increase these limits for specific 
 # DTXT example
 {
   name: `Sample`,
-  created: D(2026-01-15),
-  updated: D(2026-01-15T10:30:00Z),
+  created: Date(2026-01-15),
+  updated: Date(2026-01-15T10:30:00Z),
   active: T,
   count: 42,
-  big: BN(9007199254740993),
-  hash: B(A7B2319E44CE12BA),
+  big: BigNumber(9007199254740993),
+  hash: Binary(A7B2319E44CE12BA),
   items: [1, 2, 3],
   meta: {
     retries: 3,
@@ -516,7 +517,7 @@ array         = "[" [ value { "," value } [ "," ] ] "]" ;
 
 value         = ( number | boolean | null | string | interpreted_string | array | object | constructor ) ;
 
-constructor   = ( "D" | "BN" | "B" ) "(" payload ")" ;
+constructor   = ( "Date" | "BigNumber" | "Binary" ) "(" payload ")" ;
 payload       = char_not_paren { char_not_paren } ;
 
 string             = "`" { char_not_backtick } "`" ;

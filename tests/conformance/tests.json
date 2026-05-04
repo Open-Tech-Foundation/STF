@@ -233,42 +233,42 @@
   },
   {
     "name": "Constructor: Date (ISO)",
-    "input": "{ d: D(2026-01-15T12:00:00Z) }",
+    "input": "{ d: Date(2026-01-15T12:00:00Z) }",
     "expected": {
-      "d": "$date:2026-01-15"
+      "d": "$date:2026-01-15T12:00:00Z"
     }
   },
   {
     "name": "Constructor: Big Number",
-    "input": "{ bn: BN(12345678901234567890) }",
+    "input": "{ bn: BigNumber(12345678901234567890) }",
     "expected": {
       "bn": "$bigint:12345678901234567890"
     }
   },
   {
-    "name": "Constructor: BN Canonicalization (Leading Zeros)",
-    "input": "{ bn: BN(000123) }",
+    "name": "Constructor: BigNumber Canonicalization (Leading Zeros)",
+    "input": "{ bn: BigNumber(000123) }",
     "expected": {
       "bn": "$bigint:123"
     }
   },
   {
-    "name": "Constructor: BN Canonicalization (-0)",
-    "input": "{ bn: BN(-0) }",
+    "name": "Constructor: BigNumber Canonicalization (-0)",
+    "input": "{ bn: BigNumber(-0) }",
     "expected": {
       "bn": "$bigint:0"
     }
   },
   {
     "name": "Constructor: Binary (Hex)",
-    "input": "{ b: B(48454C4C4F) }",
+    "input": "{ b: Binary(48454C4C4F) }",
     "expected": {
       "b": "$binary:48454C4C4F"
     }
   },
   {
     "name": "Constructor: Binary Canonicalization (Lowercase Hex)",
-    "input": "{ b: B(48454c4c4f) }",
+    "input": "{ b: Binary(48454c4c4f) }",
     "expected": {
       "b": "$binary:48454C4C4F"
     }
@@ -411,27 +411,44 @@
   },
   {
     "name": "Invalid: Constructor Whitespace",
-    "input": "{ x: BN (123) }",
+    "input": "{ x: BigNumber (123) }",
     "error": "ERR_SYNTAX"
   },
   {
-    "name": "Invalid: Constructor Payload with Whitespace",
-    "input": "{ x: BN(1 2 3) }",
-    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
-  },
-  {
     "name": "Invalid: Constructor Payload with Parens",
-    "input": "{ x: BN(1(2)3) }",
+    "input": "{ x: BigNumber(1(2)3) }",
     "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
   },
   {
     "name": "Invalid: Empty Constructor Payload",
-    "input": "{ x: BN() }",
+    "input": "{ x: BigNumber() }",
     "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
   },
   {
     "name": "Invalid: Nesting Constructors",
-    "input": "{ x: BN(BN(1)) }",
+    "input": "{ x: BigNumber(BigNumber(1)) }",
+    "error": "ERR_NESTED_CONSTRUCTOR"
+  },
+  {
+    "name": "Invalid: Constructor Payload with Whitespace",
+    "input": "{ x: BigNumber(1 2 3) }",
+    "expected": {
+      "x": "$bigint:123"
+    }
+  },
+  {
+    "name": "Invalid: Constructor Payload with Parens",
+    "input": "{ x: BigNumber(1(2)3) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: Empty Constructor Payload",
+    "input": "{ x: BigNumber() }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: Nesting Constructors",
+    "input": "{ x: BigNumber(BigNumber(1)) }",
     "error": "ERR_NESTED_CONSTRUCTOR"
   },
   {
@@ -466,7 +483,48 @@
   },
   {
     "name": "Invalid: D() Constructor Payload",
-    "input": "{ date: D(not-a-date) }",
+    "input": "{ date: Date(not-a-date) }",
     "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Constructor: Date with space in payload is valid",
+    "input": "{ d: Date(2026-01-15 10:30:00) }",
+    "expected": {
+      "d": "$date:2026-01-15 10:30:00"
+    }
+  },
+  {
+    "name": "Constructor: BigNumber with space in payload is valid",
+    "input": "{ bn: BigNumber(900 719 925 474 099 3) }",
+    "expected": {
+      "bn": "$bigint:9007199254740993"
+    }
+  },
+  {
+    "name": "Constructor: Binary with space in payload is valid",
+    "input": "{ b: Binary(A7 B2 31 9E 44 CE 12 BA) }",
+    "expected": {
+      "b": "$binary:A7B2319E44CE12BA"
+    }
+  },
+  {
+    "name": "Invalid: Old short form D() is parse error",
+    "input": "{ d: D(2026-01-15) }",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "Invalid: Old short form BN() is parse error",
+    "input": "{ bn: BN(123) }",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "Invalid: Old short form B() is parse error",
+    "input": "{ b: B(ABCDEF) }",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "Invalid: Unknown Constructor",
+    "input": "{ x: CUSTOM(1) }",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
   }
 ]

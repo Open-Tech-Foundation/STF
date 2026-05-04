@@ -46,16 +46,16 @@ DTXT provides explicit types for data that JSON usually treats as strings.
 
 #### Dates
 - **JSON**: `"2026-01-15T10:00:00Z"`
-- **DTXT**: `D(2026-01-15T10:00:00Z)`
+- **DTXT**: `Date(2026-01-15T10:00:00Z)`
 
 #### Big Integers
 JSON often loses precision with large numbers or requires strings.
 - **JSON**: `"9007199254740993"` (string)
-- **DTXT**: `BN(9007199254740993)`
+- **DTXT**: `BigNumber(9007199254740993)`
 
 #### Binary Data
 - **JSON**: `"aGVsbG8="` (base64)
-- **DTXT**: `B(68656C6C6F)` (hex)
+- **DTXT**: `Binary(68656C6C6F)` (hex)
 
 ## Example Transformation
 

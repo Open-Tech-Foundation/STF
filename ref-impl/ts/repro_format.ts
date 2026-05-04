@@ -11,7 +11,7 @@ const input = `{
     reduction: 0.183
     isActive: T
   }
-  timestamp: D(2026-01-17)
+   timestamp: Date(2026-01-17)
 }`;
 
 console.log("--- Input ---");

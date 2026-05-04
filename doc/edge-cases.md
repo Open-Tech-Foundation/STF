@@ -67,25 +67,33 @@ To use escapes or include backticks, interpreted strings MUST be used.
 ### 4.1 Empty Payload
 Payloads **MUST NOT** be empty.
 ```dtxt
-{ date: D() } # INVALID
+{ date: Date() } # INVALID
 ```
 
 ### 4.2 Whitespace in Payload
-Payloads **MUST NOT** contain whitespace.
+Payloads **MAY** contain whitespace and any UTF-8 characters except `(` and `)`.
 ```dtxt
-{ date: D(2026-01-15 10:00:00) } # INVALID (use T separator)
+{ date: Date(2026-01-15 10:00:00) } # VALID
 ```
 
 ### 4.3 Nesting
 Constructors **MUST NOT** be nested.
 ```dtxt
-{ x: BN(BN(123)) } # INVALID
+{ x: BigNumber(BigNumber(123)) } # INVALID
 ```
 
 ### 4.4 Strict Validation
-Payloads **MUST** strictly conform to their specified formats. `D(...)` must be a valid ISO-8601 string.
+Payloads **MUST** strictly conform to their specified formats. `Date(...)` must be a valid ISO-8601 string.
 ```dtxt
-{ d1: D(not-a-date) } # INVALID (must fail to parse)
+{ d1: Date(not-a-date) } # INVALID (must fail to parse)
+```
+
+### 4.5 Old Short Form Constructors
+The old short form constructors (`D()`, `BN()`, `B()`) are no longer recognized and **MUST** produce a parse error with `ERR_UNKNOWN_CONSTRUCTOR`.
+```dtxt
+{ d: D(2026-01-15) } # INVALID (unknown constructor)
+{ bn: BN(123) }     # INVALID (unknown constructor)
+{ b: B(ABCDEF) }   # INVALID (unknown constructor)
 ```
 
 ## 5. Structural Constraints

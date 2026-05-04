@@ -1,4 +1,4 @@
-import * as dtxt from './dtxt';
+import * as dtxt from './dtxt.ts';
 import { writeFileSync, statSync } from 'fs';
 
 function generateLargeData(count: number) {

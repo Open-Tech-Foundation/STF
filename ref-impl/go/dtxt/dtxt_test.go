@@ -13,12 +13,12 @@ func TestSpecExample(t *testing.T) {
 # DTXT example
 {
   name: ` + "`Sample`" + `,
-  created: D(2026-01-15),
-  updated: D(2026-01-15T10:30:00Z),
+  created: Date(2026-01-15),
+  updated: Date(2026-01-15T10:30:00Z),
   active: T,
   count: 42,
-  big: BN(9007199254740993),
-  hash: B(A7B2319E44CE12BA),
+  big: BigNumber(9007199254740993),
+  hash: Binary(A7B2319E44CE12BA),
   items: [1, 2, 3],
   meta: {
     retries: 3,

@@ -22,22 +22,22 @@ const SAMPLES = {
     latency: 0.12,
     isActive: T,
   },
-  timestamp: D(2026-01-24),
+  timestamp: Date(2026-01-24),
 }`,
   users: `{
   users: [
     {
-      id: BN(10029384756201928374),
+      id: BigNumber(10029384756201928374),
       name: \`Alice\`,
       email: \`alice@example.com\`,
       roles: [\`admin\`, \`dev\`],
-      lastLogin: D(2026-01-23T14:20:00Z),
+      lastLogin: Date(2026-01-23T14:20:00Z),
     },
     {
-      id: BN(10029384756201928375),
+      id: BigNumber(10029384756201928375),
       name: \`Bob\`,
       email: \`bob@example.com\`,
-      avatar: B(89504E470D0A1A0A),
+      avatar: Binary(89504E470D0A1A0A),
       isActive: F,
     },
   ],
@@ -56,7 +56,7 @@ const SAMPLES = {
 string\`,
   ],
   metadata: {
-    hash: B(E2C1),
+    hash: Binary(E2C1),
     tags: [],
   },
 }`
