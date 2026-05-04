@@ -20,7 +20,7 @@ A project of the [Open Tech Foundation](https://github.com/Open-Tech-Foundation)
 - **Unquoted Keys**: Clean, minimal syntax.
 - **Backtick Strings**: No more escaping double quotes.
 - **Explicit Literals**: `T`, `F`, `N` for True, False, and Null.
-- **Constructor Literals**: Native support for Dates `D()`, BigNumbers `BN()`, and Binary `B()`.
+- **Constructor Literals**: Native support for Dates `Date()`, BigNumbers `BigNumber()`, and Binary `Binary()`.
 - **Single-line Comments**: Use `#` for notes and documentation.
 - **Fast Parsing**: Designed for direct byte-level processing.
 - **Optional Schema Validation**: Separate `dtxt-schema` validator keeps core parsing fast.
