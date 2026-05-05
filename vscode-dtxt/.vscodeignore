@@ -1,0 +1,22 @@
+# Ignore development files
+node_modules/
+src/
+out/test/
+.gitignore
+tsconfig.json
+*.ts
+*.map
+
+# Ignore test files
+test/
+.vscode-test/
+
+# Ignore docs
+*.md
+!README.md
+
+# Keep these
+!syntaxes/
+!language-configuration.json
+!out/extension.js
+!out/extension.js.map

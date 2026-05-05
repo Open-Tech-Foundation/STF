@@ -1,0 +1,237 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Prior99/textmate-json-schema/main/schema.json",
+  "name": "DTXT",
+  "scopeName": "source.dtxt",
+  "fileTypes": ["dtxt"],
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#objects"
+    },
+    {
+      "include": "#arrays"
+    },
+    {
+      "include": "#constructors"
+    },
+    {
+      "include": "#literals"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.dtxt",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "objects": {
+      "patterns": [
+        {
+          "name": "meta.structure.object.dtxt",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.object.begin.dtxt"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.object.end.dtxt"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#object-key"
+            },
+            {
+              "include": "#object-value"
+            }
+          ]
+        }
+      ]
+    },
+    "object-key": {
+      "patterns": [
+        {
+          "name": "meta.object.key.dtxt",
+          "match": "([a-zA-Z_][a-zA-Z0-9_-]*)\\s*(:)",
+          "captures": {
+            "1": {
+              "name": "entity.name.tag.dtxt"
+            },
+            "2": {
+              "name": "punctuation.separator.key-value.dtxt"
+            }
+          }
+        }
+      ]
+    },
+    "object-value": {
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#objects"
+        },
+        {
+          "include": "#arrays"
+        },
+        {
+          "include": "#constructors"
+        },
+        {
+          "include": "#literals"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#numbers"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.comma.dtxt"
+        }
+      ]
+    },
+    "arrays": {
+      "patterns": [
+        {
+          "name": "meta.structure.array.dtxt",
+          "begin": "\\[",
+          "end": "\\]",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.array.begin.dtxt"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.array.end.dtxt"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#objects"
+            },
+            {
+              "include": "#constructors"
+            },
+            {
+              "include": "#literals"
+            },
+            {
+              "include": "#strings"
+            },
+            {
+              "include": "#numbers"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.comma.dtxt"
+            }
+          ]
+        }
+      ]
+    },
+    "constructors": {
+      "patterns": [
+        {
+          "name": "meta.constructor.dtxt",
+          "match": "\\b(Date|BigNumber|Binary)\\(([^)]*)\\)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.constructor.name.dtxt"
+            },
+            "2": {
+              "name": "string.other.constructor.payload.dtxt"
+            }
+          }
+        }
+      ]
+    },
+    "literals": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.true.dtxt",
+          "match": "\\bT\\b"
+        },
+        {
+          "name": "constant.language.boolean.false.dtxt",
+          "match": "\\bF\\b"
+        },
+        {
+          "name": "constant.language.null.dtxt",
+          "match": "\\bN\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.backtick.dtxt",
+          "begin": "`",
+          "end": "`",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.dtxt"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.dtxt"
+            }
+          }
+        },
+        {
+          "name": "string.quoted.double.dtxt",
+          "begin": "\"",
+          "end": "\"",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.dtxt"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.dtxt"
+            }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.dtxt",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.dtxt",
+          "match": "-?\\b(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\\b"
+        }
+      ]
+    }
+  }
+}

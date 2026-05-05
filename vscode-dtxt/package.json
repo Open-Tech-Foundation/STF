@@ -1,0 +1,69 @@
+{
+  "name": "dtxt",
+  "displayName": "DTXT Support",
+  "description": "DTXT (Data Text Format) syntax highlighting and validation",
+  "version": "1.0.0",
+  "publisher": "opentf",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Open-Tech-Foundation/DTXT.git"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters",
+    "Linters"
+  ],
+  "keywords": [
+    "dtxt",
+    "data",
+    "format",
+    "serialization"
+  ],
+  "activationEvents": [
+    "onLanguage:dtxt"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "dtxt",
+        "aliases": [
+          "DTXT",
+          "Data Text Format"
+        ],
+        "extensions": [
+          ".dtxt"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "dtxt",
+        "scopeName": "source.dtxt",
+        "path": "./syntaxes/dtxt.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0"
+  },
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Open-Tech-Foundation/DTXT/issues"
+  },
+  "homepage": "https://github.com/Open-Tech-Foundation/DTXT#readme",
+  "icon": "icon.png"
+}
