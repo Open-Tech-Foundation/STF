@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DTXT WASM Test</title>
+</head>
+<body>
+    <h1>DTXT WASM Test</h1>
+    <div id="output"></div>
+    
+    <script type="module">
+        import * as wasm from './ref-impl/wasm/pkg-web/dtxt_wasm.js';
+        
+        const output = document.getElementById('output');
+        
+        function log(message) {
+            output.innerHTML += `<div>${message}</div>`;
+            console.log(message);
+        }
+        
+        try {
+            log('WASM module loaded: ' + typeof wasm.parse);
+            
+            // Test 1: Simple object
+            const result1 = wasm.parse('{name: `John`, age: 30}');
+            log('✅ Test 1 - Simple object: ' + JSON.stringify(result1));
+            
+            // Test 2: Nested object
+            const result2 = wasm.parse('{user: {name: `Alice`, active: T}}');
+            log('✅ Test 2 - Nested object: ' + JSON.stringify(result2));
+            
+            log('✅ Web WASM module working!');
+        } catch (e) {
+            log('❌ Error: ' + e.message);
+        }
+    </script>
+</body>
+</html>

@@ -46,6 +46,7 @@ The `ref-impl/` directory contains reference implementations for various languag
 -   [TypeScript](ref-impl/ts/)
 -   [Go](ref-impl/go/)
 -   [Rust](ref-impl/rs/)
+-   [WebAssembly](ref-impl/wasm/) - Browser & Node.js support
 
 ## 📊 Benchmark Results
 
@@ -63,6 +64,7 @@ DTXT consistently achieves a **reduced payload size** (16%–20%) compared to JS
 | ⏱️ **Parse** | Go | 91.2 ms | 49.6 ms | - | **69.6 ms** | 🚀 **23% faster** |
 | | Rust | 72.2 ms*| - | - | **54.9 ms** | 🚀 **24% faster** |
 | | TS | 40.8 ms | - | - | 342.3 ms | 8.3x slower |
+| | TS (WASM) | 38.8 ms** | - | - | **39 ms** | Comparable |
 | | Python | 93.0 ms | - | 90.3 ms | **90.3 ms** | 🚀 **3% faster** |
 | ✍️ **Serial**| Go | 105.6 ms | 38.4 ms | - | **47.4 ms** | 🚀 **55% faster** |
 | | Rust | 55.4 ms*| - | - | **27.1 ms** | 🚀 **51% faster** |
@@ -74,6 +76,7 @@ DTXT consistently achieves a **reduced payload size** (16%–20%) compared to JS
 
 > [!NOTE]
 > TypeScript benchmarks compare the DTXT reference implementation against **Bun's native JSON library**.
+> **Note**: TypeScript DTXT is slower than native JSON.parse because JSON.parse is implemented in C++ (V8 engine), while DTXT is pure JavaScript. For TypeScript environments needing native-speed DTXT parsing, use the [WASM module](ref-impl/wasm/).
 
 
 
