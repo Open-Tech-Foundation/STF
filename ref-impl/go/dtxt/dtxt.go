@@ -62,6 +62,12 @@ func (p *Parser) skipWhitespace() {
 // Parse parses a DTXT string and returns a map
 func (p *Parser) Parse() (map[string]DTXTValue, error) {
 	p.skipWhitespace()
+	for p.current() == '@' {
+		if err := p.parseDirective(); err != nil {
+			return nil, err
+		}
+		p.skipWhitespace()
+	}
 	result, err := p.parseObject()
 	if err != nil {
 		return nil, err
@@ -71,6 +77,30 @@ func (p *Parser) Parse() (map[string]DTXTValue, error) {
 		return nil, fmt.Errorf("trailing data at position %d", p.pos)
 	}
 	return result, nil
+}
+
+func (p *Parser) parseDirective() error {
+	p.advance() // skip '@'
+	for p.pos < len(p.input) {
+		ch := p.current()
+		if (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' {
+			p.advance()
+		} else {
+			break
+		}
+	}
+	if p.current() != '(' {
+		return fmt.Errorf("expected '(' after directive name at position %d", p.pos)
+	}
+	p.advance()
+	for p.pos < len(p.input) && p.current() != ')' {
+		p.advance()
+	}
+	if p.pos >= len(p.input) {
+		return fmt.Errorf("unterminated directive at position %d", p.pos)
+	}
+	p.advance() // skip ')'
+	return nil
 }
 
 func (p *Parser) parseValue() (DTXTValue, error) {
@@ -218,29 +248,62 @@ func (p *Parser) parseString() (string, error) {
 }
 
 func (p *Parser) parseInterpretedString() (string, error) {
-	start := p.pos
 	p.advance() // skip opening '"'
+	var buf strings.Builder
 	for p.pos < len(p.input) {
 		ch := p.current()
-		if ch == '\\' {
-			p.advance()
-			if p.pos < len(p.input) {
-				p.advance()
-			}
-			continue
-		}
 		if ch == '"' {
 			p.advance()
-			break
+			return buf.String(), nil
 		}
+		if ch == '\n' || ch == '\r' {
+			return "", fmt.Errorf("ERR_INVALID_STRING: literal newline in interpreted string")
+		}
+		if ch == '\\' {
+			p.advance()
+			if p.pos >= len(p.input) {
+				return "", fmt.Errorf("ERR_INVALID_STRING: unterminated escape")
+			}
+			esc := p.current()
+			switch esc {
+			case '"':
+				buf.WriteByte('"')
+			case '\\':
+				buf.WriteByte('\\')
+			case '/':
+				buf.WriteByte('/')
+			case 'b':
+				buf.WriteByte('\b')
+			case 'f':
+				buf.WriteByte('\f')
+			case 'n':
+				buf.WriteByte('\n')
+			case 'r':
+				buf.WriteByte('\r')
+			case 't':
+				buf.WriteByte('\t')
+			case 'u':
+				if p.pos+4 >= len(p.input) {
+					return "", fmt.Errorf("ERR_INVALID_STRING: incomplete unicode escape")
+				}
+				hexStr := string(p.input[p.pos+1 : p.pos+5])
+				var codepoint uint32
+				_, err := fmt.Sscanf(hexStr, "%x", &codepoint)
+				if err != nil {
+					return "", fmt.Errorf("ERR_INVALID_STRING: invalid unicode escape")
+				}
+				buf.WriteRune(rune(codepoint))
+				p.pos += 4
+			default:
+				return "", fmt.Errorf("ERR_INVALID_STRING: invalid escape sequence")
+			}
+			p.advance()
+			continue
+		}
+		buf.WriteByte(ch)
 		p.advance()
 	}
-	
-	result, err := strconv.Unquote(string(p.input[start:p.pos]))
-	if err != nil {
-		return "", fmt.Errorf("ERR_INVALID_STRING: %v", err)
-	}
-	return result, nil
+	return "", fmt.Errorf("ERR_INVALID_STRING: unterminated string")
 }
 
 func (p *Parser) parseNumber() (float64, error) {
@@ -328,18 +391,30 @@ func (p *Parser) parseConstructor() (DTXTValue, error) {
 			}
 			return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
 		case "BigNumber":
-			// Remove spaces from payload
-			payloadClean := strings.ReplaceAll(payload, " ", "")
+			if len(payload) == 0 {
+				return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: empty BigNumber payload")
+			}
+			for _, ch := range payload {
+				if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' {
+					return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: whitespace in BigNumber payload")
+				}
+			}
 			n := new(big.Int)
-			_, ok := n.SetString(payloadClean, 10)
+			_, ok := n.SetString(payload, 10)
 			if !ok {
 				return nil, fmt.Errorf("invalid BigNumber payload: %s", payload)
 			}
 			return n, nil
 		case "Binary":
-			// Remove spaces from payload
-			payloadClean := strings.ReplaceAll(payload, " ", "")
-			bytes, err := hex.DecodeString(payloadClean)
+			if len(payload) == 0 {
+				return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: empty Binary payload")
+			}
+			for _, ch := range payload {
+				if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' {
+					return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: whitespace in Binary payload")
+				}
+			}
+			bytes, err := hex.DecodeString(payload)
 			if err != nil {
 				return nil, fmt.Errorf("invalid Binary(hex) payload: %s", payload)
 			}

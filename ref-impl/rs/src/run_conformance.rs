@@ -30,9 +30,7 @@ fn normalize(val: &DTXTValue) -> JsonValue {
              JsonValue::String(format!("$bigint:{}", n))
         }
         DTXTValue::Date(s) => {
-            // Truncate to YYYY-MM-DD
-            let truncated = s.split('T').next().unwrap_or(s);
-            JsonValue::String(format!("$date:{}", truncated))
+            JsonValue::String(format!("$date:{}", s))
         }
         DTXTValue::Bytes(b) => {
             let hex = b.iter().map(|b| format!("{:02X}", b)).collect::<String>();

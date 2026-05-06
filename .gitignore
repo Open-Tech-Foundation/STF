@@ -51,3 +51,8 @@ target/
 debug/
 **/*.rs.bk
 Cargo.lock
+
+# Zig
+.zig-cache/
+zig-cache/
+zig-out/

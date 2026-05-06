@@ -167,7 +167,7 @@
     }
   },
   {
-    "name": "Strings: No Escapes",
+    "name": "Strings: No Escapes in Raw",
     "input": "{ s: `\\n` }",
     "expected": {
       "s": "\\n"
@@ -239,6 +239,20 @@
     }
   },
   {
+    "name": "Constructor: Date (Date Only)",
+    "input": "{ d: Date(2026-01-15) }",
+    "expected": {
+      "d": "$date:2026-01-15"
+    }
+  },
+  {
+    "name": "Constructor: Date with Space",
+    "input": "{ d: Date(2026-01-15 10:30:00) }",
+    "expected": {
+      "d": "$date:2026-01-15 10:30:00"
+    }
+  },
+  {
     "name": "Constructor: Big Number",
     "input": "{ bn: BigNumber(12345678901234567890) }",
     "expected": {
@@ -260,6 +274,13 @@
     }
   },
   {
+    "name": "Constructor: BigNumber with Negative",
+    "input": "{ bn: BigNumber(-9007199254740993) }",
+    "expected": {
+      "bn": "$bigint:-9007199254740993"
+    }
+  },
+  {
     "name": "Constructor: Binary (Hex)",
     "input": "{ b: Binary(48454C4C4F) }",
     "expected": {
@@ -276,77 +297,16 @@
   {
     "name": "Deep Nesting",
     "input": "{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{v:1}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}",
-    "expected": {
-      "a": {
-        "a": {
-          "a": {
-            "a": {
-              "a": {
-                "a": {
-                  "a": {
-                    "a": {
-                      "a": {
-                        "a": {
-                          "a": {
-                            "a": {
-                              "a": {
-                                "a": {
-                                  "a": {
-                                    "a": {
-                                      "a": {
-                                        "a": {
-                                          "a": {
-                                            "a": {
-                                              "a": {
-                                                "a": {
-                                                  "a": {
-                                                    "a": {
-                                                      "a": {
-                                                        "a": {
-                                                          "a": {
-                                                            "a": {
-                                                              "a": {
-                                                                "a": {
-                                                                  "a": {
-                                                                    "a": {
-                                                                      "v": 1
-                                                                    }
-                                                                  }
-                                                                }
-                                                              }
-                                                            }
-                                                          }
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    "expected": {"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"v":1}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
   },
   {
     "name": "Invalid: Duplicate Key",
     "input": "{ a: 1, a: 2 }",
+    "error": "ERR_DUPLICATE_KEY"
+  },
+  {
+    "name": "Invalid: Duplicate Key in Nested Object",
+    "input": "{ outer: { inner: { a: 1, a: 2 } } }",
     "error": "ERR_DUPLICATE_KEY"
   },
   {
@@ -362,6 +322,11 @@
   {
     "name": "Invalid: Unicode in Key",
     "input": "{ 🔑: 1 }",
+    "error": "ERR_INVALID_IDENTIFIER"
+  },
+  {
+    "name": "Invalid: Whitespace in Key",
+    "input": "{ a b: 1 }",
     "error": "ERR_INVALID_IDENTIFIER"
   },
   {
@@ -430,30 +395,33 @@
     "error": "ERR_NESTED_CONSTRUCTOR"
   },
   {
-    "name": "Invalid: Constructor Payload with Whitespace",
+    "name": "Invalid: Constructor Payload with Whitespace (BigNumber)",
     "input": "{ x: BigNumber(1 2 3) }",
-    "expected": {
-      "x": "$bigint:123"
-    }
-  },
-  {
-    "name": "Invalid: Constructor Payload with Parens",
-    "input": "{ x: BigNumber(1(2)3) }",
     "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
   },
   {
-    "name": "Invalid: Empty Constructor Payload",
-    "input": "{ x: BigNumber() }",
+    "name": "Invalid: Constructor Payload with Whitespace (Binary)",
+    "input": "{ x: Binary(A7 B2) }",
     "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
-  },
-  {
-    "name": "Invalid: Nesting Constructors",
-    "input": "{ x: BigNumber(BigNumber(1)) }",
-    "error": "ERR_NESTED_CONSTRUCTOR"
   },
   {
     "name": "Invalid: Unknown Constructor",
     "input": "{ x: CUSTOM(1) }",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "Invalid: Old Short Form D() is parse error",
+    "input": "{ d: D(2026-01-15) }",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "Invalid: Old Short Form BN() is parse error",
+    "input": "{ bn: BN(123) }",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "Invalid: Old Short Form B() is parse error",
+    "input": "{ b: B(ABCDEF) }",
     "error": "ERR_UNKNOWN_CONSTRUCTOR"
   },
   {
@@ -475,6 +443,21 @@
     }
   },
   {
+    "name": "Underscore Keys",
+    "input": "{ user_id: 1, _private: 2 }",
+    "expected": {
+      "user_id": 1,
+      "_private": 2
+    }
+  },
+  {
+    "name": "Leading Digit Keys",
+    "input": "{ 123key: `value` }",
+    "expected": {
+      "123key": "value"
+    }
+  },
+  {
     "name": "Interpreted Strings: Escapes",
     "input": "{ text: \"hello\\nworld\\\"\" }",
     "expected": {
@@ -482,49 +465,114 @@
     }
   },
   {
-    "name": "Invalid: D() Constructor Payload",
+    "name": "Interpreted Strings: Backslash Escape",
+    "input": "{ text: \"path\\\\to\\\\file\" }",
+    "expected": {
+      "text": "path\\to\\file"
+    }
+  },
+  {
+    "name": "Interpreted Strings: Unicode Escape",
+    "input": "{ text: \"\\u0048\\u0065\\u006C\\u006C\\u006F\" }",
+    "expected": {
+      "text": "Hello"
+    }
+  },
+  {
+    "name": "Interpreted Strings: Tab and Carriage Return",
+    "input": "{ text: \"col1\\tcol2\\r\\n\" }",
+    "expected": {
+      "text": "col1\tcol2\r\n"
+    }
+  },
+  {
+    "name": "Interpreted Strings: Form Feed and Backspace",
+    "input": "{ text: \"\\f\\b\" }",
+    "expected": {
+      "text": "\f\b"
+    }
+  },
+  {
+    "name": "Interpreted Strings: Solidus Escape",
+    "input": "{ text: \"a\\/b\" }",
+    "expected": {
+      "text": "a/b"
+    }
+  },
+  {
+    "name": "Invalid: Interpreted String with Literal Newline",
+    "input": "{ text: \"hello\nworld\" }",
+    "error": "ERR_INVALID_STRING"
+  },
+  {
+    "name": "Invalid: Date with Invalid ISO-8601",
+    "input": "{ d: Date(2026-13-45) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: BigNumber with Non-Digit Payload",
+    "input": "{ bn: BigNumber(12.34) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: BigNumber with Letters",
+    "input": "{ bn: BigNumber(123a) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: Binary with Odd-Length Hex",
+    "input": "{ b: Binary(ABC) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: Binary with Non-Hex Characters",
+    "input": "{ b: Binary(123G) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: Trailing Content After Root Object",
+    "input": "{a: 1} extra",
+    "error": "ERR_TRAILING_CONTENT"
+  },
+  {
+    "name": "Invalid: Unclosed Root Object",
+    "input": "{a: 1",
+    "error": "ERR_UNTERMINATED"
+  },
+  {
+    "name": "Invalid: Unclosed Array",
+    "input": "{a: [1, 2}",
+    "error": "ERR_UNTERMINATED"
+  },
+  {
+    "name": "Invalid: Date Constructor with Invalid Payload",
     "input": "{ date: Date(not-a-date) }",
     "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
   },
   {
-    "name": "Constructor: Date with space in payload is valid",
-    "input": "{ d: Date(2026-01-15 10:30:00) }",
+    "name": "Raw String with Literal Newline",
+    "input": "{ text: `line one\nline two` }",
     "expected": {
-      "d": "$date:2026-01-15 10:30:00"
+      "text": "line one\nline two"
     }
   },
   {
-    "name": "Constructor: BigNumber with space in payload is valid",
-    "input": "{ bn: BigNumber(900 719 925 474 099 3) }",
+    "name": "Directive: @schema",
+    "input": "@schema(https://example.com/schema.dtxt)\n{ name: `test` }",
     "expected": {
-      "bn": "$bigint:9007199254740993"
+      "name": "test"
     }
   },
   {
-    "name": "Constructor: Binary with space in payload is valid",
-    "input": "{ b: Binary(A7 B2 31 9E 44 CE 12 BA) }",
+    "name": "Directive: Unknown (Warning, Not Error)",
+    "input": "@custom(some-value)\n{ name: `test` }",
     "expected": {
-      "b": "$binary:A7B2319E44CE12BA"
+      "name": "test"
     }
   },
   {
-    "name": "Invalid: Old short form D() is parse error",
-    "input": "{ d: D(2026-01-15) }",
-    "error": "ERR_UNKNOWN_CONSTRUCTOR"
-  },
-  {
-    "name": "Invalid: Old short form BN() is parse error",
-    "input": "{ bn: BN(123) }",
-    "error": "ERR_UNKNOWN_CONSTRUCTOR"
-  },
-  {
-    "name": "Invalid: Old short form B() is parse error",
-    "input": "{ b: B(ABCDEF) }",
-    "error": "ERR_UNKNOWN_CONSTRUCTOR"
-  },
-  {
-    "name": "Invalid: Unknown Constructor",
-    "input": "{ x: CUSTOM(1) }",
-    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+    "name": "Directive: Invalid Syntax (Whitespace Before Paren)",
+    "input": "@schema (https://example.com/schema.dtxt)\n{ name: `test` }",
+    "error": "ERR_SYNTAX"
   }
 ]

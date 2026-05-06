@@ -132,12 +132,39 @@ impl<'a> DTXTParser<'a> {
 
     pub fn parse(&mut self) -> Result<FxHashMap<&'a str, DTXTValue<'a>>, DTXTError> {
         self.skip_whitespace();
+        while self.current() == Some(b'@') {
+            self.parse_directive()?;
+            self.skip_whitespace();
+        }
         let result = self.parse_object()?;
         self.skip_whitespace();
         if self.pos < self.input.len() {
             return Err(DTXTError::TrailingData(self.pos));
         }
         Ok(result)
+    }
+
+    fn parse_directive(&mut self) -> Result<(), DTXTError> {
+        self.advance(); // skip '@'
+        while let Some(ch) = self.current() {
+            if ch.is_ascii_alphanumeric() || ch == b'_' || ch == b'-' {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        if self.current() != Some(b'(') {
+            return Err(DTXTError::Syntax(self.pos));
+        }
+        self.advance(); // skip '('
+        while self.current() != Some(b')') {
+            if self.pos >= self.input.len() {
+                return Err(DTXTError::Unterminated);
+            }
+            self.advance();
+        }
+        self.advance(); // skip ')'
+        Ok(())
     }
 
     #[inline]
@@ -345,24 +372,91 @@ impl<'a> DTXTParser<'a> {
 
         match type_name {
             "Date" => {
-                // Payload may contain any UTF-8 except ( and )
-                // Validate ISO 8601 - allow spaces in payload
-                let valid = payload.len() >= 10 && payload.chars().all(|c| c.is_ascii_digit() || c == '-' || c == 'T' || c == 'Z' || c == ':' || c == '.' || c == '+' || c == ' ');
-                if !valid {
+                let bytes = payload.as_bytes();
+                if payload.len() < 10 {
+                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                }
+                let mut i = 0;
+                let match_digit = |i: &mut usize, count: usize| -> Option<u32> {
+                    let mut result = 0u32;
+                    for _ in 0..count {
+                        if *i >= bytes.len() || !bytes[*i].is_ascii_digit() {
+                            return None;
+                        }
+                        result = result * 10 + (bytes[*i] - b'0') as u32;
+                        *i += 1;
+                    }
+                    Some(result)
+                };
+                let match_char = |i: &mut usize, ch: u8| -> bool {
+                    if *i >= bytes.len() || bytes[*i] != ch {
+                        return false;
+                    }
+                    *i += 1;
+                    true
+                };
+
+                if match_digit(&mut i, 4).is_none() || !match_char(&mut i, b'-') {
+                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                }
+                let month = match_digit(&mut i, 2).ok_or_else(|| DTXTError::InvalidConstructorPayload(payload.to_string()))?;
+                if !match_char(&mut i, b'-') {
+                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                }
+                let day = match_digit(&mut i, 2).ok_or_else(|| DTXTError::InvalidConstructorPayload(payload.to_string()))?;
+
+                if month < 1 || month > 12 || day < 1 || day > 31 {
+                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                }
+
+                if i < bytes.len() && (bytes[i] == b'T' || bytes[i] == b' ') {
+                    i += 1;
+                    if match_digit(&mut i, 2).is_none() || !match_char(&mut i, b':') {
+                        return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                    }
+                    if match_digit(&mut i, 2).is_none() || !match_char(&mut i, b':') {
+                        return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                    }
+                    if match_digit(&mut i, 2).is_none() {
+                        return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                    }
+                    if i < bytes.len() && bytes[i] == b'.' {
+                        i += 1;
+                        while i < bytes.len() && bytes[i].is_ascii_digit() {
+                            i += 1;
+                        }
+                    }
+                    if i < bytes.len() && bytes[i] == b'Z' {
+                        i += 1;
+                    } else if i < bytes.len() && (bytes[i] == b'+' || bytes[i] == b'-') {
+                        i += 1;
+                        if match_digit(&mut i, 2).is_none() || !match_char(&mut i, b':') {
+                            return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                        }
+                        if match_digit(&mut i, 2).is_none() {
+                            return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                        }
+                    }
+                }
+
+                if i != bytes.len() {
                     return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
                 }
                 Ok(DTXTValue::Date(payload))
             }
             "BigNumber" => {
-                // Remove spaces from payload for validation and parsing
-                let cleaned: String = payload.chars().filter(|c| !c.is_whitespace()).collect();
-                let num = cleaned.parse::<BigInt>()
+                if payload.as_bytes().iter().any(|&c| c == b' ' || c == b'\t' || c == b'\r' || c == b'\n') {
+                    return Err(DTXTError::InvalidConstructorPayload(format!("BigNumber({})", payload)));
+                }
+                let num = payload.parse::<BigInt>()
                     .map_err(|_| DTXTError::InvalidConstructorPayload(format!("BigNumber({})", payload)))?;
                 Ok(DTXTValue::BigInt(num))
             }
             "Binary" => {
-                // Remove spaces from payload for validation and parsing
-                let cleaned: String = payload.chars().filter(|c| !c.is_whitespace()).collect();
+                if payload.as_bytes().iter().any(|&c| c == b' ' || c == b'\t' || c == b'\r' || c == b'\n') {
+                    return Err(DTXTError::InvalidConstructorPayload(format!("Binary({}) whitespace", payload)));
+                }
+                let cleaned: String = payload.chars().map(|c| c.to_ascii_uppercase()).collect();
                 if cleaned.len() % 2 != 0 {
                     return Err(DTXTError::InvalidConstructorPayload(format!("Binary({}) length", payload)));
                 }

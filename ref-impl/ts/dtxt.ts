@@ -10,9 +10,6 @@ export type DTXTValue =
     | number
     | boolean
     | null
-    | bigint
-    | Date
-    | Uint8Array
     | DTXTValue[]
     | { [key: string]: DTXTValue };
 
@@ -29,12 +26,34 @@ export class DTXTParser {
 
     parse(): { [key: string]: DTXTValue } {
         this.skipWhitespaceAndComments();
+        while (this.current() === '@') {
+            this.parseDirective();
+            this.skipWhitespaceAndComments();
+        }
         const result = this.parseObject();
         this.skipWhitespaceAndComments();
         if (this.pos < this.input.length) {
             throw new DTXTError(`Trailing data after root object: ${this.input[this.pos]}`);
         }
         return result;
+    }
+
+    private parseDirective(): void {
+        this.advance();
+        while (this.pos < this.input.length && this.isAlpha(this.input[this.pos])) {
+            this.advance();
+        }
+        if (this.current() !== '(') {
+            throw new DTXTError("ERR_SYNTAX: Expected '(' after directive name");
+        }
+        this.advance();
+        while (this.pos < this.input.length && this.input[this.pos] !== ')') {
+            this.advance();
+        }
+        if (this.pos >= this.input.length) {
+            throw new DTXTError("Unterminated directive");
+        }
+        this.advance();
     }
 
     private current(): string | null {
@@ -225,11 +244,14 @@ export class DTXTParser {
     }
 
     private parseInterpretedString(): string {
-        this.advance(); // skip "
+        this.advance();
         const start = this.pos;
         while (this.pos < this.input.length && this.input[this.pos] !== '"') {
+            if (this.input[this.pos] === '\n' || this.input[this.pos] === '\r') {
+                throw new DTXTError("ERR_INVALID_STRING: Literal newline in interpreted string");
+            }
             if (this.input[this.pos] === '\\') {
-                this.advance(); // skip \
+                this.advance();
             }
             this.advance();
         }
@@ -237,7 +259,7 @@ export class DTXTParser {
             throw new DTXTError("Unterminated string");
         }
         const result = this.input.slice(start, this.pos);
-        this.advance(); // skip closing "
+        this.advance();
         try {
             return JSON.parse(`"${result}"`);
         } catch (e) {
@@ -286,7 +308,7 @@ export class DTXTParser {
         if (this.current() !== '(') {
             throw new DTXTError(`Expected '(' after constructor name at position ${this.pos}`);
         }
-        this.advance(); // skip (
+        this.advance();
 
         const payloadStart = this.pos;
         while (this.pos < this.input.length && this.input[this.pos] !== ')') {
@@ -300,32 +322,124 @@ export class DTXTParser {
         if (this.current() !== ')') {
             throw new DTXTError("Unterminated constructor");
         }
-        this.advance(); // skip )
+        this.advance();
 
         if (typeName === 'Date') {
-            if (!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?$/.test(payload)) {
-                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
-            }
-            return new Date(payload);
+            return this.validateDate(payload);
         } else if (typeName === 'BigNumber') {
-            const cleaned = payload.replace(/\s/g, '');
-            if (!/^-?\d+$/.test(cleaned)) {
-                throw new DTXTError(`Invalid BigNumber payload: ${payload}`);
-            }
-            return BigInt(cleaned);
+            return this.parseBigNumber(payload);
         } else if (typeName === 'Binary') {
-            const cleaned = payload.replace(/\s/g, '');
-            if (cleaned.length % 2 !== 0) {
-                throw new DTXTError(`Invalid Binary(hex) payload: ${payload}`);
-            }
-            const bytes = new Uint8Array(cleaned.length / 2);
-            for (let i = 0; i < cleaned.length; i += 2) {
-                bytes[i / 2] = parseInt(cleaned.slice(i, i + 2), 16);
-            }
-            return bytes;
+            return this.parseBinary(payload);
         } else {
             throw new DTXTError(`Unknown constructor: ${typeName}`);
         }
+    }
+
+    private validateDate(payload: string): string {
+        if (payload.length === 0) {
+            throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
+        }
+
+        let i = 0;
+        const matchDigit = (count: number): string | null => {
+            let result = '';
+            for (let j = 0; j < count; j++) {
+                if (i >= payload.length || payload[i] < '0' || payload[i] > '9') return null;
+                result += payload[i];
+                i++;
+            }
+            return result;
+        };
+        const matchChar = (ch: string): boolean => {
+            if (i >= payload.length || payload[i] !== ch) return false;
+            i++;
+            return true;
+        };
+
+        const year = matchDigit(4);
+        if (!year || !matchChar('-')) throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
+        const month = matchDigit(2);
+        if (!month || !matchChar('-')) throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
+        const day = matchDigit(2);
+        if (!day) throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
+
+        const m = parseInt(month);
+        const d = parseInt(day);
+        if (m < 1 || m > 12) throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
+        if (d < 1 || d > 31) throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
+
+        if (i < payload.length && (payload[i] === 'T' || payload[i] === ' ')) {
+            i++;
+            if (!matchDigit(2) || !matchChar(':')) throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
+            if (!matchDigit(2) || !matchChar(':')) throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
+            if (!matchDigit(2)) throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
+            if (i < payload.length && payload[i] === '.') {
+                i++;
+                while (i < payload.length && payload[i] >= '0' && payload[i] <= '9') i++;
+            }
+            if (i < payload.length && payload[i] === 'Z') {
+                i++;
+            } else if (i < payload.length && (payload[i] === '+' || payload[i] === '-')) {
+                i++;
+                if (!matchDigit(2) || !matchChar(':')) throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
+                if (!matchDigit(2)) throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
+            }
+        }
+
+        if (i !== payload.length) {
+            throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload`);
+        }
+
+        return `$date:${payload}`;
+    }
+
+    private parseBigNumber(payload: string): string {
+        if (payload.length === 0) {
+            throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid BigNumber() payload`);
+        }
+        for (const ch of payload) {
+            if (ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') {
+                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid BigNumber() payload`);
+            }
+        }
+        let idx = 0;
+        const negative = payload[0] === '-';
+        if (payload[0] === '+' || payload[0] === '-') idx = 1;
+        if (idx >= payload.length) {
+            throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid BigNumber() payload`);
+        }
+        for (let j = idx; j < payload.length; j++) {
+            if (payload[j] < '0' || payload[j] > '9') {
+                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid BigNumber() payload`);
+            }
+        }
+        let cleaned = payload.slice(idx);
+        while (cleaned.length > 1 && cleaned[0] === '0') {
+            cleaned = cleaned.slice(1);
+        }
+        if (cleaned === '0') return `$bigint:0`;
+        return negative ? `$bigint:-${cleaned}` : `$bigint:${cleaned}`;
+    }
+
+    private parseBinary(payload: string): string {
+        if (payload.length === 0) {
+            throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Binary() payload`);
+        }
+        for (const ch of payload) {
+            if (ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') {
+                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Binary() payload`);
+            }
+        }
+        const cleaned = payload.toUpperCase();
+        if (cleaned.length % 2 !== 0) {
+            throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Binary() payload`);
+        }
+        for (const ch of cleaned) {
+            if (!('0123456789ABCDEF'.includes(ch))) {
+                throw new DTXTError(`ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Binary() payload`);
+            }
+        }
+        return `$binary:${cleaned}`;
     }
 }
 
@@ -349,21 +463,6 @@ export function stringify(obj: DTXTValue, indent: string | null = null): string 
             }
             if (indent) parts.push(indent.repeat(level));
             parts.push(']');
-        } else if (o instanceof Date) {
-            let val = o.toISOString();
-            if (val.includes('T00:00:00.000Z')) val = val.split('T')[0];
-            else if (val.endsWith('.000Z')) val = val.slice(0, -5) + 'Z';
-            parts.push('Date(', val, ')');
-        } else if (o instanceof Uint8Array) {
-            parts.push('Binary(');
-            for (let i = 0; i < o.length; i++) {
-                const hex = o[i].toString(16);
-                if (hex.length === 1) parts.push('0');
-                parts.push(hex.toUpperCase());
-            }
-            parts.push(')');
-        } else if (typeof o === 'bigint') {
-            parts.push('BigNumber(', o.toString(), ')');
         } else if (o === null) {
             parts.push('N');
         } else if (typeof o === 'boolean') {
@@ -371,7 +470,14 @@ export function stringify(obj: DTXTValue, indent: string | null = null): string 
         } else if (typeof o === 'number') {
             parts.push(o.toString());
         } else if (typeof o === 'string') {
-            if (o.includes('`')) {
+            if (o.startsWith('$date:')) {
+                parts.push('Date(', o.slice(6), ')');
+            } else if (o.startsWith('$bigint:')) {
+                const val = o.slice(8);
+                parts.push('BigNumber(', val, ')');
+            } else if (o.startsWith('$binary:')) {
+                parts.push('Binary(', o.slice(8), ')');
+            } else if (o.includes('`')) {
                 parts.push(JSON.stringify(o));
             } else {
                 parts.push('`', o, '`');

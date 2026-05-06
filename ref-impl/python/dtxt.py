@@ -1,8 +1,4 @@
 import re
-from datetime import datetime, date
-import decimal
-import binascii
-
 import json
 
 class DTXTError(Exception):
@@ -10,6 +6,7 @@ class DTXTError(Exception):
 
 class DTXTLexer:
     TOKEN_SPEC = [
+        ('DIRECTIVE',   r'@[A-Za-z0-9_-]+\([^()]*\)'),
         ('COMMENT',   r'#.*'),
         ('STRING',    r'`[^`]*`'),
         ('DSTRING',   r'"(?:[^"\\]|\\.)*"'),
@@ -37,7 +34,7 @@ class DTXTLexer:
         for mo in re.finditer(regex, text):
             kind = mo.lastgroup
             value = mo.group()
-            if kind == 'WHITESPACE' or kind == 'COMMENT':
+            if kind == 'WHITESPACE' or kind == 'COMMENT' or kind == 'DIRECTIVE':
                 continue
             elif kind == 'MISMATCH':
                 raise DTXTError(f"Unexpected character: {value!r}")
@@ -162,40 +159,111 @@ class DTXTParser:
         return arr
 
     def parse_constructor(self, full_value):
-        # TypeName(payload)
-        match = re.match(r'([A-Za-z0-9_]+)\((.*)\)', full_value)
+        match = re.match(r'([A-Za-z0-9_-]+)\((.*)\)', full_value)
         if not match:
              raise DTXTError(f"Invalid constructor format: {full_value}")
         type_name, payload = match.groups()
 
         if type_name == 'Date':
-            # ISO 8601 - allow spaces in payload
-            try:
-                # Try full datetime first (with possible space instead of T)
-                payload_clean = payload.replace(' ', 'T') if ' ' in payload and 'T' not in payload else payload
-                if 'T' in payload_clean:
-                    return datetime.fromisoformat(payload_clean.replace('Z', '+00:00'))
-                else:
-                    return datetime.strptime(payload, '%Y-%m-%d').date()
-            except Exception:
+            if len(payload) == 0:
                 raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+
+            i = 0
+            def match_digit(count):
+                nonlocal i
+                result = ''
+                for _ in range(count):
+                    if i >= len(payload) or not payload[i].isdigit():
+                        return None
+                    result += payload[i]
+                    i += 1
+                return result
+
+            def match_char(ch):
+                nonlocal i
+                if i >= len(payload) or payload[i] != ch:
+                    return False
+                i += 1
+                return True
+
+            year = match_digit(4)
+            if not year or not match_char('-'):
+                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+            month = match_digit(2)
+            if not month or not match_char('-'):
+                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+            day = match_digit(2)
+            if not day:
+                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+
+            m = int(month)
+            d = int(day)
+            if m < 1 or m > 12:
+                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+            if d < 1 or d > 31:
+                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+
+            if i < len(payload) and payload[i] in ('T', ' '):
+                i += 1
+                if not match_digit(2) or not match_char(':'):
+                    raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+                if not match_digit(2) or not match_char(':'):
+                    raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+                if not match_digit(2):
+                    raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+                if i < len(payload) and payload[i] == '.':
+                    i += 1
+                    while i < len(payload) and payload[i].isdigit():
+                        i += 1
+                if i < len(payload) and payload[i] == 'Z':
+                    i += 1
+                elif i < len(payload) and payload[i] in ('+', '-'):
+                    i += 1
+                    if not match_digit(2) or not match_char(':'):
+                        raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+                    if not match_digit(2):
+                        raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+
+            if i != len(payload):
+                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
+
+            return f"$date:{payload}"
         elif type_name == 'BigNumber':
-            # Remove spaces from payload
-            payload_clean = payload.replace(' ', '')
-            if not re.match(r'^-?[0-9]+$', payload_clean):
-                 raise DTXTError(f"Invalid BigNumber payload: {payload}")
-            # Canonicalization: remove leading zeros and normalize -0 to 0
-            result = int(payload_clean)
-            if result == 0:
-                return 0
-            return result
+            if len(payload) == 0:
+                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid BigNumber() payload")
+            for ch in payload:
+                if ch in (' ', '\t', '\r', '\n'):
+                    raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid BigNumber() payload")
+            idx = 0
+            negative = payload[0] == '-'
+            if payload[0] in ('+', '-'):
+                idx = 1
+            if idx >= len(payload):
+                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid BigNumber() payload")
+            for j in range(idx, len(payload)):
+                if not payload[j].isdigit():
+                    raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid BigNumber() payload")
+            cleaned = payload[idx:]
+            while len(cleaned) > 1 and cleaned[0] == '0':
+                cleaned = cleaned[1:]
+            if cleaned == '0':
+                return "$bigint:0"
+            if negative:
+                return f"$bigint:-{cleaned}"
+            return f"$bigint:{cleaned}"
         elif type_name == 'Binary':
-            # Remove spaces from payload
-            payload_clean = payload.replace(' ', '')
-            try:
-                return binascii.unhexlify(payload_clean)
-            except Exception:
-                raise DTXTError(f"Invalid Binary(hex) payload: {payload}")
+            if len(payload) == 0:
+                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Binary() payload")
+            for ch in payload:
+                if ch in (' ', '\t', '\r', '\n'):
+                    raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Binary() payload")
+            cleaned = payload.upper()
+            if len(cleaned) % 2 != 0:
+                raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Binary() payload")
+            for ch in cleaned:
+                if ch not in '0123456789ABCDEF':
+                    raise DTXTError("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Binary() payload")
+            return f"$binary:{cleaned}"
         else:
             raise DTXTError(f"Unknown constructor: {type_name}")
 
@@ -222,7 +290,6 @@ def loads(dtxt_text):
 def dumps(obj):
     if isinstance(obj, dict):
         items = []
-        # Keys must be sorted for canonicality if we want determinism
         for k in sorted(obj.keys()):
             v = obj[k]
             items.append(f"{k}: {dumps(v)}")
@@ -231,35 +298,29 @@ def dumps(obj):
         items = [dumps(element) for element in obj]
         return "[" + ", ".join(items) + "]"
     elif isinstance(obj, str):
-        # Backticked string
-        return f"`{obj}`"
+        if obj.startswith('$date:'):
+            return f"Date({obj[6:]})"
+        elif obj.startswith('$bigint:'):
+            return f"BigNumber({obj[8:]})"
+        elif obj.startswith('$binary:'):
+            return f"Binary({obj[8:]})"
+        elif '`' in obj:
+            return json.dumps(obj)
+        else:
+            return f"`{obj}`"
     elif isinstance(obj, bool):
         return "T" if obj else "F"
     elif isinstance(obj, type(None)):
         return "N"
     elif isinstance(obj, (int, float)):
-        # Check if it was a BN or large int
         return str(obj)
-    elif isinstance(obj, (datetime, date)):
-        if hasattr(obj, 'isoformat'):
-            val = obj.isoformat()
-            if isinstance(obj, datetime) and obj.tzinfo:
-                val = val.replace('+00:00', 'Z')
-            return f"Date({val})"
-        return f"Date({obj})"
-    elif isinstance(obj, bytes):
-        return f"Binary({obj.hex().upper()})"
     else:
         raise DTXTError(f"Unsupported type for serialization: {type(obj)}")
 
 def dumps_canonical(obj, indent=None):
-    # For now, let's keep it simple. Canonical usually implies no extra space.
-    # But for human readability, we might want indent.
-    # The spec says "Avoid unnecessary whitespace" for canonical output.
     if indent is None:
         return dumps(obj)
-    
-    # Recursive indent version
+
     def _dump(o, level):
         sp = "  " * level
         if isinstance(o, dict):
@@ -277,5 +338,5 @@ def dumps_canonical(obj, indent=None):
             return "[\n" + ",\n".join(items) + ",\n" + sp + "]"
         else:
             return dumps(o)
-            
+
     return _dump(obj, 0)
