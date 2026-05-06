@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@assemblyscript/loader": "^0.28.17"
+  }
+}
