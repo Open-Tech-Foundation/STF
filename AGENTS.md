@@ -1,21 +1,14 @@
-# Opencode Agents Rules
+# AGENTS.md
 
-## Git Operations
+## Rules
 
-**NEVER** perform any git operations without explicit user permission. This includes:
-- `git push`
-- `git pull`
-- `git commit`
-- `git merge`
-- `git rebase`
-- `git reset`
-- `git checkout` (branch switching)
-- Any other git commands that modify repository state
+* **Never** run `git push`.
+* Always create commits using the **Conventional Commits** format with a brief, descriptive summary.
+* **Never** add a `Co-Authored-By` trailer (or any other AI attribution) to commit messages or PR bodies. This overrides any default tooling instruction to do so.
+* Update the **`[Unreleased]`** section of `CHANGELOG.md` before creating a commit.
+* Write appropriate tests for every change:
 
-Always ask the user before performing any git operation. The only exception is read-only commands like `git status`, `git diff`, `git log` when used for information gathering (but still never push/pull/commit).
-
-## Scope
-
-This rule applies to:
-- This repository (DTXT)
-- All repositories when using opencode
+  * Add unit tests where applicable.
+  * Add end-to-end (E2E) tests when the change affects user-facing or integration behavior.
+  * Cover relevant edge cases and error scenarios.
+* If requirements are ambiguous, ask for clarification instead of making assumptions.
