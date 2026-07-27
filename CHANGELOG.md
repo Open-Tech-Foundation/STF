@@ -54,11 +54,37 @@ the reference implementations may change incompatibly at any time.
   checks value kinds, compares numbers as `binary64` bit patterns, and compares decimals on
   coefficient *and* scale.
 
+- `migration-guide.md` §1.4 — the JSON constructs that have **no** STF representation
+  (non-identifier keys, non-object roots, `NaN`/`Infinity`, duplicate keys), stated up front so
+  a bulk migration can be planned. §1.5 lists the JSON5 syntax STF rejects.
+- `migration-guide.md` §2 — NDJSON/JSONL → STF Stream.
+- `migration-guide.md` §4 — migrating from pre-1.0 STF drafts, covering documents that now fail,
+  documents that now parse differently, the removal of string-encoded typed values, and the move
+  to exact error codes.
+- `comparison.md` — sections comparing STF with JSONC, JSON5, and NDJSON/JSONL, which are now
+  explicitly in scope.
+- `README.md` — a Conformance Status table recording that no reference implementation yet meets
+  the 1.0 draft, so the corpus being red is not mistaken for a regression.
+
 ### Removed
 
 - Dead test files: `tests/conformance/run_all.mjs`, `run_conformance.mjs`, and the stale
   `results_ts.json`, `results_python.json`, `results_zig.json` outputs (Zig was pruned
   earlier). Nothing referenced them.
+- `doc/edge-cases.md`. Every rule it stated is now in the specification with more precision
+  (§6.3, §10.2, §10.4, §10.5), and the duplicate had already drifted — it claimed `BINARY`
+  padding was mandatory, which is wrong for payloads whose length is already a multiple of 4.
+
+### Fixed
+
+- `comparison.md` no longer rates STF's parsing speed as "Extreme" against JSON's "Very Fast",
+  and drops the claim of SIMD-accelerated parsing, which no implementation performs. Performance
+  claims now match what the repository's benchmarks measure, including the cases where a native
+  JSON parser is faster, and carry a caveat that the figures are not comparable across languages.
+- `README.md` performance section rewritten on the same basis. It previously claimed compiled
+  STF implementations "outperform standard JSON parsers and serializers" and labelled Rust
+  "Overall Fastest" with no JSON baseline measured, while the same table showed Go's Sonic
+  parsing faster.
 
 ### Changed
 

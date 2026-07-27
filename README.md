@@ -7,45 +7,122 @@ A project of the [Open Tech Foundation](https://github.com/Open-Tech-Foundation)
 > [!CAUTION]
 > **EXPERIMENTAL PRE-RELEASE**
 >
-> STF is currently in an experimental, pre-release state. The specification and implementations provided here are for research and feedback purposes only. APIs and document grammar are subject to breaking changes.
+> STF is in an experimental, pre-release state, for research and feedback only.
+> The specification and the reference implementations may change incompatibly at any time.
+>
+> The 1.0 draft specification is complete, but **the reference implementations have not yet
+> caught up to it** — see [Conformance Status](#conformance-status).
 
 ## Overview
 
->**STF (Structured Text Format)** is a human-readable, structured data format designed for configuration and high-performance data interchange. It emphasizes predictability, fast parsing, and explicit typing via uppercase constructor literals (`BIGINT`, `DECIMAL`, `DATE`, `TIMESTAMP`, `BINARY`).
+**STF (Structured Text Format)** is a human-readable, structured data format for configuration
+and data interchange. It is designed to **replace** JSON, JSONC, JSON5, NDJSON, and JSONL for
+new work — not to be a superset of them. STF deliberately does not inherit their looseness, so
+some valid JSON has no STF representation; conversion fails loudly rather than guessing.
 
-### Key Features
+```stf
+# A configuration file
+{
+  service: `checkout-api`,
+  port: 8080,
+  enabled: T,
+  deploy_after: TIMESTAMP(2026-01-15T10:30:00Z),
+  price_cap: DECIMAL(199.00),        # exact — scale is preserved
+  account_id: BIGINT(9007199254740993),
+  signing_key: BINARY(SGVsbG8=),
+  regions: [`eu-west-1`, `us-east-1`],
+}
+```
 
-- **Unquoted Keys**: Clean, minimal syntax.
-- **Backtick Raw Strings & Interpreted Strings**: Flexible string handling.
-- **Explicit Literals**: `T`, `F`, `N` for True, False, and Null.
-- **Uppercase Constructor Literals**: Native support for `BIGINT`, `DECIMAL`, `DATE`, `TIMESTAMP`, and Base64 `BINARY`.
-- **Scale-Sensitive Decimals**: `1.5` ≢ `1.50`, preserving exact precision.
-- **Single-line Comments**: Use `#` for notes and documentation.
-- **Fast Parsing**: Designed for direct byte-level processing.
-- **Optional Schema Validation**: Separate `stf-schema` validator keeps core parsing fast.
+### The problem it solves
+
+JSON forces every non-primitive type through strings, so a reader cannot tell a date from a
+string that looks like one, and `19.99` is never exactly 19.99. STF makes the type explicit at
+the point of use, with no schema or convention required:
+
+| JSON | STF |
+| :--- | :--- |
+| `"created": "2026-01-15"` — date, or string? | `created: DATE(2026-01-15)` |
+| `"id": "9007199254740993"` — string to survive `JSON.parse` | `id: BIGINT(9007199254740993)` |
+| `"price": 19.99` — binary64, not exact | `price: DECIMAL(19.99)` |
+| `"blob": "SGVsbG8="` — base64 by convention | `blob: BINARY(SGVsbG8=)` |
+
+### Key features
+
+- **Unquoted keys** — `[A-Za-z0-9_-]+`, no quotes, no ambiguity.
+- **Two string forms** — `` `raw` `` preserves everything literally; `"interpreted"` supports
+  JSON escapes.
+- **One-character literals** — `T`, `F`, `N` for true, false, null.
+- **Explicit typed constructors** — `BIGINT`, `DECIMAL`, `DATE`, `TIMESTAMP`, `BINARY`.
+- **Scale-sensitive decimals** — `DECIMAL(1.5)` ≠ `DECIMAL(1.50)`. Usable for money.
+- **Comments** — `#` to end of line.
+- **Trailing commas** — permitted in objects and arrays.
+- **Canonical form** — one byte encoding per value, for hashing and signing.
+- **Normative error codes** — every rejection maps to exactly one documented code.
+- **Record streams** — [`.stfs`](doc/stream.md) for append-only event logs.
 
 ## Documentation
 
--   [STF 1.0 Specification (Draft)](doc/spec.md)
--   [STF Schema Specification (Draft)](doc/schema.md)
--   [Migration Guide (JSON → STF)](doc/migration-guide.md)
--   [Edge Cases & Constraints](doc/edge-cases.md)
--   [Standardized Error Codes](doc/error-codes.md)
--   [Comparison with Other Formats](doc/comparison.md)
+**Normative**
 
-## Testing
+- [STF 1.0 Specification](doc/spec.md) — the format
+- [Standardized Error Codes](doc/error-codes.md) — condition → code, exact
+- [STF Stream Profile](doc/stream.md) — `.stfs` line-delimited record streams
+- [STF Schema Specification](doc/schema.md) — optional validation layer
 
--   [Conformance Test Suite](tests/conformance/tests.json)
+**Non-normative**
+
+- [Migration Guide](doc/migration-guide.md) — from JSON, JSON5, NDJSON, DTXT, and pre-1.0 drafts
+- [Comparison with Other Formats](doc/comparison.md)
+
+## Conformance
+
+The [conformance corpus](tests/conformance/) is the executable contract: 258 cases, each traced
+to a normative rule. Runners must compare error codes **exactly** and check value **kinds**, so
+a string can never satisfy a `DECIMAL` expectation.
+
+```sh
+node tests/conformance/run_js.mjs
+```
+
+### Conformance Status
+
+None of the reference implementations is conformant with the 1.0 draft yet. The corpus is
+deliberately red — it is the specification of the remaining work.
+
+| Implementation | Corpus | Notes |
+| :--- | :--- | :--- |
+| JavaScript | 158/258 | Typed values still returned as strings; error codes inexact |
+| Python | not yet run | Also returns exact integers past 2^53 (spec §7.2 requires binary64) |
+| Go | not yet run | Also drops non-BMP characters in interpreted strings |
+| Rust | not yet run | Minimal constructor payload validation |
+
+The main gap across all four is spec §3.1: typed values are represented as strings with a
+marker prefix (`"$decimal:1.5"`), which cannot be distinguished from a user string of the same
+text and causes serialization to emit unparseable documents.
 
 ## Reference Implementations
 
-The `ref-impl/` directory contains reference implementations for the supported languages:
+- [JavaScript / TypeScript](ref-impl/js/)
+- [Python](ref-impl/python/)
+- [Go](ref-impl/go/)
+- [Rust](ref-impl/rust/)
 
--   [JavaScript / TypeScript](ref-impl/js/)
--   [Python](ref-impl/python/)
--   [Go](ref-impl/go/)
--   [Rust](ref-impl/rust/)
+## Performance
+
+**Payload size: STF is 15–18% smaller than JSON** on equivalent data, from unquoted keys and
+one-character literals.
+
+Parse speed depends far more on the implementation than on the format. Go's STF parser is
+~21% faster than `encoding/json`; the JavaScript and Python implementations are slower than
+their native JSON parsers, which are written in C++ and C respectively.
+
+> These figures are not comparable across languages — each implementation benchmarks its own
+> randomly-seeded dataset, and the Python baseline includes default `json.dumps` separator
+> spacing. Treat them as within-language comparisons pending a benchmark rework. Full numbers:
+> [benchmarks/RESULTS.md](benchmarks/RESULTS.md).
 
 ## License
 
-This project is dedicated to the public domain under the [CC0 1.0 Universal (CC0 1.0) Public Domain Dedication](LICENSE).
+Dedicated to the public domain under the
+[CC0 1.0 Universal Public Domain Dedication](LICENSE).
