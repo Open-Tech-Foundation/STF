@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { parse as parseSTF, stringify as stringifySTF, STFValue, format as formatSTF } from "./ref-impl/ts/stf.ts";
+import { parse as parseSTF, stringify as stringifySTF, STFValue, format as formatSTF } from "./ref-impl/js/stf.ts";
 
 interface Options {
   mode: "json-to-stf" | "stf-to-json" | "format";

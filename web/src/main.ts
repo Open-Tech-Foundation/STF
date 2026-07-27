@@ -1,5 +1,5 @@
 import './style.css';
-import { parse, stringify, format } from '../../ref-impl/ts/stf.ts';
+import { parse, stringify, format } from '../../ref-impl/js/stf.ts';
 
 import jsyaml from 'js-yaml';
 import JSON5 from 'json5';

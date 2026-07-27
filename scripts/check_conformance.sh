@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# DTXT Conformance Test Unified Runner
-# This script runs the conformance tests for all reference implementations.
+# STF Conformance Test Unified Runner
+# This script runs the conformance tests for all active reference implementations (JS, Python, Go, Rust).
 
 set -e
 
@@ -12,13 +12,13 @@ NC='\033[0m'
 
 ROOT_DIR=$(pwd)
 
-echo -e "${BLUE}DTXT Conformance Test Suite${NC}"
+echo -e "${BLUE}STF Conformance Test Suite${NC}"
 echo "================================="
 
-# TypeScript
-echo -e "\n${BLUE}Running TypeScript conformance tests...${NC}"
-cd "$ROOT_DIR/ref-impl/ts"
-npx -y tsx run_conformance.ts
+# JavaScript / TypeScript
+echo -e "\n${BLUE}Running JS/TS conformance tests...${NC}"
+cd "$ROOT_DIR/ref-impl/js"
+bun run run_conformance.ts
 
 # Python
 echo -e "\n${BLUE}Running Python conformance tests...${NC}"
@@ -32,7 +32,7 @@ go run cmd/conformance/main.go
 
 # Rust
 echo -e "\n${BLUE}Running Rust conformance tests...${NC}"
-cd "$ROOT_DIR/ref-impl/rs"
+cd "$ROOT_DIR/ref-impl/rust"
 cargo run --quiet --bin run_conformance
 
-echo -e "\n${GREEN}All implementations passed conformance tests successfully!${NC}"
+echo -e "\n${GREEN}All reference implementations passed conformance tests successfully!${NC}"

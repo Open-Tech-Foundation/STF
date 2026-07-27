@@ -39,13 +39,12 @@ A project of the [Open Tech Foundation](https://github.com/Open-Tech-Foundation)
 
 ## Reference Implementations
 
-The `ref-impl/` directory contains reference implementations for various languages:
+The `ref-impl/` directory contains reference implementations for the supported languages:
 
--   [TypeScript](ref-impl/ts/)
+-   [JavaScript / TypeScript](ref-impl/js/)
 -   [Python](ref-impl/python/)
 -   [Go](ref-impl/go/)
--   [Rust](ref-impl/rs/)
--   [WebAssembly](ref-impl/wasm/) - Browser & Node.js support
+-   [Rust](ref-impl/rust/)
 
 ## License
 
