@@ -38,6 +38,7 @@ An implementation MAY be a parser only.
 * **Media type (post-registration)**: `application/stf`
 * **File extension**: `.stf`
 * **Schema file extension**: `.schema.stf`
+* **Stream file extension**: `.stfs` — see [STF Stream](stream.md)
 
 ### 1.3 Non-Goals
 
@@ -47,13 +48,16 @@ To maintain simplicity and predictability, the following are **NOT** goals of th
 * **Schema Validation**: Schema validation is defined in a separate specification
   ([STF Schema](schema.md)) and is decoupled from core parsing for performance.
 * **Resource Referencing**: STF does not support internal references (anchors) or external imports.
-* **Streaming Framing**: STF is a discrete document format, not a framing protocol.
+* **Streaming Framing**: The core format is a discrete document, not a framing protocol.
+  Append-only record streams are served by the separate [STF Stream](stream.md) profile, which
+  layers on this specification without altering it.
 * **Comments as Data**: Comments are purely for documentation and MUST be ignored by processors.
 
 ### 1.4 Supplementary Documentation
 
 * [Standardized Error Codes](error-codes.md) — normative
 * [STF Schema Specification](schema.md) — normative, separate layer
+* [STF Stream Profile](stream.md) — normative, optional profile for record streams
 * [Migration Guide (JSON → STF)](migration-guide.md) — non-normative
 * [Comparison with Other Formats](comparison.md) — non-normative
 

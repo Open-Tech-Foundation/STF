@@ -69,6 +69,14 @@ Implementations **SHOULD** also report a byte offset and a human-readable messag
 | :--- | :--- |
 | `ERR_UNREPRESENTABLE` | A host value has no valid STF representation (spec §13.1). |
 
+### Stream Profile
+Raised only when reading [STF Stream](stream.md) (`.stfs`). Never raised by a core parser.
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_STREAM_RAW_NEWLINE` | A record contains a raw LF or CR (stream §3.2). |
+| `ERR_STREAM_DIRECTIVE_IN_RECORD` | A directive appears outside the header line (stream §4). |
+
 ### Schema Validation
 Raised by `stf-schema`, never by a core parser. See [schema.md](schema.md).
 

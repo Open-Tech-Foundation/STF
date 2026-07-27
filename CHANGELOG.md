@@ -36,6 +36,13 @@ the reference implementations may change incompatibly at any time.
 - New error codes: `ERR_INVALID_UTF8`, `ERR_NUMBER_OVERFLOW`, `ERR_UNREPRESENTABLE`, and
   `ERR_TRAILING_CONTENT` (the last was already emitted by several implementations but
   undocumented).
+- **STF Stream profile** (`doc/stream.md`, `.stfs`) — an optional, line-delimited record format
+  for append-only event logs, audit trails, and telemetry, serving the use case NDJSON/JSONL
+  address. One STF document per line; a record may not contain a raw line terminator, so a
+  reader can split on LF without parsing. Records are parsed independently, so a malformed
+  record does not invalidate the stream. An optional header line carries stream-wide
+  directives. The core discrete-document format is unchanged.
+- Stream error codes `ERR_STREAM_RAW_NEWLINE` and `ERR_STREAM_DIRECTIVE_IN_RECORD`.
 
 ### Changed
 
