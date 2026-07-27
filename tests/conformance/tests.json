@@ -216,12 +216,17 @@
     }
   },
   {
-    "name": "Keywords as Keys",
-    "input": "{ T: 1, F: 2, N: 3 }",
+    "name": "Keywords and Constructor Names as Keys",
+    "input": "{ T: 1, F: 2, N: 3, DATE: 4, TIMESTAMP: 5, DECIMAL: 6, BIGINT: 7, BINARY: 8 }",
     "expected": {
       "T": 1,
       "F": 2,
-      "N": 3
+      "N": 3,
+      "DATE": 4,
+      "TIMESTAMP": 5,
+      "DECIMAL": 6,
+      "BIGINT": 7,
+      "BINARY": 8
     }
   },
   {
@@ -232,66 +237,73 @@
     }
   },
   {
-    "name": "Constructor: Date (ISO)",
-    "input": "{ d: Date(2026-01-15T12:00:00Z) }",
-    "expected": {
-      "d": "$date:2026-01-15T12:00:00Z"
-    }
-  },
-  {
-    "name": "Constructor: Date (Date Only)",
-    "input": "{ d: Date(2026-01-15) }",
+    "name": "Constructor: DATE (Wall Date)",
+    "input": "{ d: DATE(2026-01-15) }",
     "expected": {
       "d": "$date:2026-01-15"
     }
   },
   {
-    "name": "Constructor: Date with Space",
-    "input": "{ d: Date(2026-01-15 10:30:00) }",
+    "name": "Constructor: TIMESTAMP (With Z Offset)",
+    "input": "{ ts: TIMESTAMP(2026-01-15T12:00:00Z) }",
     "expected": {
-      "d": "$date:2026-01-15 10:30:00"
+      "ts": "$timestamp:2026-01-15T12:00:00Z"
     }
   },
   {
-    "name": "Constructor: Big Number",
-    "input": "{ bn: BigNumber(12345678901234567890) }",
+    "name": "Constructor: TIMESTAMP (With Numeric Offset)",
+    "input": "{ ts: TIMESTAMP(2026-01-15T12:00:00.123+05:30) }",
+    "expected": {
+      "ts": "$timestamp:2026-01-15T12:00:00.123+05:30"
+    }
+  },
+  {
+    "name": "Constructor: BIGINT",
+    "input": "{ bn: BIGINT(12345678901234567890) }",
     "expected": {
       "bn": "$bigint:12345678901234567890"
     }
   },
   {
-    "name": "Constructor: BigNumber Canonicalization (Leading Zeros)",
-    "input": "{ bn: BigNumber(000123) }",
+    "name": "Constructor: BIGINT Canonicalization (Leading Zeros)",
+    "input": "{ bn: BIGINT(000123) }",
     "expected": {
       "bn": "$bigint:123"
     }
   },
   {
-    "name": "Constructor: BigNumber Canonicalization (-0)",
-    "input": "{ bn: BigNumber(-0) }",
+    "name": "Constructor: BIGINT Canonicalization (-0)",
+    "input": "{ bn: BIGINT(-0) }",
     "expected": {
       "bn": "$bigint:0"
     }
   },
   {
-    "name": "Constructor: BigNumber with Negative",
-    "input": "{ bn: BigNumber(-9007199254740993) }",
+    "name": "Constructor: BIGINT with Negative",
+    "input": "{ bn: BIGINT(-9007199254740993) }",
     "expected": {
       "bn": "$bigint:-9007199254740993"
     }
   },
   {
-    "name": "Constructor: Binary (Hex)",
-    "input": "{ b: Binary(48454C4C4F) }",
+    "name": "Constructor: DECIMAL (Scale 1)",
+    "input": "{ dec: DECIMAL(1.5) }",
     "expected": {
-      "b": "$binary:48454C4C4F"
+      "dec": "$decimal:1.5"
     }
   },
   {
-    "name": "Constructor: Binary Canonicalization (Lowercase Hex)",
-    "input": "{ b: Binary(48454c4c4f) }",
+    "name": "Constructor: DECIMAL (Scale 2)",
+    "input": "{ dec: DECIMAL(1.50) }",
     "expected": {
-      "b": "$binary:48454C4C4F"
+      "dec": "$decimal:1.50"
+    }
+  },
+  {
+    "name": "Constructor: BINARY (Base64 Standard)",
+    "input": "{ b: BINARY(SGVsbG8=) }",
+    "expected": {
+      "b": "$binary:SGVsbG8="
     }
   },
   {
@@ -376,32 +388,32 @@
   },
   {
     "name": "Invalid: Constructor Whitespace",
-    "input": "{ x: BigNumber (123) }",
+    "input": "{ x: BIGINT (123) }",
     "error": "ERR_SYNTAX"
   },
   {
     "name": "Invalid: Constructor Payload with Parens",
-    "input": "{ x: BigNumber(1(2)3) }",
-    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+    "input": "{ x: BIGINT(1(2)3) }",
+    "error": "ERR_NESTED_CONSTRUCTOR"
   },
   {
     "name": "Invalid: Empty Constructor Payload",
-    "input": "{ x: BigNumber() }",
+    "input": "{ x: BIGINT() }",
     "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
   },
   {
     "name": "Invalid: Nesting Constructors",
-    "input": "{ x: BigNumber(BigNumber(1)) }",
+    "input": "{ x: BIGINT(BIGINT(1)) }",
     "error": "ERR_NESTED_CONSTRUCTOR"
   },
   {
-    "name": "Invalid: Constructor Payload with Whitespace (BigNumber)",
-    "input": "{ x: BigNumber(1 2 3) }",
+    "name": "Invalid: Constructor Payload with Whitespace (BIGINT)",
+    "input": "{ x: BIGINT(1 2 3) }",
     "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
   },
   {
-    "name": "Invalid: Constructor Payload with Whitespace (Binary)",
-    "input": "{ x: Binary(A7 B2) }",
+    "name": "Invalid: Constructor Payload with Whitespace (BINARY)",
+    "input": "{ x: BINARY(SG VsbG8=) }",
     "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
   },
   {
@@ -410,19 +422,64 @@
     "error": "ERR_UNKNOWN_CONSTRUCTOR"
   },
   {
-    "name": "Invalid: Old Short Form D() is parse error",
-    "input": "{ d: D(2026-01-15) }",
+    "name": "Invalid: Mixed Casing Date Constructor",
+    "input": "{ d: Date(2026-01-15) }",
     "error": "ERR_UNKNOWN_CONSTRUCTOR"
   },
   {
-    "name": "Invalid: Old Short Form BN() is parse error",
-    "input": "{ bn: BN(123) }",
+    "name": "Invalid: Lowercase date Constructor",
+    "input": "{ d: date(2026-01-15) }",
     "error": "ERR_UNKNOWN_CONSTRUCTOR"
   },
   {
-    "name": "Invalid: Old Short Form B() is parse error",
-    "input": "{ b: B(ABCDEF) }",
+    "name": "Invalid: Old BigNumber is parse error",
+    "input": "{ bn: BigNumber(123) }",
     "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "Invalid: Old Binary (Hex) is parse error",
+    "input": "{ b: Binary(48454C4C4F) }",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "Invalid: DATE with Time Component",
+    "input": "{ d: DATE(2026-01-15T10:30:00Z) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: TIMESTAMP without Timezone Offset",
+    "input": "{ ts: TIMESTAMP(2026-01-15T10:30:00) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: DECIMAL digit-cap overflow (>34 significant digits)",
+    "input": "{ dec: DECIMAL(12345678901234567890123456789012345) }",
+    "error": "ERR_DECIMAL_OVERFLOW"
+  },
+  {
+    "name": "Invalid: DECIMAL with leading plus",
+    "input": "{ dec: DECIMAL(+1.5) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: DECIMAL with leading zeros",
+    "input": "{ dec: DECIMAL(01.5) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: BINARY with non-canonical trailing bits",
+    "input": "{ b: BINARY(Zh==) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: BINARY with URL-safe base64 characters",
+    "input": "{ b: BINARY(a-b_) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "Invalid: BINARY unpadded",
+    "input": "{ b: BINARY(SGVsbG8) }",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
   },
   {
     "name": "Invalid: Unclosed String",
@@ -505,28 +562,13 @@
     "error": "ERR_INVALID_STRING"
   },
   {
-    "name": "Invalid: Date with Invalid ISO-8601",
-    "input": "{ d: Date(2026-13-45) }",
+    "name": "Invalid: BIGINT with Decimal Payload",
+    "input": "{ bn: BIGINT(12.34) }",
     "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
   },
   {
-    "name": "Invalid: BigNumber with Non-Digit Payload",
-    "input": "{ bn: BigNumber(12.34) }",
-    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
-  },
-  {
-    "name": "Invalid: BigNumber with Letters",
-    "input": "{ bn: BigNumber(123a) }",
-    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
-  },
-  {
-    "name": "Invalid: Binary with Odd-Length Hex",
-    "input": "{ b: Binary(ABC) }",
-    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
-  },
-  {
-    "name": "Invalid: Binary with Non-Hex Characters",
-    "input": "{ b: Binary(123G) }",
+    "name": "Invalid: BIGINT with Letters",
+    "input": "{ bn: BIGINT(123a) }",
     "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
   },
   {
@@ -545,11 +587,6 @@
     "error": "ERR_UNTERMINATED"
   },
   {
-    "name": "Invalid: Date Constructor with Invalid Payload",
-    "input": "{ date: Date(not-a-date) }",
-    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
-  },
-  {
     "name": "Raw String with Literal Newline",
     "input": "{ text: `line one\nline two` }",
     "expected": {
@@ -558,7 +595,7 @@
   },
   {
     "name": "Directive: @schema",
-    "input": "@schema(https://example.com/schema.dtxt)\n{ name: `test` }",
+    "input": "@schema(https://example.com/schema.stf)\n{ name: `test` }",
     "expected": {
       "name": "test"
     }
@@ -572,7 +609,7 @@
   },
   {
     "name": "Directive: Invalid Syntax (Whitespace Before Paren)",
-    "input": "@schema (https://example.com/schema.dtxt)\n{ name: `test` }",
+    "input": "@schema (https://example.com/schema.stf)\n{ name: `test` }",
     "error": "ERR_SYNTAX"
   }
 ]

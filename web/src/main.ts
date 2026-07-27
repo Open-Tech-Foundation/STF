@@ -1,5 +1,5 @@
 import './style.css';
-import { DTXTLexer, DTXTParser, stringify, format } from '../../ref-impl/ts/dtxt.ts';
+import { parse, stringify, format } from '../../ref-impl/ts/stf.ts';
 
 import jsyaml from 'js-yaml';
 import JSON5 from 'json5';
@@ -9,9 +9,8 @@ import { encode as msgpackEncode } from '@msgpack/msgpack';
 import * as CBOR from 'cbor-js';
 
 const SAMPLES = {
-  // ... (SAMPLES remain same)
   welcome: `{
-  title: \`Welcome to DTXT\`,
+  title: \`Welcome to STF\`,
   version: 1.0,
   features: [
     \`Predictable\`,
@@ -22,22 +21,22 @@ const SAMPLES = {
     latency: 0.12,
     isActive: T,
   },
-  timestamp: Date(2026-01-24),
+  timestamp: DATE(2026-01-24),
 }`,
   users: `{
   users: [
     {
-      id: BigNumber(10029384756201928374),
+      id: BIGINT(10029384756201928374),
       name: \`Alice\`,
       email: \`alice@example.com\`,
       roles: [\`admin\`, \`dev\`],
-      lastLogin: Date(2026-01-23T14:20:00Z),
+      lastLogin: TIMESTAMP(2026-01-23T14:20:00Z),
     },
     {
-      id: BigNumber(10029384756201928375),
+      id: BIGINT(10029384756201928375),
       name: \`Bob\`,
       email: \`bob@example.com\`,
-      avatar: Binary(89504E470D0A1A0A),
+      avatar: BINARY(SGVsbG8=),
       isActive: F,
     },
   ],
@@ -47,6 +46,7 @@ const SAMPLES = {
     debug: T,
     max_retries: 3,
     timeout: 1.5e3,
+    price: DECIMAL(19.99),
   },
   data: [
     N,
@@ -56,7 +56,7 @@ const SAMPLES = {
 string\`,
   ],
   metadata: {
-    hash: Binary(E2C1),
+    hash: BINARY(SGVsbG8=),
     tags: [],
   },
 }`
@@ -68,7 +68,7 @@ const FORMATS = [
   { id: 'yaml', name: 'YAML', ext: '.yaml', bidirectional: true },
   { id: 'toml', name: 'TOML', ext: '.toml', bidirectional: true },
   { id: 'xml', name: 'XML', ext: '.xml', bidirectional: true },
-  { id: 'minified', name: 'Minified DTXT', ext: '.dtxt', bidirectional: true },
+  { id: 'minified', name: 'Minified STF', ext: '.stf', bidirectional: true },
   { id: 'msgpack', name: 'MsgPack (Hex)', ext: '.msgpack', bidirectional: false },
   { id: 'cbor', name: 'CBOR (Hex)', ext: '.cbor', bidirectional: false },
 ];
@@ -78,15 +78,15 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <div class="container">
     <header>
-      <h1>DTXT Playground</h1>
-      <p class="subtitle">Experience the future of predictable, high-performance data interchange. Edit DTXT on the left, see results on the right.</p>
+      <h1>STF Playground</h1>
+      <p class="subtitle">Experience the future of predictable, high-performance data interchange. Edit STF on the left, see results on the right.</p>
     </header>
 
     <main class="playground">
       <div class="editor-pane">
         <div class="pane-header">
           <div class="header-left">
-            <span class="label">DTXT Input</span>
+            <span class="label">STF Input</span>
             <select id="sample-select">
               <option value="welcome">Welcome</option>
               <option value="users">User Profile</option>
@@ -115,7 +115,7 @@ app.innerHTML = `
     <div class="stats-container">
       <div class="stat-card">
         <div class="stat-value" id="dtxt-size">0 B</div>
-        <div class="stat-label">DTXT Payload</div>
+        <div class="stat-label">STF Payload</div>
       </div>
       <div class="stat-card">
         <div class="stat-value" id="target-size">0 B</div>
@@ -151,8 +151,8 @@ function formatBytes(bytes: number) {
   return (bytes / 1024).toFixed(2) + ' KB';
 }
 
-function updateStats(dtxtText: string, targetText: string, formatName: string) {
-  const dtxtBytes = new TextEncoder().encode(dtxtText).length;
+function updateStats(stfText: string, targetText: string, formatName: string) {
+  const stfBytes = new TextEncoder().encode(stfText).length;
   let targetBytes: number;
   const currentFormat = formatSelect.value;
   if (currentFormat === 'msgpack' || currentFormat === 'cbor') {
@@ -161,9 +161,9 @@ function updateStats(dtxtText: string, targetText: string, formatName: string) {
     targetBytes = new TextEncoder().encode(targetText).length;
   }
 
-  const reduction = targetBytes > 0 ? ((targetBytes - dtxtBytes) / targetBytes * 100).toFixed(1) : '0.0';
+  const reduction = targetBytes > 0 ? ((targetBytes - stfBytes) / targetBytes * 100).toFixed(1) : '0.0';
 
-  dtxtSizeEl.textContent = formatBytes(dtxtBytes);
+  dtxtSizeEl.textContent = formatBytes(stfBytes);
   targetSizeEl.textContent = formatBytes(targetBytes);
   targetLabelEl.textContent = `${formatName} Equivalent`;
   reductionEl.textContent = reduction + '%';
@@ -208,7 +208,6 @@ const Handlers: Record<string, { serialize: (obj: any) => string, parse?: (text:
       try {
         return TOML.stringify(prepareForSerialization(obj) as any);
       } catch (e: any) {
-        // fallback for objects that might fail due to nesting rules or other TOML constraints
         return `# Error: ${e.message}\n` + JSON.stringify(prepareForSerialization(obj), null, 2);
       }
     },
@@ -227,37 +226,29 @@ const Handlers: Record<string, { serialize: (obj: any) => string, parse?: (text:
   },
   minified: {
     serialize: (obj) => stringify(obj, null),
-    parse: (text) => {
-      const lexer = new DTXTLexer(text);
-      const parser = new DTXTParser(lexer.tokens);
-      return parser.parse();
-    }
+    parse: (text) => parse(text)
   },
   msgpack: {
     serialize: (obj) => {
       const uint8 = msgpackEncode(prepareForSerialization(obj));
       return Array.from(uint8).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
     }
-    // Bidirectional for binary is complex in a text area, keeping one-way for now as per plan
   },
   cbor: {
     serialize: (obj) => {
       const buffer = CBOR.encode(prepareForSerialization(obj));
-      // CBOR.encode returns an ArrayBuffer or similar
       return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
     }
   }
 };
 
 function updateOutput() {
-  const dtxtText = dtxtInput.value;
+  const stfText = dtxtInput.value;
   const targetFormatId = formatSelect.value;
   const formatInfo = FORMATS.find(f => f.id === targetFormatId)!;
 
   try {
-    const lexer = new DTXTLexer(dtxtText);
-    const parser = new DTXTParser(lexer.tokens);
-    const parsed = parser.parse();
+    const parsed = parse(stfText);
 
     outputView.classList.remove('error');
 
@@ -267,7 +258,7 @@ function updateOutput() {
     outputView.value = outputText;
     outputExt.textContent = formatInfo.ext;
 
-    updateStats(dtxtText, outputText, formatInfo.name);
+    updateStats(stfText, outputText, formatInfo.name);
 
   } catch (e: any) {
     outputView.classList.add('error');
@@ -286,12 +277,12 @@ function updateFromOutput() {
     if (!handler || !handler.parse) return;
 
     const parsed = handler.parse(outputText);
-    const dtxtText = stringify(parsed, '  ');
+    const stfText = stringify(parsed, '  ');
 
     dtxtInput.classList.remove('error');
-    dtxtInput.value = dtxtText;
+    dtxtInput.value = stfText;
 
-    updateStats(dtxtText, outputText, formatInfo.name);
+    updateStats(stfText, outputText, formatInfo.name);
   } catch (e: any) {
     dtxtInput.classList.add('error');
   }
@@ -332,9 +323,8 @@ formatBtn.addEventListener('click', () => {
     dtxtInput.value = formatted;
     updateOutput();
   } catch (e) {
-    alert("Cannot format invalid DTXT code");
+    alert("Cannot format invalid STF code");
   }
 });
 
-// Initial run
 updateOutput();

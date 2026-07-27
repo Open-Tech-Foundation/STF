@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/Prior99/textmate-json-schema/main/schema.json",
-  "name": "DTXT",
-  "scopeName": "source.dtxt",
-  "fileTypes": ["dtxt"],
+  "name": "STF",
+  "scopeName": "source.stf",
+  "fileTypes": ["stf"],
   "patterns": [
     {
       "include": "#comments"
@@ -30,7 +30,7 @@
     "comments": {
       "patterns": [
         {
-          "name": "comment.line.number-sign.dtxt",
+          "name": "comment.line.number-sign.stf",
           "match": "#.*$"
         }
       ]
@@ -38,17 +38,17 @@
     "objects": {
       "patterns": [
         {
-          "name": "meta.structure.object.dtxt",
+          "name": "meta.structure.object.stf",
           "begin": "\\{",
           "end": "\\}",
           "beginCaptures": {
             "0": {
-              "name": "punctuation.definition.object.begin.dtxt"
+              "name": "punctuation.definition.object.begin.stf"
             }
           },
           "endCaptures": {
             "0": {
-              "name": "punctuation.definition.object.end.dtxt"
+              "name": "punctuation.definition.object.end.stf"
             }
           },
           "patterns": [
@@ -68,14 +68,14 @@
     "object-key": {
       "patterns": [
         {
-          "name": "meta.object.key.dtxt",
-          "match": "([a-zA-Z_][a-zA-Z0-9_-]*)\\s*(:)",
+          "name": "meta.object.key.stf",
+          "match": "([a-zA-Z0-9_-]+)\\s*(:)",
           "captures": {
             "1": {
-              "name": "entity.name.tag.dtxt"
+              "name": "entity.name.tag.stf"
             },
             "2": {
-              "name": "punctuation.separator.key-value.dtxt"
+              "name": "punctuation.separator.key-value.stf"
             }
           }
         }
@@ -106,24 +106,24 @@
         },
         {
           "match": ",",
-          "name": "punctuation.separator.comma.dtxt"
+          "name": "punctuation.separator.comma.stf"
         }
       ]
     },
     "arrays": {
       "patterns": [
         {
-          "name": "meta.structure.array.dtxt",
+          "name": "meta.structure.array.stf",
           "begin": "\\[",
           "end": "\\]",
           "beginCaptures": {
             "0": {
-              "name": "punctuation.definition.array.begin.dtxt"
+              "name": "punctuation.definition.array.begin.stf"
             }
           },
           "endCaptures": {
             "0": {
-              "name": "punctuation.definition.array.end.dtxt"
+              "name": "punctuation.definition.array.end.stf"
             }
           },
           "patterns": [
@@ -147,7 +147,7 @@
             },
             {
               "match": ",",
-              "name": "punctuation.separator.comma.dtxt"
+              "name": "punctuation.separator.comma.stf"
             }
           ]
         }
@@ -156,14 +156,14 @@
     "constructors": {
       "patterns": [
         {
-          "name": "meta.constructor.dtxt",
-          "match": "\\b(Date|BigNumber|Binary)\\(([^)]*)\\)",
+          "name": "meta.constructor.stf",
+          "match": "\\b(BIGINT|DECIMAL|DATE|TIMESTAMP|BINARY)\\(([^)]*)\\)",
           "captures": {
             "1": {
-              "name": "keyword.other.constructor.name.dtxt"
+              "name": "keyword.other.constructor.name.stf"
             },
             "2": {
-              "name": "string.other.constructor.payload.dtxt"
+              "name": "string.other.constructor.payload.stf"
             }
           }
         }
@@ -172,15 +172,15 @@
     "literals": {
       "patterns": [
         {
-          "name": "constant.language.boolean.true.dtxt",
+          "name": "constant.language.boolean.true.stf",
           "match": "\\bT\\b"
         },
         {
-          "name": "constant.language.boolean.false.dtxt",
+          "name": "constant.language.boolean.false.stf",
           "match": "\\bF\\b"
         },
         {
-          "name": "constant.language.null.dtxt",
+          "name": "constant.language.null.stf",
           "match": "\\bN\\b"
         }
       ]
@@ -188,37 +188,37 @@
     "strings": {
       "patterns": [
         {
-          "name": "string.quoted.backtick.dtxt",
+          "name": "string.quoted.backtick.stf",
           "begin": "`",
           "end": "`",
           "beginCaptures": {
             "0": {
-              "name": "punctuation.definition.string.begin.dtxt"
+              "name": "punctuation.definition.string.begin.stf"
             }
           },
           "endCaptures": {
             "0": {
-              "name": "punctuation.definition.string.end.dtxt"
+              "name": "punctuation.definition.string.end.stf"
             }
           }
         },
         {
-          "name": "string.quoted.double.dtxt",
+          "name": "string.quoted.double.stf",
           "begin": "\"",
           "end": "\"",
           "beginCaptures": {
             "0": {
-              "name": "punctuation.definition.string.begin.dtxt"
+              "name": "punctuation.definition.string.begin.stf"
             }
           },
           "endCaptures": {
             "0": {
-              "name": "punctuation.definition.string.end.dtxt"
+              "name": "punctuation.definition.string.end.stf"
             }
           },
           "patterns": [
             {
-              "name": "constant.character.escape.dtxt",
+              "name": "constant.character.escape.stf",
               "match": "\\\\."
             }
           ]
@@ -228,7 +228,7 @@
     "numbers": {
       "patterns": [
         {
-          "name": "constant.numeric.dtxt",
+          "name": "constant.numeric.stf",
           "match": "-?\\b(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\\b"
         }
       ]

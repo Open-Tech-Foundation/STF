@@ -1,0 +1,22 @@
+{
+  active: T,
+  config: {
+    retries: 3,
+    timeout: 30,
+    price: DECIMAL(19.99),
+  },
+  created: DATE(2026-01-01),
+  updated: TIMESTAMP(2026-01-01T12:00:00Z),
+  data: [
+    1,
+    2,
+    3,
+  ],
+  name: `OpenTF Project`,
+  tags: [
+    `eslint`,
+    `prettier`,
+    `stf`,
+  ],
+  version: 123,
+}

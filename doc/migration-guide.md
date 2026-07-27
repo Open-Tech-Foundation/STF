@@ -1,86 +1,63 @@
-# Migration Guide: JSON to DTXT
+# Migration Guide: JSON & DTXT → STF
 
-Migrating from JSON to DTXT is straightforward but requires attention to literal changes and unquoted keys.
+This guide covers migrating existing JSON and DTXT documents to **STF (Structured Text Format)**.
 
 ## Quick Reference Table
 
-| Feature | JSON | DTXT |
-| :--- | :--- | :--- |
-| **Root** | Any value | Object `{}` always |
-| **True** | `true` | `T` |
-| **False** | `false` | `F` |
-| **Null** | `null` | `N` |
-| **Keys** | `"key"` (quoted) | `key` (unquoted) |
-| **Strings** | `"string"` | `` `string` `` |
-| **Comments** | N/A | `# comment` |
-| **Commas** | No trailing | Trailing allowed |
+| Feature | JSON | Legacy DTXT | STF 1.0 |
+| :--- | :--- | :--- | :--- |
+| **Root** | Any value | Object `{}` | Object `{}` always |
+| **True / False / Null** | `true` / `false` / `null` | `T` / `F` / `N` | `T` / `F` / `N` |
+| **Keys** | `"key"` (quoted) | `key` | `key` (unquoted) |
+| **Strings** | `"string"` | `` `string` `` | `` `string` `` (raw) or `"string"` (interpreted) |
+| **Wall Date** | `"2026-01-15"` | `Date(2026-01-15)` | `DATE(2026-01-15)` |
+| **Timestamp (Instant)** | `"2026-01-15T10:30:00Z"` | `Date(...)` | `TIMESTAMP(2026-01-15T10:30:00Z)` |
+| **Big Integer** | `"9007199254740993"` | `BigNumber(...)` | `BIGINT(9007199254740993)` |
+| **Decimal** | `1.50` (lossy) | N/A | `DECIMAL(1.50)` |
+| **Binary** | `"aGVsbG8="` | `Binary(HEX)` | `BINARY(SGVsbG8=)` (Base64) |
 
-## Step-by-Step Migration
+---
 
-### 1. Change the Root
-In JSON, the root can be an array or a primitive. In DTXT, it **must** be an object.
-- **JSON**: `[1, 2, 3]`
-- **DTXT**: `{ data: [1, 2, 3] }`
+## Major STF 1.0 Breaking Changes
 
-### 2. Update Boolean and Null Literals
-DTXT uses single-character, uppercase literals for speed.
-- `true` → `T`
-- `false` → `F`
-- `null` → `N`
+### 1. Uppercase Constructor Casing
+All constructor literals are now strictly **uppercase** (`BIGINT`, `DECIMAL`, `DATE`, `TIMESTAMP`, `BINARY`).
+* `Date(...)` → `DATE(...)` or `TIMESTAMP(...)`
+* `BigNumber(...)` → `BIGINT(...)`
+* `Binary(...)` → `BINARY(...)`
+* Mixed-case and lowercase constructor names (e.g. `Date()`, `date()`) are **parse errors** (`ERR_UNKNOWN_CONSTRUCTOR`). No case folding is performed.
 
-### 3. Remove Quotes from Keys
-DTXT keys are unquoted identifiers.
-- **JSON**: `"user_id": 123`
-- **DTXT**: `user_id: 123`
+### 2. `DATE` vs `TIMESTAMP` Semantics
+* `DATE` is strictly for **wall dates** (`YYYY-MM-DD`). Passing any time or timezone component to `DATE(...)` will result in a parse error (`ERR_INVALID_CONSTRUCTOR_PAYLOAD`).
+* `TIMESTAMP` is for **instants**. A timezone offset (`Z` or `+HH:MM` / `-HH:MM`) is **mandatory**. Timestamps without an offset are rejected to prevent timezone ambiguities.
 
-> [!NOTE]
-> DTXT keys are restricted to ASCII letters, digits, and underscores. If your JSON keys contain special characters (like dots or spaces), you must rename them or nest them.
+### 3. Arbitrary-Precision Integer: `BIGINT`
+Renamed from `BigNumber` to `BIGINT`. It accepts arbitrary-precision integers only. Fractional/decimal numbers must use `DECIMAL(...)`.
 
-### 4. Switch to Backticks for Strings
-All strings in DTXT use backticks.
-- **JSON**: `"Hello World"`
-- **DTXT**: `` `Hello World` ``
+### 4. Binary Base64 Encoding
+`BINARY(...)` now uses standard RFC 4648 Base64 encoding with mandatory padding `=`. Hex encoding is no longer accepted.
 
-### 5. Take Advantage of Constructors
-DTXT provides explicit types for data that JSON usually treats as strings.
+---
 
-#### Dates
-- **JSON**: `"2026-01-15T10:00:00Z"`
-- **DTXT**: `Date(2026-01-15T10:00:00Z)`
+## Step-by-Step Migration Example
 
-#### Big Integers
-JSON often loses precision with large numbers or requires strings.
-- **JSON**: `"9007199254740993"` (string)
-- **DTXT**: `BigNumber(9007199254740993)`
-
-#### Binary Data
-- **JSON**: `"aGVsbG8="` (base64)
-- **DTXT**: `Binary(68656C6C6F)` (hex)
-
-## Example Transformation
-
-### Before (JSON)
-```json
+### Before (Legacy DTXT)
+```dtxt
 {
-  "project": "DTXT",
-  "version": 1.0,
-  "stable": false,
-  "config": {
-    "retry_count": 3
-  },
-  "tags": ["data", "format"]
+  created: Date(2026-01-15),
+  updated: Date(2026-01-15T10:30:00Z),
+  big: BigNumber(9007199254740993),
+  hash: Binary(48656C6C6F),
 }
 ```
 
-### After (DTXT)
-```dtxt
+### After (STF 1.0)
+```stf
 {
-  project: `DTXT`,
-  version: 1.0,
-  stable: F,
-  config: {
-    retry_count: 3,
-  },
-  tags: [`data`, `format`],
+  created: DATE(2026-01-15),
+  updated: TIMESTAMP(2026-01-15T10:30:00Z),
+  big: BIGINT(9007199254740993),
+  hash: BINARY(SGVsbG8=),
+  price: DECIMAL(19.99),
 }
 ```

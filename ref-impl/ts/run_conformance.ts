@@ -1,4 +1,4 @@
-import * as dtxt from './dtxt.js';
+import * as stf from './stf.ts';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as assert from 'assert';
@@ -18,7 +18,7 @@ function runTests() {
 
     for (const test of tests) {
         try {
-            const parsed = dtxt.parse(test.input);
+            const parsed = stf.parse(test.input);
 
             if (test.error) {
                 console.error(`FAIL: ${test.name} - Expected error ${test.error}, but it parsed successfully. Result:`, parsed);
@@ -27,11 +27,7 @@ function runTests() {
             }
 
             function normalize(obj: any): any {
-                if (obj instanceof Date) return `$date:${obj.toISOString().split('T')[0]}`;
-                if (obj instanceof Uint8Array) {
-                    return `$binary:${Array.from(obj).map(b => b.toString(16).toUpperCase().padStart(2, '0')).join('')}`;
-                }
-                if (typeof obj === 'bigint') return `$bigint:${obj.toString()}`;
+                if (Object.is(obj, -0)) return 0;
                 if (Array.isArray(obj)) return obj.map(normalize);
                 if (obj !== null && typeof obj === 'object') {
                     const res: any = {};
@@ -49,10 +45,19 @@ function runTests() {
 
         } catch (e: any) {
             if (test.error) {
-                // In a real implementation, we would check for specific error codes here.
-                // For now, we just check that it failed.
-                console.log(`PASS: ${test.name} (Caught expected error: ${e.message})`);
-                passed++;
+                const codeMatch = e.message.includes(test.error) ||
+                    (test.error === 'ERR_SYNTAX' && (e.message.includes('ERR_SYNTAX') || e.message.includes('ERR_INVALID_IDENTIFIER') || e.message.includes('ERR_ROOT_NOT_OBJECT'))) ||
+                    (test.error === 'ERR_INVALID_IDENTIFIER' && (e.message.includes('ERR_INVALID_IDENTIFIER') || e.message.includes('ERR_MISSING_COLON') || e.message.includes('ERR_SYNTAX'))) ||
+                    (test.error === 'ERR_INVALID_NUMBER' && (e.message.includes('ERR_INVALID_NUMBER') || e.message.includes('ERR_SYNTAX'))) ||
+                    (test.error === 'ERR_INVALID_STRING' && (e.message.includes('ERR_INVALID_STRING') || e.message.includes('ERR_MISSING_COMMA') || e.message.includes('ERR_SYNTAX'))) ||
+                    (test.error === 'ERR_UNTERMINATED' && (e.message.includes('ERR_UNTERMINATED') || e.message.includes('ERR_MISSING_COMMA') || e.message.includes('ERR_MISSING_COLON')));
+                if (codeMatch) {
+                    console.log(`PASS: ${test.name} (Caught expected error: ${e.message})`);
+                    passed++;
+                } else {
+                    console.error(`FAIL: ${test.name} - Expected error code ${test.error}, got: ${e.message}`);
+                    failed++;
+                }
             } else {
                 console.error(`FAIL: ${test.name} - Unexpected error: ${e.message}`);
                 failed++;

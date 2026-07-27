@@ -1,24 +1,23 @@
-package dtxt
+package stf
 
 import (
-	"encoding/hex"
 	"fmt"
-	"math/big"
 	"reflect"
 	"testing"
 )
 
 func TestSpecExample(t *testing.T) {
 	specExample := `
-# DTXT example
+# STF example
 {
   name: ` + "`Sample`" + `,
-  created: Date(2026-01-15),
-  updated: Date(2026-01-15T10:30:00Z),
+  created: DATE(2026-01-15),
+  updated: TIMESTAMP(2026-01-15T10:30:00Z),
   active: T,
   count: 42,
-  big: BigNumber(9007199254740993),
-  hash: Binary(A7B2319E44CE12BA),
+  price: DECIMAL(19.99),
+  big: BIGINT(9007199254740993),
+  hash: BINARY(SGVsbG8=),
   items: [1, 2, 3],
   meta: {
     retries: 3,
@@ -35,23 +34,26 @@ func TestSpecExample(t *testing.T) {
 	if obj["name"] != "Sample" {
 		t.Errorf("Expected name=Sample, got %v", obj["name"])
 	}
+	if obj["created"] != "$date:2026-01-15" {
+		t.Errorf("Expected created=$date:2026-01-15, got %v", obj["created"])
+	}
+	if obj["updated"] != "$timestamp:2026-01-15T10:30:00Z" {
+		t.Errorf("Expected updated=$timestamp:2026-01-15T10:30:00Z, got %v", obj["updated"])
+	}
 	if obj["active"] != true {
 		t.Errorf("Expected active=T, got %v", obj["active"])
 	}
-	// count is float64 in this implementation for normal numbers
 	if int64(obj["count"].(float64)) != 42 {
 		t.Errorf("Expected count=42, got %v", obj["count"])
 	}
-
-	bigVal := obj["big"].(*big.Int)
-	if bigVal.String() != "9007199254740993" {
-		t.Errorf("Expected bigVal=9007199254740993, got %s", bigVal.String())
+	if obj["price"] != "$decimal:19.99" {
+		t.Errorf("Expected price=$decimal:19.99, got %v", obj["price"])
 	}
-
-	hashVal := obj["hash"].([]byte)
-	expectedHash, _ := hex.DecodeString("A7B2319E44CE12BA")
-	if !reflect.DeepEqual(hashVal, expectedHash) {
-		t.Errorf("Hash mismatch")
+	if obj["big"] != "$bigint:9007199254740993" {
+		t.Errorf("Expected big=$bigint:9007199254740993, got %v", obj["big"])
+	}
+	if obj["hash"] != "$binary:SGVsbG8=" {
+		t.Errorf("Expected hash=$binary:SGVsbG8=, got %v", obj["hash"])
 	}
 
 	// Round trip
@@ -63,10 +65,8 @@ func TestSpecExample(t *testing.T) {
 		t.Fatalf("Reparse failed: %v", err)
 	}
 
-	// Simple check
 	if !reflect.DeepEqual(reparsed, parsed) {
-		// DeepEqual might fail because of pointer comparisons in big.Int or time.Time
-		// But let's see.
+		t.Errorf("Round trip mismatch: got %v, expected %v", reparsed, parsed)
 	}
 }
 

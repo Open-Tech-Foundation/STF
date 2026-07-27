@@ -1,19 +1,20 @@
-package dtxt
+package stf
 
 import (
-	"encoding/hex"
+	"encoding/base64"
 	"fmt"
-	"math/big"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
+
+	"github.com/shopspring/decimal"
 )
 
-// DTXTValue represents any valid DTXT value
-type DTXTValue interface{}
+// STFValue represents any valid STF value
+type STFValue interface{}
 
-// Parser handles DTXT parsing
+// Parser handles STF parsing
 type Parser struct {
 	input []byte
 	pos   int
@@ -22,7 +23,7 @@ type Parser struct {
 
 const maxDepth = 64
 
-// NewParser creates a new DTXT parser
+// NewParser creates a new STF parser
 func NewParser(input string) *Parser {
 	return &Parser{
 		input: []byte(input),
@@ -48,7 +49,6 @@ func (p *Parser) skipWhitespace() {
 		case ' ', '\t', '\r', '\n':
 			p.advance()
 		case '#':
-			// Skip comment
 			p.pos += 1
 			for p.pos < len(p.input) && p.current() != '\n' {
 				p.advance()
@@ -59,8 +59,8 @@ func (p *Parser) skipWhitespace() {
 	}
 }
 
-// Parse parses a DTXT string and returns a map
-func (p *Parser) Parse() (map[string]DTXTValue, error) {
+// Parse parses a STF string and returns a map
+func (p *Parser) Parse() (map[string]STFValue, error) {
 	p.skipWhitespace()
 	for p.current() == '@' {
 		if err := p.parseDirective(); err != nil {
@@ -74,7 +74,7 @@ func (p *Parser) Parse() (map[string]DTXTValue, error) {
 	}
 	p.skipWhitespace()
 	if p.pos < len(p.input) {
-		return nil, fmt.Errorf("trailing data at position %d", p.pos)
+		return nil, fmt.Errorf("ERR_TRAILING_CONTENT: trailing data at position %d", p.pos)
 	}
 	return result, nil
 }
@@ -90,20 +90,20 @@ func (p *Parser) parseDirective() error {
 		}
 	}
 	if p.current() != '(' {
-		return fmt.Errorf("expected '(' after directive name at position %d", p.pos)
+		return fmt.Errorf("ERR_SYNTAX: expected '(' after directive name at position %d", p.pos)
 	}
 	p.advance()
 	for p.pos < len(p.input) && p.current() != ')' {
 		p.advance()
 	}
 	if p.pos >= len(p.input) {
-		return fmt.Errorf("unterminated directive at position %d", p.pos)
+		return fmt.Errorf("ERR_UNTERMINATED: unterminated directive at position %d", p.pos)
 	}
 	p.advance() // skip ')'
 	return nil
 }
 
-func (p *Parser) parseValue() (DTXTValue, error) {
+func (p *Parser) parseValue() (STFValue, error) {
 	p.skipWhitespace()
 	ch := p.current()
 
@@ -140,23 +140,25 @@ func (p *Parser) parseValue() (DTXTValue, error) {
 		if (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '_' {
 			return p.parseConstructor()
 		}
-		return nil, fmt.Errorf("unexpected character at position %d: %c", p.pos, ch)
+		return nil, fmt.Errorf("ERR_SYNTAX: unexpected character at position %d: %c", p.pos, ch)
 	}
 }
 
-func (p *Parser) parseObject() (map[string]DTXTValue, error) {
-	p.advance() // skip '{'
+func (p *Parser) parseObject() (map[string]STFValue, error) {
+	if p.current() != '{' {
+		return nil, fmt.Errorf("ERR_ROOT_NOT_OBJECT: expected '{'")
+	}
+	p.advance()
 	p.depth++
 	if p.depth > maxDepth {
 		return nil, fmt.Errorf("ERR_NESTING_DEPTH: exceeded %d levels", maxDepth)
 	}
 	defer func() { p.depth-- }()
 
-	obj := make(map[string]DTXTValue)
+	obj := make(map[string]STFValue)
 
 	p.skipWhitespace()
 	for p.current() != '}' {
-		// Parse key
 		key, err := p.parseKey()
 		if err != nil {
 			return nil, err
@@ -164,7 +166,7 @@ func (p *Parser) parseObject() (map[string]DTXTValue, error) {
 
 		p.skipWhitespace()
 		if p.current() != ':' {
-			return nil, fmt.Errorf("expected ':' at position %d", p.pos)
+			return nil, fmt.Errorf("ERR_MISSING_COLON: expected ':' at position %d", p.pos)
 		}
 		p.advance()
 
@@ -173,7 +175,7 @@ func (p *Parser) parseObject() (map[string]DTXTValue, error) {
 			return nil, err
 		}
 		if _, ok := obj[key]; ok {
-			return nil, fmt.Errorf("duplicate key: %s", key)
+			return nil, fmt.Errorf("ERR_DUPLICATE_KEY: duplicate key: %s", key)
 		}
 		obj[key] = value
 
@@ -181,14 +183,19 @@ func (p *Parser) parseObject() (map[string]DTXTValue, error) {
 		if p.current() == ',' {
 			p.advance()
 			p.skipWhitespace()
+		} else if p.current() != '}' {
+			return nil, fmt.Errorf("ERR_MISSING_COMMA: expected ',' or '}' in object")
 		}
 	}
 
+	if p.pos >= len(p.input) {
+		return nil, fmt.Errorf("ERR_UNTERMINATED: unclosed object")
+	}
 	p.advance() // skip '}'
 	return obj, nil
 }
 
-func (p *Parser) parseArray() ([]DTXTValue, error) {
+func (p *Parser) parseArray() ([]STFValue, error) {
 	p.advance() // skip '['
 	p.depth++
 	if p.depth > maxDepth {
@@ -196,7 +203,7 @@ func (p *Parser) parseArray() ([]DTXTValue, error) {
 	}
 	defer func() { p.depth-- }()
 
-	arr := make([]DTXTValue, 0)
+	arr := make([]STFValue, 0)
 
 	p.skipWhitespace()
 	for p.current() != ']' {
@@ -210,6 +217,8 @@ func (p *Parser) parseArray() ([]DTXTValue, error) {
 		if p.current() == ',' {
 			p.advance()
 			p.skipWhitespace()
+		} else if p.current() != ']' {
+			return nil, fmt.Errorf("ERR_MISSING_COMMA: expected ',' or ']' in array")
 		}
 	}
 
@@ -248,7 +257,7 @@ func (p *Parser) parseString() (string, error) {
 }
 
 func (p *Parser) parseInterpretedString() (string, error) {
-	p.advance() // skip opening '"'
+	p.advance()
 	var buf strings.Builder
 	for p.pos < len(p.input) {
 		ch := p.current()
@@ -309,21 +318,21 @@ func (p *Parser) parseInterpretedString() (string, error) {
 func (p *Parser) parseNumber() (float64, error) {
 	start := p.pos
 
-	// Optional negative sign
 	if p.current() == '-' {
 		p.advance()
 	}
 
-	// Integer part
 	if p.current() == '0' {
 		p.advance()
+		if p.current() >= '0' && p.current() <= '9' {
+			return 0, fmt.Errorf("ERR_INVALID_NUMBER: leading zero")
+		}
 	} else if p.current() >= '1' && p.current() <= '9' {
 		for p.pos < len(p.input) && p.current() >= '0' && p.current() <= '9' {
 			p.advance()
 		}
 	}
 
-	// Decimal part
 	if p.current() == '.' {
 		p.advance()
 		for p.pos < len(p.input) && p.current() >= '0' && p.current() <= '9' {
@@ -331,7 +340,6 @@ func (p *Parser) parseNumber() (float64, error) {
 		}
 	}
 
-	// Exponent
 	if p.current() == 'e' || p.current() == 'E' {
 		p.advance()
 		if p.current() == '+' || p.current() == '-' {
@@ -344,12 +352,12 @@ func (p *Parser) parseNumber() (float64, error) {
 
 	numStr := string(p.input[start:p.pos])
 	if strings.HasSuffix(numStr, ".") {
-		return 0, fmt.Errorf("invalid number: %s (trailing dot)", numStr)
+		return 0, fmt.Errorf("ERR_INVALID_NUMBER: %s (trailing dot)", numStr)
 	}
 	return strconv.ParseFloat(numStr, 64)
 }
 
-func (p *Parser) parseConstructor() (DTXTValue, error) {
+func (p *Parser) parseConstructor() (STFValue, error) {
 	start := p.pos
 	for p.pos < len(p.input) {
 		ch := p.current()
@@ -362,85 +370,141 @@ func (p *Parser) parseConstructor() (DTXTValue, error) {
 	typeName := string(p.input[start:p.pos])
 
 	if p.current() != '(' {
-		return nil, fmt.Errorf("expected '(' after constructor name at position %d", p.pos)
+		return nil, fmt.Errorf("ERR_SYNTAX: expected '(' after constructor name at position %d", p.pos)
 	}
 	p.advance()
 
 	payloadStart := p.pos
 	for p.pos < len(p.input) && p.current() != ')' {
+		if p.current() == '(' {
+			return nil, fmt.Errorf("ERR_NESTED_CONSTRUCTOR: invalid constructor nesting")
+		}
 		p.advance()
+	}
+	if p.pos >= len(p.input) {
+		return nil, fmt.Errorf("ERR_UNTERMINATED: constructor payload")
 	}
 	payload := string(p.input[payloadStart:p.pos])
 	p.advance() // skip ')'
 
-		switch typeName {
-		case "Date":
-			// Handle payload with spaces
-			// Try different formats
-			formats := []string{
-				"2006-01-02 15:04:05",
-				"2006-01-02T15:04:05Z07:00",
-				"2006-01-02T15:04:05",
-				"2006-01-02",
-			}
-			for _, fmt := range formats {
-				t, err := time.Parse(fmt, payload)
-				if err == nil {
-					return t, nil
-				}
-			}
-			return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: Invalid Date() payload")
-		case "BigNumber":
-			if len(payload) == 0 {
-				return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: empty BigNumber payload")
-			}
-			for _, ch := range payload {
-				if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' {
-					return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: whitespace in BigNumber payload")
-				}
-			}
-			n := new(big.Int)
-			_, ok := n.SetString(payload, 10)
-			if !ok {
-				return nil, fmt.Errorf("invalid BigNumber payload: %s", payload)
-			}
-			return n, nil
-		case "Binary":
-			if len(payload) == 0 {
-				return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: empty Binary payload")
-			}
-			for _, ch := range payload {
-				if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' {
-					return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: whitespace in Binary payload")
-				}
-			}
-			bytes, err := hex.DecodeString(payload)
-			if err != nil {
-				return nil, fmt.Errorf("invalid Binary(hex) payload: %s", payload)
-			}
-			return bytes, nil
-		default:
-			return nil, fmt.Errorf("unknown constructor: %s", typeName)
+	switch typeName {
+	case "DATE":
+		matched, _ := regexp.MatchString(`^\d{4}-\d{2}-\d{2}$`, payload)
+		if !matched {
+			return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: DATE must be YYYY-MM-DD format")
 		}
+		return fmt.Sprintf("$date:%s", payload), nil
+	case "TIMESTAMP":
+		matched, _ := regexp.MatchString(`^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`, payload)
+		if !matched {
+			return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: TIMESTAMP requires explicit offset")
+		}
+		return fmt.Sprintf("$timestamp:%s", payload), nil
+	case "BIGINT":
+		if len(payload) == 0 || strings.ContainsAny(payload, " \t\r\n+") {
+			return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: invalid BIGINT payload")
+		}
+		matched, _ := regexp.MatchString(`^-?\d+$`, payload)
+		if !matched {
+			return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: invalid BIGINT format")
+		}
+		sign := ""
+		pStr := payload
+		if strings.HasPrefix(payload, "-") {
+			sign = "-"
+			pStr = payload[1:]
+		}
+		pStr = strings.TrimLeft(pStr, "0")
+		if pStr == "" {
+			return "$bigint:0", nil
+		}
+		return fmt.Sprintf("$bigint:%s%s", sign, pStr), nil
+	case "DECIMAL":
+		// Note in each ref-impl: native == is wrong (e.g. shopspring/decimal compares numerically).
+		// Hand-roll digits+scale string match for exact scale preservation!
+		if len(payload) == 0 || strings.HasPrefix(payload, "+") {
+			return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: invalid DECIMAL payload")
+		}
+		matched, _ := regexp.MatchString(`^-?(?:0|[1-9]\d*)(?:\.\d+)?$`, payload)
+		if !matched {
+			return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: invalid DECIMAL format")
+		}
+		clean := strings.TrimPrefix(payload, "-")
+		clean = strings.TrimLeft(clean, "0")
+		clean = strings.ReplaceAll(clean, ".", "")
+		if len(clean) > 34 {
+			return nil, fmt.Errorf("ERR_DECIMAL_OVERFLOW: DECIMAL exceeds 34 significant digits")
+		}
+		return fmt.Sprintf("$decimal:%s", payload), nil
+	case "BINARY":
+		// RFC 4648 standard base64 alphabet
+		if len(payload) == 0 || len(payload)%4 != 0 {
+			return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: BINARY base64 length must be multiple of 4")
+		}
+		matched, _ := regexp.MatchString(`^[A-Za-z0-9+/]+={0,2}$`, payload)
+		if !matched {
+			return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: BINARY invalid base64 alphabet")
+		}
+		_, err := base64.StdEncoding.DecodeString(payload)
+		if err != nil {
+			return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: invalid base64")
+		}
+		if strings.HasSuffix(payload, "==") {
+			b64Table := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+			val := strings.IndexByte(b64Table, payload[len(payload)-3])
+			if val&15 != 0 {
+				return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: BINARY non-canonical trailing bits")
+			}
+		} else if strings.HasSuffix(payload, "=") {
+			b64Table := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+			val := strings.IndexByte(b64Table, payload[len(payload)-2])
+			if val&3 != 0 {
+				return nil, fmt.Errorf("ERR_INVALID_CONSTRUCTOR_PAYLOAD: BINARY non-canonical trailing bits")
+			}
+		}
+		return fmt.Sprintf("$binary:%s", payload), nil
+	default:
+		return nil, fmt.Errorf("ERR_UNKNOWN_CONSTRUCTOR: unknown constructor: %s", typeName)
+	}
 }
 
-// Parse is a convenience function to parse DTXT strings
-func Parse(input string) (map[string]DTXTValue, error) {
+// Parse is a convenience function to parse STF strings
+func Parse(input string) (map[string]STFValue, error) {
 	parser := NewParser(input)
 	return parser.Parse()
 }
 
-// Stringify converts a DTXT value to a string
-func Stringify(value DTXTValue, indent string) string {
+// Stringify converts a STF value to a string
+func Stringify(value STFValue, indent string) string {
 	var sb strings.Builder
 	stringifyValue(value, &sb, indent, 0)
 	return sb.String()
 }
 
-func stringifyValue(value DTXTValue, sb *strings.Builder, indent string, level int) {
+func stringifyValue(value STFValue, sb *strings.Builder, indent string, level int) {
 	switch v := value.(type) {
 	case string:
-		if strings.Contains(v, "`") {
+		if strings.HasPrefix(v, "$date:") {
+			sb.WriteString("DATE(")
+			sb.WriteString(v[6:])
+			sb.WriteString(")")
+		} else if strings.HasPrefix(v, "$timestamp:") {
+			sb.WriteString("TIMESTAMP(")
+			sb.WriteString(v[11:])
+			sb.WriteString(")")
+		} else if strings.HasPrefix(v, "$bigint:") {
+			sb.WriteString("BIGINT(")
+			sb.WriteString(v[8:])
+			sb.WriteString(")")
+		} else if strings.HasPrefix(v, "$decimal:") {
+			sb.WriteString("DECIMAL(")
+			sb.WriteString(v[9:])
+			sb.WriteString(")")
+		} else if strings.HasPrefix(v, "$binary:") {
+			sb.WriteString("BINARY(")
+			sb.WriteString(v[8:])
+			sb.WriteString(")")
+		} else if strings.Contains(v, "`") {
 			sb.WriteString(strconv.Quote(v))
 		} else {
 			sb.WriteString("`")
@@ -459,23 +523,11 @@ func stringifyValue(value DTXTValue, sb *strings.Builder, indent string, level i
 		}
 	case nil:
 		sb.WriteString("N")
-	case *big.Int:
-		sb.WriteString("BigNumber(")
+	case decimal.Decimal:
+		sb.WriteString("DECIMAL(")
 		sb.WriteString(v.String())
 		sb.WriteString(")")
-	case time.Time:
-		sb.WriteString("Date(")
-		str := v.Format(time.RFC3339Nano)
-		if strings.HasSuffix(str, ".000Z") {
-			str = str[:len(str)-5] + "Z"
-		}
-		sb.WriteString(str)
-		sb.WriteString(")")
-	case []byte:
-		sb.WriteString("Binary(")
-		sb.WriteString(strings.ToUpper(hex.EncodeToString(v)))
-		sb.WriteString(")")
-	case []DTXTValue:
+	case []STFValue:
 		if len(v) == 0 {
 			sb.WriteString("[]")
 			return
@@ -502,7 +554,7 @@ func stringifyValue(value DTXTValue, sb *strings.Builder, indent string, level i
 			}
 		}
 		sb.WriteString("]")
-	case map[string]DTXTValue:
+	case map[string]STFValue:
 		if len(v) == 0 {
 			sb.WriteString("{}")
 			return

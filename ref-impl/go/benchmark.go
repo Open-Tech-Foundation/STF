@@ -7,37 +7,37 @@ import (
 	"os"
 	"time"
 
-	"github.com/Open-Tech-Foundation/dtxt/ref-impl/go/dtxt"
+	"github.com/Open-Tech-Foundation/dtxt/ref-impl/go/stf"
 	"github.com/bytedance/sonic"
 )
 
-func generateLargeData(count int) map[string]dtxt.DTXTValue {
-	entries := make([]dtxt.DTXTValue, 0, count)
+func generateLargeData(count int) map[string]stf.STFValue {
+	entries := make([]stf.STFValue, 0, count)
 	for i := 0; i < count; i++ {
-		meta := map[string]dtxt.DTXTValue{
+		meta := map[string]stf.STFValue{
 			"level":    float64(i % 10),
 			"verified": i%3 == 0,
 			"note":     nil,
-			"nested": map[string]dtxt.DTXTValue{
+			"nested": map[string]stf.STFValue{
 				"a": 1.0,
 				"b": false,
 				"c": "nested string",
 			},
 		}
 
-		entry := map[string]dtxt.DTXTValue{
+		entry := map[string]stf.STFValue{
 			"id":       float64(i),
 			"uid":      fmt.Sprintf("user-%d", i),
 			"isActive": i%2 == 0,
 			"score":    rand.Float64() * 1000,
-			"tags":     []dtxt.DTXTValue{"data", "benchmark", "storage", "json", "dtxt"},
+			"tags":     []stf.STFValue{"data", "benchmark", "storage", "json", "stf"},
 			"meta":     meta,
 		}
 		entries = append(entries, entry)
 	}
 
-	return map[string]dtxt.DTXTValue{
-		"title":       "DTXT vs JSON (Go)",
+	return map[string]stf.STFValue{
+		"title":       "STF vs JSON (Go)",
 		"description": "Benchmark for base format overhead",
 		"entries":     entries,
 	}
@@ -51,18 +51,18 @@ func main() {
 
 	// Payload Size Comparison
 	jsonBytes, _ := json.Marshal(rawData)
-	dtxtStr := dtxt.Stringify(rawData, "")
+	stfStr := stf.Stringify(rawData, "")
 
 	os.WriteFile("../../benchmarks/go/bench_v2_go.json", jsonBytes, 0644)
-	os.WriteFile("../../benchmarks/go/bench_v2_go.dtxt", []byte(dtxtStr), 0644)
+	os.WriteFile("../../benchmarks/go/bench_v2_go.stf", []byte(stfStr), 0644)
 
 	jsonSize := len(jsonBytes)
-	dtxtSize := len(dtxtStr)
+	stfSize := len(stfStr)
 
 	fmt.Println("\n--- Payload Size ---")
 	fmt.Printf("JSON: %.2f MB\n", float64(jsonSize)/1024/1024)
-	fmt.Printf("DTXT:  %.2f MB\n", float64(dtxtSize)/1024/1024)
-	fmt.Printf("Reduction: %.1f%%\n", (1.0-float64(dtxtSize)/float64(jsonSize))*100)
+	fmt.Printf("STF:  %.2f MB\n", float64(stfSize)/1024/1024)
+	fmt.Printf("Reduction: %.1f%%\n", (1.0-float64(stfSize)/float64(jsonSize))*100)
 
 	// Performance Comparison
 	iterations := 5
@@ -87,13 +87,13 @@ func main() {
 	}
 	fmt.Printf("sonic.Unmarshal: %.2f ms\n", float64(sonicParseTotal.Milliseconds())/float64(iterations))
 
-	var dtxtParseTotal time.Duration
+	var stfParseTotal time.Duration
 	for i := 0; i < iterations; i++ {
 		start := time.Now()
-		dtxt.Parse(dtxtStr)
-		dtxtParseTotal += time.Since(start)
+		stf.Parse(stfStr)
+		stfParseTotal += time.Since(start)
 	}
-	fmt.Printf("dtxt.Parse:     %.2f ms\n", float64(dtxtParseTotal.Milliseconds())/float64(iterations))
+	fmt.Printf("stf.Parse:      %.2f ms\n", float64(stfParseTotal.Milliseconds())/float64(iterations))
 
 	fmt.Printf("\n--- Serialization Performance (Average of %d runs) ---\n", iterations)
 
@@ -113,11 +113,11 @@ func main() {
 	}
 	fmt.Printf("sonic.Marshal:   %.2f ms\n", float64(sonicStringifyTotal.Milliseconds())/float64(iterations))
 
-	var dtxtStringifyTotal time.Duration
+	var stfStringifyTotal time.Duration
 	for i := 0; i < iterations; i++ {
 		start := time.Now()
-		dtxt.Stringify(rawData, "")
-		dtxtStringifyTotal += time.Since(start)
+		stf.Stringify(rawData, "")
+		stfStringifyTotal += time.Since(start)
 	}
-	fmt.Printf("dtxt.Stringify: %.2f ms\n", float64(dtxtStringifyTotal.Milliseconds())/float64(iterations))
+	fmt.Printf("stf.Stringify:  %.2f ms\n", float64(stfStringifyTotal.Milliseconds())/float64(iterations))
 }

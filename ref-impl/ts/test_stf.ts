@@ -1,17 +1,18 @@
-import { parse, stringify } from './dtxt.ts';
+import { parse, stringify } from './stf.ts';
 import * as assert from 'assert';
 
 function testSpecExample() {
     const specExample = `
-# DTXT example
+# STF example
 {
   name: \`Sample\`,
-  created: Date(2026-01-15),
-  updated: Date(2026-01-15T10:30:00Z),
+  created: DATE(2026-01-15),
+  updated: TIMESTAMP(2026-01-15T10:30:00Z),
   active: T,
   count: 42,
-  big: BigNumber(9007199254740993),
-  hash: Binary(A7B2319E44CE12BA),
+  price: DECIMAL(19.99),
+  big: BIGINT(9007199254740993),
+  hash: BINARY(SGVsbG8=),
   items: [1, 2, 3],
   meta: {
     retries: 3,
@@ -23,10 +24,13 @@ function testSpecExample() {
     console.log("Parsed Example Successfully");
 
     assert.strictEqual(parsed.name, 'Sample');
+    assert.strictEqual(parsed.created, '$date:2026-01-15');
+    assert.strictEqual(parsed.updated, '$timestamp:2026-01-15T10:30:00Z');
     assert.strictEqual(parsed.active, true);
     assert.strictEqual(parsed.count, 42);
-    assert.strictEqual(parsed.big, 9007199254740993n);
-    assert.deepStrictEqual(parsed.hash, new Uint8Array([0xA7, 0xB2, 0x31, 0x9E, 0x44, 0xCE, 0x12, 0xBA]));
+    assert.strictEqual(parsed.price, '$decimal:19.99');
+    assert.strictEqual(parsed.big, '$bigint:9007199254740993');
+    assert.strictEqual(parsed.hash, '$binary:SGVsbG8=');
     assert.deepStrictEqual(parsed.items, [1, 2, 3]);
     assert.strictEqual((parsed as any).meta.retries, 3);
     assert.strictEqual((parsed as any).meta.enabled, false);
@@ -38,7 +42,7 @@ function testSpecExample() {
     const reparsed = parse(dumped);
     assert.strictEqual(reparsed.name, parsed.name);
     assert.strictEqual(reparsed.big, parsed.big);
-    assert.deepStrictEqual(reparsed.hash, parsed.hash);
+    assert.strictEqual(reparsed.hash, parsed.hash);
     console.log("Round trip successful");
 }
 

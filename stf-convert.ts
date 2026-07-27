@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { parse as parseDTXT, stringify as stringifyDTXT, DTXTValue, format as formatDTXT } from "./ref-impl/ts/dtxt.js";
+import { parse as parseSTF, stringify as stringifySTF, STFValue, format as formatSTF } from "./ref-impl/ts/stf.ts";
 
 interface Options {
-  mode: "json-to-dtxt" | "dtxt-to-json" | "format";
+  mode: "json-to-stf" | "stf-to-json" | "format";
   input: string | null;
   output: string | null;
   indent: string | null;
@@ -14,7 +14,7 @@ interface Options {
 
 function parseArgs(args: string[]): Options {
   const opts: Options = {
-    mode: "json-to-dtxt",
+    mode: "json-to-stf",
     input: null,
     output: null,
     indent: null,
@@ -26,12 +26,12 @@ function parseArgs(args: string[]): Options {
     const arg = args[i];
     switch (arg) {
       case "-j":
-      case "--json-to-dtxt":
-        opts.mode = "json-to-dtxt";
+      case "--json-to-stf":
+        opts.mode = "json-to-stf";
         break;
-      case "-d":
-      case "--dtxt-to-json":
-        opts.mode = "dtxt-to-json";
+      case "-s":
+      case "--stf-to-json":
+        opts.mode = "stf-to-json";
         break;
       case "-f":
       case "--format":
@@ -82,61 +82,42 @@ function parseArgs(args: string[]): Options {
 
 function printHelp(): void {
   console.log(`
-DTXT Converter — Convert between JSON and DTXT formats
+STF Converter — Convert between JSON and STF formats
 
 USAGE:
-  dtxt-convert [options] [input-file]
+  stf-convert [options] [input-file]
 
 MODES:
-  -j, --json-to-dtxt    Convert JSON to DTXT (default)
-  -d, --dtxt-to-json    Convert DTXT to JSON
-  -f, --format          Format/pretty-print a DTXT file
+  -j, --json-to-stf    Convert JSON to STF (default)
+  -s, --stf-to-json    Convert STF to JSON
+  -f, --format         Format/pretty-print an STF file
 
 INPUT/OUTPUT:
-  -i, --input <file>    Input file (or pass as positional arg)
-  -o, --output <file>   Output file (defaults to stdout)
+  -i, --input <file>   Input file (or pass as positional arg)
+  -o, --output <file>  Output file (defaults to stdout)
 
 FORMATTING:
-  --indent <string>     Indentation string (default: "  ")
-  --minify              Remove all unnecessary whitespace
+  --indent <string>    Indentation string (default: "  ")
+  --minify             Remove all unnecessary whitespace
 
 ARRAY ROOTS:
-  DTXT requires root objects. Arrays/scalars are auto-wrapped:
-  --wrap-key <key>      Key name for wrapped root (default: "root")
-  --no-wrap             Error instead of wrapping (strict mode)
+  STF requires root objects. Arrays/scalars are auto-wrapped:
+  --wrap-key <key>     Key name for wrapped root (default: "root")
+  --no-wrap            Error instead of wrapping (strict mode)
 
 OTHER:
-  -h, --help            Show this help message
-  -v, --version         Show version
+  -h, --help           Show this help message
+  -v, --version        Show version
 
 EXAMPLES:
-  dtxt-convert -j config.json -o config.dtxt
-  dtxt-convert -d config.dtxt -o config.json
-  dtxt-convert -f config.dtxt
-  cat data.json | dtxt-convert -j
-  dtxt-convert --json-to-dtxt --minify input.json
-
-JSON TO DTXT MAPPING:
-  true/false       → T/F
-  null             → N
-  strings          → \`string\` (or "string" if contains backtick)
-  numbers          → number
-  arrays           → [...]
-  objects          → { key: value, }
-  ISO-8601 dates   → Date(YYYY-MM-DDTHH:mm:ssZ)  (if string matches ISO-8601)
-  large integers   → BigNumber(n)  (if exceeds safe integer range)
-
-DTXT TO JSON MAPPING:
-  T/F              → true/false
-  N                → null
-  Date(...)        → ISO-8601 string
-  BigNumber(...)   → string representation
-  Binary(...)      → hex string prefixed with "0x"
+  stf-convert -j config.json -o config.stf
+  stf-convert -s config.stf -o config.json
+  stf-convert -f config.stf
 `);
 }
 
 function printVersion(): void {
-  console.log("dtxt-convert 0.1.0");
+  console.log("stf-convert 1.0.0");
 }
 
 function readInput(filePath: string | null): string {
@@ -157,20 +138,13 @@ function writeOutput(content: string, filePath: string | null): void {
   }
 }
 
-function detectIsoDate(str: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$/.test(str);
-}
-
-function jsonToDtxtValue(value: unknown, indent: string | null): string {
+function jsonToStfValue(value: unknown, indent: string | null): string {
   if (value === null) return "N";
   if (value === true) return "T";
   if (value === false) return "F";
   if (typeof value === "number") return value.toString();
-  if (typeof value === "bigint") return `BigNumber(${value.toString()})`;
+  if (typeof value === "bigint") return `BIGINT(${value.toString()})`;
   if (typeof value === "string") {
-    if (detectIsoDate(value)) {
-      return `Date(${value})`;
-    }
     if (value.includes("`")) {
       return JSON.stringify(value);
     }
@@ -180,7 +154,7 @@ function jsonToDtxtValue(value: unknown, indent: string | null): string {
     if (value.length === 0) return "[]";
     const newline = indent ? "\n" : "";
     const sp = indent ? indent : "";
-    const items = value.map((v) => sp + jsonToDtxtValue(v, indent));
+    const items = value.map((v) => sp + jsonToStfValue(v, indent));
     return `[${newline}${items.join("," + newline)},${indent ? "\n" : ""}]`;
   }
   if (typeof value === "object") {
@@ -189,7 +163,7 @@ function jsonToDtxtValue(value: unknown, indent: string | null): string {
     const newline = indent ? "\n" : "";
     const sp = indent ? indent : "";
     const items = keys.map((k) => {
-      const val = jsonToDtxtValue((value as any)[k], indent ? indent + "  " : null);
+      const val = jsonToStfValue((value as any)[k], indent ? indent + "  " : null);
       return `${sp}${k}: ${val}`;
     });
     return `{${newline}${items.join("," + newline)},${indent ? "\n" : ""}}`;
@@ -197,22 +171,12 @@ function jsonToDtxtValue(value: unknown, indent: string | null): string {
   throw new Error(`Unsupported JSON type: ${typeof value}`);
 }
 
-function dtxtToJsonValue(value: DTXTValue): unknown {
-  if (value instanceof Date) return value.toISOString();
-  if (value instanceof Uint8Array) {
-    let hex = "0x";
-    for (let i = 0; i < value.length; i++) {
-      const h = value[i].toString(16);
-      hex += h.length === 1 ? "0" + h.toUpperCase() : h.toUpperCase();
-    }
-    return hex;
-  }
-  if (typeof value === "bigint") return value.toString();
-  if (Array.isArray(value)) return value.map(dtxtToJsonValue);
+function stfToJsonValue(value: STFValue): unknown {
+  if (Array.isArray(value)) return value.map(stfToJsonValue);
   if (typeof value === "object" && value !== null) {
     const result: Record<string, unknown> = {};
     for (const k of Object.keys(value)) {
-      result[k] = dtxtToJsonValue((value as any)[k]);
+      result[k] = stfToJsonValue((value as any)[k]);
     }
     return result;
   }
@@ -226,27 +190,27 @@ function main(): void {
   try {
     const input = readInput(opts.input);
 
-    if (opts.mode === "json-to-dtxt") {
+    if (opts.mode === "json-to-stf") {
       const json = JSON.parse(input);
       let toConvert = json;
       if (!opts.wrapKey && (Array.isArray(json) || typeof json !== "object" || json === null)) {
-        throw new Error("DTXT requires a root object. Use --wrap-key <name> or pass an object.");
+        throw new Error("STF requires a root object. Use --wrap-key <name> or pass an object.");
       }
       if (Array.isArray(json) || typeof json !== "object" || json === null) {
         toConvert = { [opts.wrapKey]: json };
       }
       const indent = opts.minify ? null : (opts.indent || "  ");
-      const result = jsonToDtxtValue(toConvert, indent);
+      const result = jsonToStfValue(toConvert, indent);
       writeOutput(result, opts.output);
-    } else if (opts.mode === "dtxt-to-json") {
-      const dtxt = parseDTXT(input);
-      const json = dtxtToJsonValue(dtxt);
+    } else if (opts.mode === "stf-to-json") {
+      const parsed = parseSTF(input);
+      const json = stfToJsonValue(parsed);
       const indent = opts.minify ? null : (opts.indent || "  ");
       writeOutput(JSON.stringify(json, null, indent), opts.output);
     } else if (opts.mode === "format") {
       const formatted = opts.minify
-        ? stringifyDTXT(parseDTXT(input), null)
-        : formatDTXT(input);
+        ? stringifySTF(parseSTF(input), null)
+        : formatSTF(input);
       writeOutput(formatted, opts.output);
     }
   } catch (err: any) {

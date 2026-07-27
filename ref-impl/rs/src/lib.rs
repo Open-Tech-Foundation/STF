@@ -371,102 +371,79 @@ impl<'a> DTXTParser<'a> {
         self.advance(); // skip ')'
 
         match type_name {
-            "Date" => {
+            "DATE" => {
                 let bytes = payload.as_bytes();
-                if payload.len() < 10 {
+                if payload.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
                     return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
                 }
-                let mut i = 0;
-                let match_digit = |i: &mut usize, count: usize| -> Option<u32> {
-                    let mut result = 0u32;
-                    for _ in 0..count {
-                        if *i >= bytes.len() || !bytes[*i].is_ascii_digit() {
-                            return None;
-                        }
-                        result = result * 10 + (bytes[*i] - b'0') as u32;
-                        *i += 1;
+                for (idx, &b) in bytes.iter().enumerate() {
+                    if idx == 4 || idx == 7 { continue; }
+                    if !b.is_ascii_digit() {
+                        return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
                     }
-                    Some(result)
-                };
-                let match_char = |i: &mut usize, ch: u8| -> bool {
-                    if *i >= bytes.len() || bytes[*i] != ch {
-                        return false;
-                    }
-                    *i += 1;
-                    true
-                };
-
-                if match_digit(&mut i, 4).is_none() || !match_char(&mut i, b'-') {
-                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
                 }
-                let month = match_digit(&mut i, 2).ok_or_else(|| DTXTError::InvalidConstructorPayload(payload.to_string()))?;
-                if !match_char(&mut i, b'-') {
-                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
-                }
-                let day = match_digit(&mut i, 2).ok_or_else(|| DTXTError::InvalidConstructorPayload(payload.to_string()))?;
-
+                let month = (bytes[5] - b'0') * 10 + (bytes[6] - b'0');
+                let day = (bytes[8] - b'0') * 10 + (bytes[9] - b'0');
                 if month < 1 || month > 12 || day < 1 || day > 31 {
-                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
-                }
-
-                if i < bytes.len() && (bytes[i] == b'T' || bytes[i] == b' ') {
-                    i += 1;
-                    if match_digit(&mut i, 2).is_none() || !match_char(&mut i, b':') {
-                        return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
-                    }
-                    if match_digit(&mut i, 2).is_none() || !match_char(&mut i, b':') {
-                        return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
-                    }
-                    if match_digit(&mut i, 2).is_none() {
-                        return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
-                    }
-                    if i < bytes.len() && bytes[i] == b'.' {
-                        i += 1;
-                        while i < bytes.len() && bytes[i].is_ascii_digit() {
-                            i += 1;
-                        }
-                    }
-                    if i < bytes.len() && bytes[i] == b'Z' {
-                        i += 1;
-                    } else if i < bytes.len() && (bytes[i] == b'+' || bytes[i] == b'-') {
-                        i += 1;
-                        if match_digit(&mut i, 2).is_none() || !match_char(&mut i, b':') {
-                            return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
-                        }
-                        if match_digit(&mut i, 2).is_none() {
-                            return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
-                        }
-                    }
-                }
-
-                if i != bytes.len() {
                     return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
                 }
                 Ok(DTXTValue::Date(payload))
             }
-            "BigNumber" => {
-                if payload.as_bytes().iter().any(|&c| c == b' ' || c == b'\t' || c == b'\r' || c == b'\n') {
-                    return Err(DTXTError::InvalidConstructorPayload(format!("BigNumber({})", payload)));
+            "TIMESTAMP" => {
+                let bytes = payload.as_bytes();
+                if payload.len() < 19 {
+                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                }
+                // Check ISO 8601 timestamp format with mandatory timezone offset
+                let has_z = payload.ends_with('Z');
+                let has_offset = has_z || (payload.len() >= 25 && (payload.as_bytes()[payload.len()-6] == b'+' || payload.as_bytes()[payload.len()-6] == b'-'));
+                if !has_offset {
+                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                }
+                Ok(DTXTValue::Date(payload))
+            }
+            "BIGINT" => {
+                if payload.as_bytes().iter().any(|&c| c == b' ' || c == b'\t' || c == b'\r' || c == b'\n' || c == b'+') {
+                    return Err(DTXTError::InvalidConstructorPayload(format!("BIGINT({})", payload)));
                 }
                 let num = payload.parse::<BigInt>()
-                    .map_err(|_| DTXTError::InvalidConstructorPayload(format!("BigNumber({})", payload)))?;
+                    .map_err(|_| DTXTError::InvalidConstructorPayload(format!("BIGINT({})", payload)))?;
                 Ok(DTXTValue::BigInt(num))
             }
-            "Binary" => {
-                if payload.as_bytes().iter().any(|&c| c == b' ' || c == b'\t' || c == b'\r' || c == b'\n') {
-                    return Err(DTXTError::InvalidConstructorPayload(format!("Binary({}) whitespace", payload)));
+            "DECIMAL" => {
+                // Note: native == is wrong (rust_decimal compares numerically). Hand-roll digits+scale string match.
+                if payload.is_empty() || payload.starts_with('+') {
+                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
                 }
-                let cleaned: String = payload.chars().map(|c| c.to_ascii_uppercase()).collect();
-                if cleaned.len() % 2 != 0 {
-                    return Err(DTXTError::InvalidConstructorPayload(format!("Binary({}) length", payload)));
+                let clean = payload.trim_start_matches('-').trim_start_matches('0').replace('.', "");
+                if clean.len() > 34 {
+                    return Err(DTXTError::InvalidConstructorPayload(format!("ERR_DECIMAL_OVERFLOW: {}", payload)));
                 }
-                let mut bytes = Vec::with_capacity(cleaned.len() / 2);
-                for i in (0..cleaned.len()).step_by(2) {
-                    let byte = u8::from_str_radix(&cleaned[i..i+2], 16)
-                        .map_err(|_| DTXTError::InvalidConstructorPayload(format!("Binary({})", payload)))?;
-                    bytes.push(byte);
+                Ok(DTXTValue::String(Cow::Borrowed(payload)))
+            }
+            "BINARY" => {
+                if payload.is_empty() || payload.len() % 4 != 0 {
+                    return Err(DTXTError::InvalidConstructorPayload(format!("BINARY({}) length", payload)));
                 }
-                Ok(DTXTValue::Bytes(bytes))
+                // Check canonical base64 trailing bits
+                if payload.ends_with("==") {
+                    let b64_table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+                    let byte_ch = payload.as_bytes()[payload.len() - 3];
+                    if let Some(pos) = b64_table.iter().position(|&r| r == byte_ch) {
+                        if pos & 15 != 0 {
+                            return Err(DTXTError::InvalidConstructorPayload("non-canonical trailing bits".to_string()));
+                        }
+                    }
+                } else if payload.ends_with('=') {
+                    let b64_table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+                    let byte_ch = payload.as_bytes()[payload.len() - 2];
+                    if let Some(pos) = b64_table.iter().position(|&r| r == byte_ch) {
+                        if pos & 3 != 0 {
+                            return Err(DTXTError::InvalidConstructorPayload("non-canonical trailing bits".to_string()));
+                        }
+                    }
+                }
+                Ok(DTXTValue::String(Cow::Borrowed(payload)))
             }
             _ => Err(DTXTError::UnknownConstructor(type_name.to_string())),
         }
@@ -499,22 +476,18 @@ fn stringify_value(value: &DTXTValue, out: &mut String, indent: Option<&str>, le
         DTXTValue::Bool(false) => out.push('F'),
         DTXTValue::Null => out.push('N'),
         DTXTValue::BigInt(n) => {
-            out.push_str("BigNumber(");
+            out.push_str("BIGINT(");
             out.push_str(&n.to_string());
             out.push(')');
         }
         DTXTValue::Date(s) => {
-            out.push_str("Date(");
+            out.push_str("DATE(");
             out.push_str(s);
             out.push(')');
         }
         DTXTValue::Bytes(bytes) => {
-            out.push_str("Binary(");
-            for byte in bytes {
-                const HEX: &[u8; 16] = b"0123456789ABCDEF";
-                out.push(HEX[(byte >> 4) as usize] as char);
-                out.push(HEX[(byte & 0x0F) as usize] as char);
-            }
+            out.push_str("BINARY(");
+            out.push_str(&serde_json::to_string(bytes).unwrap());
             out.push(')');
         }
         DTXTValue::Array(arr) => {

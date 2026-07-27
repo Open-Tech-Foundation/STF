@@ -1,0 +1,4 @@
+{
+  "plugins": ["./prettier-plugin-dtxt/src/index.js"],
+  "parser": "dtxt"
+}

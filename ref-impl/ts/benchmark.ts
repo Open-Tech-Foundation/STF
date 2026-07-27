@@ -1,9 +1,9 @@
-import * as dtxt from './dtxt.ts';
+import * as stf from './stf.ts';
 import { writeFileSync, statSync } from 'fs';
 
 function generateLargeData(count: number) {
     const data: any = {
-        title: "DTXT vs JSON (JSON-native types only)",
+        title: "STF vs JSON (JSON-native types only)",
         description: "Benchmark for base format overhead (unquoted keys, short literals)",
         entries: []
     };
@@ -14,7 +14,7 @@ function generateLargeData(count: number) {
             uid: `user-${i}`,
             isActive: i % 2 === 0,
             score: Math.random() * 1000,
-            tags: ["data", "benchmark", "storage", "json", "dtxt"],
+            tags: ["data", "benchmark", "storage", "json", "stf"],
             meta: {
                 level: i % 10,
                 verified: i % 3 === 0,
@@ -30,7 +30,7 @@ function generateLargeData(count: number) {
     return data;
 }
 
-const DATASET_SIZE = 30000; // Increased to ensure good volume
+const DATASET_SIZE = 30000;
 
 async function runBenchmark() {
     console.log(`Generating dataset with ${DATASET_SIZE} entries (JSON-native types only)...`);
@@ -38,18 +38,18 @@ async function runBenchmark() {
 
     // 1. Payload Size Comparison
     const jsonStr = JSON.stringify(rawData);
-    const dtxtStr = dtxt.stringify(rawData);
+    const stfStr = stf.stringify(rawData);
 
     writeFileSync('../../benchmarks/ts/bench_v2.json', jsonStr);
-    writeFileSync('../../benchmarks/ts/bench_v2.dtxt', dtxtStr);
+    writeFileSync('../../benchmarks/ts/bench_v2.stf', stfStr);
 
     const jsonSize = statSync('../../benchmarks/ts/bench_v2.json').size;
-    const dtxtSize = statSync('../../benchmarks/ts/bench_v2.dtxt').size;
+    const stfSize = statSync('../../benchmarks/ts/bench_v2.stf').size;
 
     console.log("\n--- Payload Size ---");
     console.log(`JSON: ${(jsonSize / 1024 / 1024).toFixed(2)} MB`);
-    console.log(`DTXT:  ${(dtxtSize / 1024 / 1024).toFixed(2)} MB`);
-    console.log(`Reduction: ${((1 - dtxtSize / jsonSize) * 100).toFixed(1)}%`);
+    console.log(`STF:  ${(stfSize / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`Reduction: ${((1 - stfSize / jsonSize) * 100).toFixed(1)}%`);
 
     // 2. Performance Comparison (Time)
     const iterations = 5;
@@ -64,13 +64,13 @@ async function runBenchmark() {
     }
     console.log(`JSON.parse: ${(jsonParseTotal / iterations).toFixed(2)} ms`);
 
-    let dtxtParseTotal = 0;
+    let stfParseTotal = 0;
     for (let i = 0; i < iterations; i++) {
         const start = performance.now();
-        dtxt.parse(dtxtStr);
-        dtxtParseTotal += performance.now() - start;
+        stf.parse(stfStr);
+        stfParseTotal += performance.now() - start;
     }
-    console.log(`dtxt.parse:  ${(dtxtParseTotal / iterations).toFixed(2)} ms`);
+    console.log(`stf.parse:  ${(stfParseTotal / iterations).toFixed(2)} ms`);
 
     console.log("\n--- Serialization Performance (Average of 5 runs) ---");
 
@@ -82,13 +82,13 @@ async function runBenchmark() {
     }
     console.log(`JSON.stringify: ${(jsonStringifyTotal / iterations).toFixed(2)} ms`);
 
-    let dtxtStringifyTotal = 0;
+    let stfStringifyTotal = 0;
     for (let i = 0; i < iterations; i++) {
         const start = performance.now();
-        dtxt.stringify(rawData);
-        dtxtStringifyTotal += performance.now() - start;
+        stf.stringify(rawData);
+        stfStringifyTotal += performance.now() - start;
     }
-    console.log(`dtxt.stringify:  ${(dtxtStringifyTotal / iterations).toFixed(2)} ms`);
+    console.log(`stf.stringify:  ${(stfStringifyTotal / iterations).toFixed(2)} ms`);
 
     // 3. Memory
     console.log("\n--- Memory Usage (Current Process) ---");

@@ -1,30 +1,35 @@
-# DTXT Error Code Standard (1.0)
+# STF Error Code Standard (1.0)
 
-To provide consistent feedback across different implementations, DTXT parsers SHOULD use the following standardized error codes.
+Standardized error codes for STF parsers and schema validators.
 
 ## General Syntax Errors
-- **`ERR_SYNTAX`**: General parsing failure when no more specific error applies.
-- **`ERR_UNTERMINATED`**: Input ended prematurely (e.g., missing `}`, `]`, or `` ` ``).
+- **`ERR_SYNTAX`**: General parsing failure.
+- **`ERR_UNTERMINATED`**: Input ended prematurely.
 
 ## Structural Errors
-- **`ERR_ROOT_NOT_OBJECT`**: The document root is not a `{}` delimited object.
-- **`ERR_DUPLICATE_KEY`**: An object contains multiple members with the same identifier.
+- **`ERR_ROOT_NOT_OBJECT`**: Root is not a `{}` object.
+- **`ERR_DUPLICATE_KEY`**: Object contains duplicate member identifiers.
 - **`ERR_MISSING_COLON`**: Expected `:` after a key.
 - **`ERR_MISSING_COMMA`**: Expected `,` between members or elements.
 
 ## Identifier Errors
-- **`ERR_INVALID_IDENTIFIER`**: Key contains characters not allowed by the specification (e.g., dots, spaces, quotes, non-ASCII).
+- **`ERR_INVALID_IDENTIFIER`**: Key contains forbidden characters.
 
 ## Primitive Value Errors
-- **`ERR_INVALID_NUMBER`**: Number literal does not follow the JSON-derived grammar (e.g., leading zeros, invalid exponent).
-- **`ERR_INVALID_STRING`**: String literal contains forbidden characters (e.g., internal backticks).
+- **`ERR_INVALID_NUMBER`**: Invalid number literal syntax.
+- **`ERR_INVALID_STRING`**: Invalid string literal or illegal newline.
 
 ## Constructor Errors
-- **`ERR_UNKNOWN_CONSTRUCTOR`**: Constructor name (e.g., `XYZ(...)` or old short forms like `D(...)`, `BN(...)`, `B(...)`) is not defined in the standard.
-- **`ERR_INVALID_CONSTRUCTOR_PAYLOAD`**: The payload inside `(...)` does not match the requirements for that specific type (e.g., non-numeric characters in `BigNumber()`, or **odd-length hexadecimal string** in `Binary()`).
-- **`ERR_NESTED_CONSTRUCTOR`**: A constructor literal was found inside the payload of another constructor.
+- **`ERR_UNKNOWN_CONSTRUCTOR`**: Constructor name (e.g. `CUSTOM(...)`, lowercase/mixed-case like `Date(...)`, `BigNumber(...)`) is unknown.
+- **`ERR_INVALID_CONSTRUCTOR_PAYLOAD`**: Payload does not match requirements (e.g. time component in `DATE`, missing offset in `TIMESTAMP`, non-canonical Base64 in `BINARY`).
+- **`ERR_NESTED_CONSTRUCTOR`**: Nested constructor payload.
+- **`ERR_DECIMAL_OVERFLOW`**: `DECIMAL` exceeds 34 significant digits.
+
+## Schema Validation Errors
+- **`ERR_SCHEMA_SCALE_MISMATCH`**: Decimal scale does not match required `scale` constraint. Message MUST indicate expected vs actual scale.
+- **`ERR_SCHEMA_TYPE_MISMATCH`**: Value type does not match required schema type.
 
 ## Resource Limits
-- **`ERR_NESTING_DEPTH`**: The document exceeds the implementation's maximum allowed nesting depth.
-- **`ERR_DOCUMENT_SIZE`**: The document exceeds the maximum allowed byte size.
-- **`ERR_PAYLOAD_SIZE`**: A constructor payload exceeds the maximum allowed size.
+- **`ERR_NESTING_DEPTH`**: Exceeds maximum nesting depth (default 64).
+- **`ERR_DOCUMENT_SIZE`**: Exceeds document size limit.
+- **`ERR_PAYLOAD_SIZE`**: Exceeds constructor payload size limit.
