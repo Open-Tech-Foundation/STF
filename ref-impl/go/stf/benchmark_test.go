@@ -1,4 +1,4 @@
-package dtxt
+package stf
 
 import (
 	"testing"

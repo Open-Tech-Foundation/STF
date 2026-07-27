@@ -176,15 +176,15 @@ impl<'a> DTXTParser<'a> {
             Some(b'`') => Ok(DTXTValue::String(Cow::Borrowed(self.parse_string()?))),
             Some(b'"') => Ok(DTXTValue::String(Cow::Owned(self.parse_interpreted_string()?))),
             Some(b'-') | Some(b'0'..=b'9') => Ok(DTXTValue::Number(self.parse_number()?)),
-            Some(b'T') if self.pos + 1 >= self.input.len() || self.input[self.pos+1] != b'(' => {
+            Some(b'T') if self.pos + 1 >= self.input.len() || (!self.input[self.pos+1].is_ascii_alphanumeric() && self.input[self.pos+1] != b'_' && self.input[self.pos+1] != b'-') => {
                 self.advance();
                 Ok(DTXTValue::Bool(true))
             }
-            Some(b'F') if self.pos + 1 >= self.input.len() || self.input[self.pos+1] != b'(' => {
+            Some(b'F') if self.pos + 1 >= self.input.len() || (!self.input[self.pos+1].is_ascii_alphanumeric() && self.input[self.pos+1] != b'_' && self.input[self.pos+1] != b'-') => {
                 self.advance();
                 Ok(DTXTValue::Bool(false))
             }
-            Some(b'N') if self.pos + 1 >= self.input.len() || self.input[self.pos+1] != b'(' => {
+            Some(b'N') if self.pos + 1 >= self.input.len() || (!self.input[self.pos+1].is_ascii_alphanumeric() && self.input[self.pos+1] != b'_' && self.input[self.pos+1] != b'-') => {
                 self.advance();
                 Ok(DTXTValue::Null)
             }
@@ -390,17 +390,15 @@ impl<'a> DTXTParser<'a> {
                 Ok(DTXTValue::Date(payload))
             }
             "TIMESTAMP" => {
-                let bytes = payload.as_bytes();
                 if payload.len() < 19 {
                     return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
                 }
-                // Check ISO 8601 timestamp format with mandatory timezone offset
                 let has_z = payload.ends_with('Z');
                 let has_offset = has_z || (payload.len() >= 25 && (payload.as_bytes()[payload.len()-6] == b'+' || payload.as_bytes()[payload.len()-6] == b'-'));
                 if !has_offset {
                     return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
                 }
-                Ok(DTXTValue::Date(payload))
+                Ok(DTXTValue::String(Cow::Owned(format!("$timestamp:{}", payload))))
             }
             "BIGINT" => {
                 if payload.as_bytes().iter().any(|&c| c == b' ' || c == b'\t' || c == b'\r' || c == b'\n' || c == b'+') {
@@ -411,21 +409,30 @@ impl<'a> DTXTParser<'a> {
                 Ok(DTXTValue::BigInt(num))
             }
             "DECIMAL" => {
-                // Note: native == is wrong (rust_decimal compares numerically). Hand-roll digits+scale string match.
                 if payload.is_empty() || payload.starts_with('+') {
+                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                }
+                if payload.starts_with("0") && payload.len() > 1 && !payload.starts_with("0.") {
+                    return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
+                }
+                if payload.starts_with("-0") && payload.len() > 2 && !payload.starts_with("-0.") {
                     return Err(DTXTError::InvalidConstructorPayload(payload.to_string()));
                 }
                 let clean = payload.trim_start_matches('-').trim_start_matches('0').replace('.', "");
                 if clean.len() > 34 {
                     return Err(DTXTError::InvalidConstructorPayload(format!("ERR_DECIMAL_OVERFLOW: {}", payload)));
                 }
-                Ok(DTXTValue::String(Cow::Borrowed(payload)))
+                Ok(DTXTValue::String(Cow::Owned(format!("$decimal:{}", payload))))
             }
             "BINARY" => {
                 if payload.is_empty() || payload.len() % 4 != 0 {
                     return Err(DTXTError::InvalidConstructorPayload(format!("BINARY({}) length", payload)));
                 }
-                // Check canonical base64 trailing bits
+                for &b in payload.as_bytes() {
+                    if !b.is_ascii_alphanumeric() && b != b'+' && b != b'/' && b != b'=' {
+                        return Err(DTXTError::InvalidConstructorPayload("BINARY invalid base64 alphabet".to_string()));
+                    }
+                }
                 if payload.ends_with("==") {
                     let b64_table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
                     let byte_ch = payload.as_bytes()[payload.len() - 3];
@@ -443,7 +450,7 @@ impl<'a> DTXTParser<'a> {
                         }
                     }
                 }
-                Ok(DTXTValue::String(Cow::Borrowed(payload)))
+                Ok(DTXTValue::String(Cow::Owned(format!("$binary:{}", payload))))
             }
             _ => Err(DTXTError::UnknownConstructor(type_name.to_string())),
         }
@@ -634,7 +641,7 @@ impl<'py, 'a> PyDTXTParser<'py, 'a> {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid identifier: {}", type_name)));
         }
         self.advance(); // (
-        let payload_start = self.pos;
+        let _payload_start = self.pos;
         while let Some(ch) = self.current() {
             if ch == b')' { break; }
             if ch == b'(' {

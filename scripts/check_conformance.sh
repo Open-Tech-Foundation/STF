@@ -33,6 +33,6 @@ go run cmd/conformance/main.go
 # Rust
 echo -e "\n${BLUE}Running Rust conformance tests...${NC}"
 cd "$ROOT_DIR/ref-impl/rust"
-cargo run --quiet --bin run_conformance
+CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/cargo-stf}" cargo run --quiet --bin run_conformance
 
 echo -e "\n${GREEN}All reference implementations passed conformance tests successfully!${NC}"

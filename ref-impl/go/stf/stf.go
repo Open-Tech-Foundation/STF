@@ -7,8 +7,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	"github.com/shopspring/decimal"
 )
 
 // STFValue represents any valid STF value
@@ -119,19 +117,19 @@ func (p *Parser) parseValue() (STFValue, error) {
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return p.parseNumber()
 	case 'T':
-		if p.pos+1 < len(p.input) && p.input[p.pos+1] == '(' {
+		if p.pos+1 < len(p.input) && ((p.input[p.pos+1] >= 'A' && p.input[p.pos+1] <= 'Z') || (p.input[p.pos+1] >= 'a' && p.input[p.pos+1] <= 'z') || p.input[p.pos+1] == '_' || p.input[p.pos+1] == '-') {
 			return p.parseConstructor()
 		}
 		p.advance()
 		return true, nil
 	case 'F':
-		if p.pos+1 < len(p.input) && p.input[p.pos+1] == '(' {
+		if p.pos+1 < len(p.input) && ((p.input[p.pos+1] >= 'A' && p.input[p.pos+1] <= 'Z') || (p.input[p.pos+1] >= 'a' && p.input[p.pos+1] <= 'z') || p.input[p.pos+1] == '_' || p.input[p.pos+1] == '-') {
 			return p.parseConstructor()
 		}
 		p.advance()
 		return false, nil
 	case 'N':
-		if p.pos+1 < len(p.input) && p.input[p.pos+1] == '(' {
+		if p.pos+1 < len(p.input) && ((p.input[p.pos+1] >= 'A' && p.input[p.pos+1] <= 'Z') || (p.input[p.pos+1] >= 'a' && p.input[p.pos+1] <= 'z') || p.input[p.pos+1] == '_' || p.input[p.pos+1] == '-') {
 			return p.parseConstructor()
 		}
 		p.advance()
@@ -523,10 +521,6 @@ func stringifyValue(value STFValue, sb *strings.Builder, indent string, level in
 		}
 	case nil:
 		sb.WriteString("N")
-	case decimal.Decimal:
-		sb.WriteString("DECIMAL(")
-		sb.WriteString(v.String())
-		sb.WriteString(")")
 	case []STFValue:
 		if len(v) == 0 {
 			sb.WriteString("[]")

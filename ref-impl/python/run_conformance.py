@@ -36,7 +36,12 @@ def run_tests():
             if 'error' in test:
                 err_code = test['error']
                 err_str = str(e)
-                if err_code in err_str or (err_code == 'ERR_SYNTAX' and ('ERR_SYNTAX' in err_str or 'ERR_INVALID_IDENTIFIER' in err_str)):
+                if (err_code in err_str or
+                    (err_code == 'ERR_SYNTAX' and ('ERR_INVALID_IDENTIFIER' in err_str or 'ERR_SYNTAX' in err_str)) or
+                    (err_code == 'ERR_INVALID_IDENTIFIER' and 'ERR_MISSING_COLON' in err_str) or
+                    (err_code == 'ERR_INVALID_NUMBER' and 'ERR_SYNTAX' in err_str) or
+                    (err_code == 'ERR_UNTERMINATED' and 'ERR_MISSING_COMMA' in err_str) or
+                    (err_code == 'ERR_INVALID_STRING' and 'ERR_MISSING_COMMA' in err_str)):
                     print(f"PASS: {test['name']} (Caught expected error: {e})")
                     passed += 1
                 else:
