@@ -1,0 +1,2430 @@
+[
+  {
+    "name": "structure/empty-object",
+    "group": "structure",
+    "input": "{}",
+    "value": {},
+    "canonical": "{}"
+  },
+  {
+    "name": "structure/simple",
+    "group": "structure",
+    "input": "{name: `Alice`, age: 30}",
+    "value": {
+      "name": "Alice",
+      "age": {
+        "$": "num",
+        "v": "30"
+      }
+    },
+    "canonical": "{age:30,name:\"Alice\"}"
+  },
+  {
+    "name": "structure/nested",
+    "group": "structure",
+    "input": "{user: {name: `Bob`, role: `admin`}}",
+    "value": {
+      "user": {
+        "name": "Bob",
+        "role": "admin"
+      }
+    }
+  },
+  {
+    "name": "structure/trailing-newline",
+    "group": "structure",
+    "input": "{a: 1}\n",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "structure/empty-input",
+    "group": "structure",
+    "input": "",
+    "error": "ERR_ROOT_NOT_OBJECT"
+  },
+  {
+    "name": "structure/whitespace-only",
+    "group": "structure",
+    "input": "   \n\t  ",
+    "error": "ERR_ROOT_NOT_OBJECT"
+  },
+  {
+    "name": "structure/comment-only",
+    "group": "structure",
+    "input": "# hi\n",
+    "error": "ERR_ROOT_NOT_OBJECT"
+  },
+  {
+    "name": "structure/directive-no-object",
+    "group": "structure",
+    "input": "@schema(x)",
+    "error": "ERR_ROOT_NOT_OBJECT"
+  },
+  {
+    "name": "structure/root-array",
+    "group": "structure",
+    "input": "[]",
+    "error": "ERR_ROOT_NOT_OBJECT"
+  },
+  {
+    "name": "structure/root-array-full",
+    "group": "structure",
+    "input": "[1, 2, 3]",
+    "error": "ERR_ROOT_NOT_OBJECT"
+  },
+  {
+    "name": "structure/root-number",
+    "group": "structure",
+    "input": "42",
+    "error": "ERR_ROOT_NOT_OBJECT"
+  },
+  {
+    "name": "structure/root-string",
+    "group": "structure",
+    "input": "`hello`",
+    "error": "ERR_ROOT_NOT_OBJECT"
+  },
+  {
+    "name": "structure/root-literal",
+    "group": "structure",
+    "input": "T",
+    "error": "ERR_ROOT_NOT_OBJECT"
+  },
+  {
+    "name": "structure/root-constructor",
+    "group": "structure",
+    "input": "DATE(2026-01-15)",
+    "error": "ERR_ROOT_NOT_OBJECT"
+  },
+  {
+    "name": "structure/two-objects",
+    "group": "structure",
+    "input": "{a:1}{b:2}",
+    "error": "ERR_TRAILING_CONTENT"
+  },
+  {
+    "name": "structure/trailing-junk",
+    "group": "structure",
+    "input": "{a:1} x",
+    "error": "ERR_TRAILING_CONTENT"
+  },
+  {
+    "name": "structure/trailing-directive",
+    "group": "structure",
+    "input": "{a:1}\n@schema(x)",
+    "error": "ERR_TRAILING_CONTENT"
+  },
+  {
+    "name": "structure/bom-leading",
+    "group": "structure",
+    "input": "﻿{a: 1}",
+    "error": "ERR_SYNTAX",
+    "note": "U+FEFF is not whitespace (spec §2)"
+  },
+  {
+    "name": "directives/schema",
+    "group": "directives",
+    "input": "@schema(config.schema.stf)\n{a: 1}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "directives/uri-payload",
+    "group": "directives",
+    "input": "@schema(https://example.com/a.schema.stf)\n{a: 1}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "directives/unknown-tolerated",
+    "group": "directives",
+    "input": "@nope(1)\n{a: 1}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    },
+    "note": "unknown directives warn, never fail"
+  },
+  {
+    "name": "directives/two-distinct",
+    "group": "directives",
+    "input": "@schema(a)\n@version(1.0)\n{a: 1}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "directives/not-in-data-model",
+    "group": "directives",
+    "input": "@schema(x)\n{a: 1}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    },
+    "note": "directives are metadata and must not appear in the parsed value"
+  },
+  {
+    "name": "directives/space-before-paren",
+    "group": "directives",
+    "input": "@schema (x)\n{a:1}",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "directives/space-after-at",
+    "group": "directives",
+    "input": "@ schema(x)\n{a:1}",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "directives/repeated-name",
+    "group": "directives",
+    "input": "@schema(a)\n@schema(b)\n{a:1}",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "objects/trailing-comma",
+    "group": "objects",
+    "input": "{a: 1, b: 2,}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      },
+      "b": {
+        "$": "num",
+        "v": "2"
+      }
+    }
+  },
+  {
+    "name": "objects/no-whitespace",
+    "group": "objects",
+    "input": "{a:1,b:2}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      },
+      "b": {
+        "$": "num",
+        "v": "2"
+      }
+    }
+  },
+  {
+    "name": "objects/extra-whitespace",
+    "group": "objects",
+    "input": "{  a  :  1  ,  b  :  2  }",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      },
+      "b": {
+        "$": "num",
+        "v": "2"
+      }
+    },
+    "note": "the pre-1.0 EBNF rejected this; spec §12 now threads ws"
+  },
+  {
+    "name": "objects/newlines-around",
+    "group": "objects",
+    "input": "{\n  a: 1,\n  b: 2\n}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      },
+      "b": {
+        "$": "num",
+        "v": "2"
+      }
+    }
+  },
+  {
+    "name": "objects/order-preserved",
+    "group": "objects",
+    "input": "{z: 1, a: 2, m: 3}",
+    "value": {
+      "z": {
+        "$": "num",
+        "v": "1"
+      },
+      "a": {
+        "$": "num",
+        "v": "2"
+      },
+      "m": {
+        "$": "num",
+        "v": "3"
+      }
+    },
+    "canonical": "{a:2,m:3,z:1}",
+    "note": "parse preserves order (§11.2); canonical sorts (§14)"
+  },
+  {
+    "name": "objects/missing-colon",
+    "group": "objects",
+    "input": "{ a 1 }",
+    "error": "ERR_MISSING_COLON"
+  },
+  {
+    "name": "objects/missing-value",
+    "group": "objects",
+    "input": "{ a: }",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "objects/missing-comma",
+    "group": "objects",
+    "input": "{ a:1 b:2 }",
+    "error": "ERR_MISSING_COMMA"
+  },
+  {
+    "name": "objects/double-comma",
+    "group": "objects",
+    "input": "{ a:1,, b:2 }",
+    "error": "ERR_MISSING_COMMA"
+  },
+  {
+    "name": "objects/leading-comma",
+    "group": "objects",
+    "input": "{ , a:1 }",
+    "error": "ERR_MISSING_COMMA"
+  },
+  {
+    "name": "objects/unterminated",
+    "group": "objects",
+    "input": "{ a: 1",
+    "error": "ERR_UNTERMINATED"
+  },
+  {
+    "name": "objects/duplicate-key",
+    "group": "objects",
+    "input": "{ a: 1, a: 2 }",
+    "error": "ERR_DUPLICATE_KEY"
+  },
+  {
+    "name": "objects/duplicate-nested",
+    "group": "objects",
+    "input": "{ o: { i: { a: 1, a: 2 } } }",
+    "error": "ERR_DUPLICATE_KEY"
+  },
+  {
+    "name": "objects/duplicate-in-array",
+    "group": "objects",
+    "input": "{ a: [{b:1, b:2}] }",
+    "error": "ERR_DUPLICATE_KEY"
+  },
+  {
+    "name": "arrays/empty",
+    "group": "arrays",
+    "input": "{items: []}",
+    "value": {
+      "items": []
+    }
+  },
+  {
+    "name": "arrays/simple",
+    "group": "arrays",
+    "input": "{nums: [1, 2, 3]}",
+    "value": {
+      "nums": [
+        {
+          "$": "num",
+          "v": "1"
+        },
+        {
+          "$": "num",
+          "v": "2"
+        },
+        {
+          "$": "num",
+          "v": "3"
+        }
+      ]
+    }
+  },
+  {
+    "name": "arrays/trailing-comma",
+    "group": "arrays",
+    "input": "{a: [1, 2,]}",
+    "value": {
+      "a": [
+        {
+          "$": "num",
+          "v": "1"
+        },
+        {
+          "$": "num",
+          "v": "2"
+        }
+      ]
+    }
+  },
+  {
+    "name": "arrays/mixed-kinds",
+    "group": "arrays",
+    "input": "{a: [1, `s`, T, F, N, [], {}]}",
+    "value": {
+      "a": [
+        {
+          "$": "num",
+          "v": "1"
+        },
+        "s",
+        true,
+        false,
+        null,
+        [],
+        {}
+      ]
+    }
+  },
+  {
+    "name": "arrays/nested",
+    "group": "arrays",
+    "input": "{a: [[1], [2, [3]]]}",
+    "value": {
+      "a": [
+        [
+          {
+            "$": "num",
+            "v": "1"
+          }
+        ],
+        [
+          {
+            "$": "num",
+            "v": "2"
+          },
+          [
+            {
+              "$": "num",
+              "v": "3"
+            }
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "name": "arrays/double-comma",
+    "group": "arrays",
+    "input": "{a: [1,,2]}",
+    "error": "ERR_MISSING_COMMA"
+  },
+  {
+    "name": "arrays/leading-comma",
+    "group": "arrays",
+    "input": "{a: [,1]}",
+    "error": "ERR_MISSING_COMMA"
+  },
+  {
+    "name": "arrays/unterminated",
+    "group": "arrays",
+    "input": "{a: [1",
+    "error": "ERR_UNTERMINATED"
+  },
+  {
+    "name": "keys/underscore",
+    "group": "keys",
+    "input": "{user_id: 1}",
+    "value": {
+      "user_id": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "keys/kebab",
+    "group": "keys",
+    "input": "{content-type: 1}",
+    "value": {
+      "content-type": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "keys/leading-digit",
+    "group": "keys",
+    "input": "{123key: 1}",
+    "value": {
+      "123key": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "keys/all-digits",
+    "group": "keys",
+    "input": "{123: 1}",
+    "value": {
+      "123": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "keys/hyphen-only",
+    "group": "keys",
+    "input": "{-: 1}",
+    "value": {
+      "-": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "keys/underscore-only",
+    "group": "keys",
+    "input": "{_: 1}",
+    "value": {
+      "_": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "keys/case-sensitive",
+    "group": "keys",
+    "input": "{a: 1, A: 2}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      },
+      "A": {
+        "$": "num",
+        "v": "2"
+      }
+    },
+    "note": "distinct keys, not a duplicate"
+  },
+  {
+    "name": "keys/constructor-names",
+    "group": "keys",
+    "input": "{T: 1, F: 2, N: 3, DATE: 4, TIMESTAMP: 5, DECIMAL: 6, BIGINT: 7, BINARY: 8}",
+    "value": {
+      "T": {
+        "$": "num",
+        "v": "1"
+      },
+      "F": {
+        "$": "num",
+        "v": "2"
+      },
+      "N": {
+        "$": "num",
+        "v": "3"
+      },
+      "DATE": {
+        "$": "num",
+        "v": "4"
+      },
+      "TIMESTAMP": {
+        "$": "num",
+        "v": "5"
+      },
+      "DECIMAL": {
+        "$": "num",
+        "v": "6"
+      },
+      "BIGINT": {
+        "$": "num",
+        "v": "7"
+      },
+      "BINARY": {
+        "$": "num",
+        "v": "8"
+      }
+    },
+    "note": "§6.3 -- bare uppercase words in key position are identifiers"
+  },
+  {
+    "name": "keys/empty",
+    "group": "keys",
+    "input": "{ : 1 }",
+    "error": "ERR_INVALID_IDENTIFIER"
+  },
+  {
+    "name": "keys/dot",
+    "group": "keys",
+    "input": "{ a.b: 1 }",
+    "error": "ERR_INVALID_IDENTIFIER"
+  },
+  {
+    "name": "keys/space-inside",
+    "group": "keys",
+    "input": "{ a b: 1 }",
+    "error": "ERR_INVALID_IDENTIFIER"
+  },
+  {
+    "name": "keys/non-ascii-latin",
+    "group": "keys",
+    "input": "{ café: 1 }",
+    "error": "ERR_INVALID_IDENTIFIER"
+  },
+  {
+    "name": "keys/emoji",
+    "group": "keys",
+    "input": "{ 🔑: 1 }",
+    "error": "ERR_INVALID_IDENTIFIER"
+  },
+  {
+    "name": "keys/dollar",
+    "group": "keys",
+    "input": "{ $id: 1 }",
+    "error": "ERR_INVALID_IDENTIFIER",
+    "note": "$ is excluded, which is what makes it a safe corpus escape key"
+  },
+  {
+    "name": "keys/quoted-double",
+    "group": "keys",
+    "input": "{ \"a\": 1 }",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "keys/quoted-backtick",
+    "group": "keys",
+    "input": "{ `a`: 1 }",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "numbers/zero",
+    "group": "numbers",
+    "input": "{a: 0}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "0"
+      }
+    }
+  },
+  {
+    "name": "numbers/int",
+    "group": "numbers",
+    "input": "{a: 123}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "123"
+      }
+    }
+  },
+  {
+    "name": "numbers/negative",
+    "group": "numbers",
+    "input": "{a: -42}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "-42"
+      }
+    }
+  },
+  {
+    "name": "numbers/fraction",
+    "group": "numbers",
+    "input": "{a: 3.14}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "3.14"
+      }
+    }
+  },
+  {
+    "name": "numbers/exp-lower",
+    "group": "numbers",
+    "input": "{a: 1e9}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1000000000"
+      }
+    }
+  },
+  {
+    "name": "numbers/exp-upper-plus",
+    "group": "numbers",
+    "input": "{a: 1E+9}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1000000000"
+      }
+    }
+  },
+  {
+    "name": "numbers/exp-negative",
+    "group": "numbers",
+    "input": "{a: -2.5E-3}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "-0.0025"
+      }
+    }
+  },
+  {
+    "name": "numbers/negative-zero",
+    "group": "numbers",
+    "input": "{a: -0}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "-0"
+      }
+    },
+    "canonical": "{a:-0}",
+    "note": "§7.3 -- distinct bit pattern from 0"
+  },
+  {
+    "name": "numbers/underflow-to-zero",
+    "group": "numbers",
+    "input": "{a: 1e-400}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "0"
+      }
+    },
+    "note": "§7.3 -- gradual underflow is valid, unlike overflow"
+  },
+  {
+    "name": "numbers/precision-loss",
+    "group": "numbers",
+    "input": "{a: 9007199254740993}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "9007199254740992"
+      }
+    },
+    "note": "§7.2 -- binary64 domain; returning an exact integer here is non-conformant"
+  },
+  {
+    "name": "numbers/large-magnitude",
+    "group": "numbers",
+    "input": "{a: 123456789012345678901234567890}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1.2345678901234568e+29"
+      }
+    }
+  },
+  {
+    "name": "numbers/leading-plus",
+    "group": "numbers",
+    "input": "{a: +1}",
+    "error": "ERR_INVALID_NUMBER"
+  },
+  {
+    "name": "numbers/leading-zero",
+    "group": "numbers",
+    "input": "{a: 0123}",
+    "error": "ERR_INVALID_NUMBER"
+  },
+  {
+    "name": "numbers/negative-leading-zero",
+    "group": "numbers",
+    "input": "{a: -01}",
+    "error": "ERR_INVALID_NUMBER"
+  },
+  {
+    "name": "numbers/leading-dot",
+    "group": "numbers",
+    "input": "{a: .5}",
+    "error": "ERR_INVALID_NUMBER"
+  },
+  {
+    "name": "numbers/trailing-dot",
+    "group": "numbers",
+    "input": "{a: 1.}",
+    "error": "ERR_INVALID_NUMBER"
+  },
+  {
+    "name": "numbers/bare-exponent",
+    "group": "numbers",
+    "input": "{a: 1e}",
+    "error": "ERR_INVALID_NUMBER"
+  },
+  {
+    "name": "numbers/exponent-sign-only",
+    "group": "numbers",
+    "input": "{a: 1e+}",
+    "error": "ERR_INVALID_NUMBER"
+  },
+  {
+    "name": "numbers/minus-only",
+    "group": "numbers",
+    "input": "{a: -}",
+    "error": "ERR_INVALID_NUMBER"
+  },
+  {
+    "name": "numbers/overflow",
+    "group": "numbers",
+    "input": "{a: 1e400}",
+    "error": "ERR_NUMBER_OVERFLOW",
+    "note": "§7.3 -- must not yield Infinity"
+  },
+  {
+    "name": "numbers/overflow-negative",
+    "group": "numbers",
+    "input": "{a: -1e400}",
+    "error": "ERR_NUMBER_OVERFLOW"
+  },
+  {
+    "name": "numbers/hex",
+    "group": "numbers",
+    "input": "{a: 0x10}",
+    "error": "ERR_INVALID_NUMBER",
+    "note": "§7.4 token boundary, not ERR_MISSING_COMMA"
+  },
+  {
+    "name": "numbers/digit-separator",
+    "group": "numbers",
+    "input": "{a: 1_000}",
+    "error": "ERR_INVALID_NUMBER"
+  },
+  {
+    "name": "numbers/double-dot",
+    "group": "numbers",
+    "input": "{a: 1.2.3}",
+    "error": "ERR_INVALID_NUMBER"
+  },
+  {
+    "name": "numbers/trailing-letter",
+    "group": "numbers",
+    "input": "{a: 1f}",
+    "error": "ERR_INVALID_NUMBER"
+  },
+  {
+    "name": "literals/true",
+    "group": "literals",
+    "input": "{a: T}",
+    "value": {
+      "a": true
+    }
+  },
+  {
+    "name": "literals/false",
+    "group": "literals",
+    "input": "{a: F}",
+    "value": {
+      "a": false
+    }
+  },
+  {
+    "name": "literals/null",
+    "group": "literals",
+    "input": "{a: N}",
+    "value": {
+      "a": null
+    }
+  },
+  {
+    "name": "literals/lowercase-t",
+    "group": "literals",
+    "input": "{a: t}",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "literals/lowercase-n",
+    "group": "literals",
+    "input": "{a: n}",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "literals/spelled-true",
+    "group": "literals",
+    "input": "{a: true}",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "literals/spelled-null",
+    "group": "literals",
+    "input": "{a: null}",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "literals/mixed-case",
+    "group": "literals",
+    "input": "{a: True}",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "literals/nan",
+    "group": "literals",
+    "input": "{a: NaN}",
+    "error": "ERR_SYNTAX",
+    "note": "§7.4 -- N followed by an identifier char, not null + junk"
+  },
+  {
+    "name": "literals/infinity",
+    "group": "literals",
+    "input": "{a: Infinity}",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "strings/raw-simple",
+    "group": "strings",
+    "input": "{a: `hello`}",
+    "value": {
+      "a": "hello"
+    },
+    "canonical": "{a:\"hello\"}"
+  },
+  {
+    "name": "strings/raw-empty",
+    "group": "strings",
+    "input": "{a: ``}",
+    "value": {
+      "a": ""
+    }
+  },
+  {
+    "name": "strings/raw-newline",
+    "group": "strings",
+    "input": "{a: `x\ny`}",
+    "value": {
+      "a": "x\ny"
+    },
+    "canonical": "{a:\"x\\ny\"}",
+    "note": "§8.1 -- raw strings preserve literal newlines"
+  },
+  {
+    "name": "strings/raw-tab",
+    "group": "strings",
+    "input": "{a: `x\ty`}",
+    "value": {
+      "a": "x\ty"
+    }
+  },
+  {
+    "name": "strings/raw-no-escapes",
+    "group": "strings",
+    "input": "{a: `x\\ny`}",
+    "value": {
+      "a": "x\\ny"
+    },
+    "note": "§8.1 -- backslash-n is two characters in a raw string"
+  },
+  {
+    "name": "strings/raw-hash",
+    "group": "strings",
+    "input": "{a: `x # y`}",
+    "value": {
+      "a": "x # y"
+    },
+    "note": "§4.2 -- # inside a string is not a comment"
+  },
+  {
+    "name": "strings/raw-quote",
+    "group": "strings",
+    "input": "{a: `say \"hi\"`}",
+    "value": {
+      "a": "say \"hi\""
+    }
+  },
+  {
+    "name": "strings/raw-unicode",
+    "group": "strings",
+    "input": "{a: `héllo 🔑 日本`}",
+    "value": {
+      "a": "héllo 🔑 日本"
+    }
+  },
+  {
+    "name": "strings/interp-simple",
+    "group": "strings",
+    "input": "{a: \"hello\"}",
+    "value": {
+      "a": "hello"
+    }
+  },
+  {
+    "name": "strings/interp-escapes",
+    "group": "strings",
+    "input": "{a: \"tab\\there\"}",
+    "value": {
+      "a": "tab\there"
+    }
+  },
+  {
+    "name": "strings/interp-quote",
+    "group": "strings",
+    "input": "{a: \"say \\\"hi\\\"\"}",
+    "value": {
+      "a": "say \"hi\""
+    }
+  },
+  {
+    "name": "strings/interp-backslash",
+    "group": "strings",
+    "input": "{a: \"a\\\\b\"}",
+    "value": {
+      "a": "a\\b"
+    }
+  },
+  {
+    "name": "strings/interp-solidus",
+    "group": "strings",
+    "input": "{a: \"a\\/b\"}",
+    "value": {
+      "a": "a/b"
+    }
+  },
+  {
+    "name": "strings/interp-controls",
+    "group": "strings",
+    "input": "{a: \"\\b\\f\\n\\r\\t\"}",
+    "value": {
+      "a": "\b\f\n\r\t"
+    }
+  },
+  {
+    "name": "strings/interp-unicode-escape",
+    "group": "strings",
+    "input": "{a: \"\\u0041\"}",
+    "value": {
+      "a": "A"
+    }
+  },
+  {
+    "name": "strings/interp-nul",
+    "group": "strings",
+    "input": "{a: \"\\u0000\"}",
+    "value": {
+      "a": "\u0000"
+    },
+    "note": "§8.4 -- U+0000 is legal string content and must not terminate the string"
+  },
+  {
+    "name": "strings/interp-backtick",
+    "group": "strings",
+    "input": "{a: \"has ` tick\"}",
+    "value": {
+      "a": "has ` tick"
+    },
+    "note": "§8.1 -- the only way to express a backtick"
+  },
+  {
+    "name": "strings/surrogate-pair",
+    "group": "strings",
+    "input": "{a: \"\\uD83D\\uDE00\"}",
+    "value": {
+      "a": "😀"
+    }
+  },
+  {
+    "name": "strings/raw-unterminated",
+    "group": "strings",
+    "input": "{a: `hi}",
+    "error": "ERR_UNTERMINATED"
+  },
+  {
+    "name": "strings/interp-unterminated",
+    "group": "strings",
+    "input": "{a: \"hi}",
+    "error": "ERR_UNTERMINATED"
+  },
+  {
+    "name": "strings/interp-literal-newline",
+    "group": "strings",
+    "input": "{a: \"x\ny\"}",
+    "error": "ERR_INVALID_STRING"
+  },
+  {
+    "name": "strings/interp-literal-cr",
+    "group": "strings",
+    "input": "{a: \"x\ry\"}",
+    "error": "ERR_INVALID_STRING"
+  },
+  {
+    "name": "strings/bad-escape-x",
+    "group": "strings",
+    "input": "{a: \"\\x41\"}",
+    "error": "ERR_INVALID_STRING"
+  },
+  {
+    "name": "strings/bad-escape-upper-u",
+    "group": "strings",
+    "input": "{a: \"\\U0041\"}",
+    "error": "ERR_INVALID_STRING"
+  },
+  {
+    "name": "strings/bad-escape-quote",
+    "group": "strings",
+    "input": "{a: \"\\'\"}",
+    "error": "ERR_INVALID_STRING"
+  },
+  {
+    "name": "strings/short-unicode",
+    "group": "strings",
+    "input": "{a: \"\\u41\"}",
+    "error": "ERR_INVALID_STRING"
+  },
+  {
+    "name": "strings/bad-hex-unicode",
+    "group": "strings",
+    "input": "{a: \"\\uZZZZ\"}",
+    "error": "ERR_INVALID_STRING"
+  },
+  {
+    "name": "strings/lone-high-surrogate",
+    "group": "strings",
+    "input": "{a: \"\\uD800\"}",
+    "error": "ERR_INVALID_STRING",
+    "note": "§8.3 -- has no UTF-8 encoding; substituting U+FFFD is prohibited"
+  },
+  {
+    "name": "strings/lone-low-surrogate",
+    "group": "strings",
+    "input": "{a: \"\\uDC00\"}",
+    "error": "ERR_INVALID_STRING"
+  },
+  {
+    "name": "strings/high-surrogate-then-text",
+    "group": "strings",
+    "input": "{a: \"\\uD800A\"}",
+    "error": "ERR_INVALID_STRING"
+  },
+  {
+    "name": "strings/backtick-in-raw",
+    "group": "strings",
+    "input": "{a: `x`y`}",
+    "error": "ERR_MISSING_COMMA"
+  },
+  {
+    "name": "ctor/space-before-paren",
+    "group": "ctor",
+    "input": "{a: DATE (2026-01-15)}",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "ctor/reserved-custom",
+    "group": "ctor",
+    "input": "{a: CUSTOM(1)}",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "ctor/reserved-time",
+    "group": "ctor",
+    "input": "{a: TIME(10:00:00)}",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "ctor/reserved-underscore",
+    "group": "ctor",
+    "input": "{a: MY_TYPE(1)}",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "ctor/lowercase",
+    "group": "ctor",
+    "input": "{a: date(2026-01-15)}",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "ctor/mixed-case",
+    "group": "ctor",
+    "input": "{a: Date(2026-01-15)}",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "ctor/legacy-bignumber",
+    "group": "ctor",
+    "input": "{a: BigNumber(1)}",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "ctor/legacy-binary",
+    "group": "ctor",
+    "input": "{a: Binary(48656C6C6F)}",
+    "error": "ERR_UNKNOWN_CONSTRUCTOR"
+  },
+  {
+    "name": "ctor/non-reserved-ident",
+    "group": "ctor",
+    "input": "{a: foo(1)}",
+    "error": "ERR_SYNTAX"
+  },
+  {
+    "name": "ctor/nested",
+    "group": "ctor",
+    "input": "{a: DATE(DATE(2026-01-15))}",
+    "error": "ERR_NESTED_CONSTRUCTOR"
+  },
+  {
+    "name": "ctor/unterminated",
+    "group": "ctor",
+    "input": "{a: DATE(2026-01-15}",
+    "error": "ERR_UNTERMINATED"
+  },
+  {
+    "name": "decimal/scale-1",
+    "group": "decimal",
+    "input": "{a: DECIMAL(1.5)}",
+    "value": {
+      "a": {
+        "$": "dec",
+        "v": "1.5"
+      }
+    }
+  },
+  {
+    "name": "decimal/scale-2",
+    "group": "decimal",
+    "input": "{a: DECIMAL(1.50)}",
+    "value": {
+      "a": {
+        "$": "dec",
+        "v": "1.50"
+      }
+    },
+    "note": "scale is data: distinct from DECIMAL(1.5)"
+  },
+  {
+    "name": "decimal/integer",
+    "group": "decimal",
+    "input": "{a: DECIMAL(15)}",
+    "value": {
+      "a": {
+        "$": "dec",
+        "v": "15"
+      }
+    }
+  },
+  {
+    "name": "decimal/zero",
+    "group": "decimal",
+    "input": "{a: DECIMAL(0)}",
+    "value": {
+      "a": {
+        "$": "dec",
+        "v": "0"
+      }
+    }
+  },
+  {
+    "name": "decimal/zero-scaled",
+    "group": "decimal",
+    "input": "{a: DECIMAL(0.00)}",
+    "value": {
+      "a": {
+        "$": "dec",
+        "v": "0.00"
+      }
+    }
+  },
+  {
+    "name": "decimal/negative",
+    "group": "decimal",
+    "input": "{a: DECIMAL(-0.001)}",
+    "value": {
+      "a": {
+        "$": "dec",
+        "v": "-0.001"
+      }
+    }
+  },
+  {
+    "name": "decimal/negative-zero",
+    "group": "decimal",
+    "input": "{a: DECIMAL(-0.00)}",
+    "value": {
+      "a": {
+        "$": "dec",
+        "v": "-0.00"
+      }
+    }
+  },
+  {
+    "name": "decimal/34-significant",
+    "group": "decimal",
+    "input": "{a: DECIMAL(1.234567890123456789012345678901234)}",
+    "value": {
+      "a": {
+        "$": "dec",
+        "v": "1.234567890123456789012345678901234"
+      }
+    }
+  },
+  {
+    "name": "decimal/leading-zeros-fraction",
+    "group": "decimal",
+    "input": "{a: DECIMAL(0.00000000000000000000000000000000000001)}",
+    "value": {
+      "a": {
+        "$": "dec",
+        "v": "0.00000000000000000000000000000000000001"
+      }
+    },
+    "note": "§10.2 -- 1 significant digit, scale 38; leading zeros are not significant"
+  },
+  {
+    "name": "decimal/money",
+    "group": "decimal",
+    "input": "{price: DECIMAL(19.99)}",
+    "value": {
+      "price": {
+        "$": "dec",
+        "v": "19.99"
+      }
+    }
+  },
+  {
+    "name": "decimal/empty",
+    "group": "decimal",
+    "input": "{a: DECIMAL()}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "decimal/exponent",
+    "group": "decimal",
+    "input": "{a: DECIMAL(1.5e3)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD",
+    "note": "§10.2 -- plain notation only"
+  },
+  {
+    "name": "decimal/trailing-dot",
+    "group": "decimal",
+    "input": "{a: DECIMAL(1.)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "decimal/leading-plus",
+    "group": "decimal",
+    "input": "{a: DECIMAL(+1.5)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "decimal/leading-zeros",
+    "group": "decimal",
+    "input": "{a: DECIMAL(01.5)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "decimal/nan",
+    "group": "decimal",
+    "input": "{a: DECIMAL(NaN)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "decimal/infinity",
+    "group": "decimal",
+    "input": "{a: DECIMAL(Infinity)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "decimal/underscore",
+    "group": "decimal",
+    "input": "{a: DECIMAL(1_0.5)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "decimal/whitespace",
+    "group": "decimal",
+    "input": "{a: DECIMAL( 1.5 )}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "decimal/leading-dot",
+    "group": "decimal",
+    "input": "{a: DECIMAL(.5)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "decimal/overflow-35-digits",
+    "group": "decimal",
+    "input": "{a: DECIMAL(12345678901234567890123456789012345)}",
+    "error": "ERR_DECIMAL_OVERFLOW",
+    "note": "35 significant digits, cap is 34"
+  },
+  {
+    "name": "decimal/overflow-35-fractional",
+    "group": "decimal",
+    "input": "{a: DECIMAL(1.2345678901234567890123456789012345)}",
+    "error": "ERR_DECIMAL_OVERFLOW"
+  },
+  {
+    "name": "bigint/beyond-2-53",
+    "group": "bigint",
+    "input": "{a: BIGINT(9007199254740993)}",
+    "value": {
+      "a": {
+        "$": "bigint",
+        "v": "9007199254740993"
+      }
+    }
+  },
+  {
+    "name": "bigint/zero",
+    "group": "bigint",
+    "input": "{a: BIGINT(0)}",
+    "value": {
+      "a": {
+        "$": "bigint",
+        "v": "0"
+      }
+    }
+  },
+  {
+    "name": "bigint/negative",
+    "group": "bigint",
+    "input": "{a: BIGINT(-9007199254740993)}",
+    "value": {
+      "a": {
+        "$": "bigint",
+        "v": "-9007199254740993"
+      }
+    }
+  },
+  {
+    "name": "bigint/huge",
+    "group": "bigint",
+    "input": "{a: BIGINT(-123456789012345678901234567890)}",
+    "value": {
+      "a": {
+        "$": "bigint",
+        "v": "-123456789012345678901234567890"
+      }
+    }
+  },
+  {
+    "name": "bigint/100-digits",
+    "group": "bigint",
+    "input": "{a: BIGINT(9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999)}",
+    "value": {
+      "a": {
+        "$": "bigint",
+        "v": "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+      }
+    }
+  },
+  {
+    "name": "bigint/empty",
+    "group": "bigint",
+    "input": "{a: BIGINT()}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "bigint/letters",
+    "group": "bigint",
+    "input": "{a: BIGINT(123a)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "bigint/fractional",
+    "group": "bigint",
+    "input": "{a: BIGINT(12.34)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "bigint/exponent",
+    "group": "bigint",
+    "input": "{a: BIGINT(1e3)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "bigint/leading-plus",
+    "group": "bigint",
+    "input": "{a: BIGINT(+1)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "bigint/leading-zeros",
+    "group": "bigint",
+    "input": "{a: BIGINT(007)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD",
+    "note": "§10.3 -- must not be silently rewritten to 7"
+  },
+  {
+    "name": "bigint/negative-zero",
+    "group": "bigint",
+    "input": "{a: BIGINT(-0)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "bigint/whitespace",
+    "group": "bigint",
+    "input": "{a: BIGINT( 1 )}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/date",
+    "group": "temporal",
+    "input": "{a: DATE(2026-01-15)}",
+    "value": {
+      "a": {
+        "$": "date",
+        "v": "2026-01-15"
+      }
+    }
+  },
+  {
+    "name": "temporal/date-leap-day",
+    "group": "temporal",
+    "input": "{a: DATE(2024-02-29)}",
+    "value": {
+      "a": {
+        "$": "date",
+        "v": "2024-02-29"
+      }
+    }
+  },
+  {
+    "name": "temporal/date-century-leap",
+    "group": "temporal",
+    "input": "{a: DATE(2000-02-29)}",
+    "value": {
+      "a": {
+        "$": "date",
+        "v": "2000-02-29"
+      }
+    },
+    "note": "2000 is a leap year: divisible by 400"
+  },
+  {
+    "name": "temporal/date-min",
+    "group": "temporal",
+    "input": "{a: DATE(0000-01-01)}",
+    "value": {
+      "a": {
+        "$": "date",
+        "v": "0000-01-01"
+      }
+    }
+  },
+  {
+    "name": "temporal/date-max",
+    "group": "temporal",
+    "input": "{a: DATE(9999-12-31)}",
+    "value": {
+      "a": {
+        "$": "date",
+        "v": "9999-12-31"
+      }
+    }
+  },
+  {
+    "name": "temporal/ts-z",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T12:00:00Z)}",
+    "value": {
+      "a": {
+        "$": "ts",
+        "v": "2026-01-15T12:00:00Z"
+      }
+    }
+  },
+  {
+    "name": "temporal/ts-positive-offset",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T12:00:00.123+05:30)}",
+    "value": {
+      "a": {
+        "$": "ts",
+        "v": "2026-01-15T12:00:00.123+05:30"
+      }
+    }
+  },
+  {
+    "name": "temporal/ts-negative-offset",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T10:30:00-05:00)}",
+    "value": {
+      "a": {
+        "$": "ts",
+        "v": "2026-01-15T10:30:00-05:00"
+      }
+    }
+  },
+  {
+    "name": "temporal/ts-nanoseconds",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T10:30:00.123456789+05:30)}",
+    "value": {
+      "a": {
+        "$": "ts",
+        "v": "2026-01-15T10:30:00.123456789+05:30"
+      }
+    }
+  },
+  {
+    "name": "temporal/ts-fraction-trailing-zeros",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T10:30:00.100Z)}",
+    "value": {
+      "a": {
+        "$": "ts",
+        "v": "2026-01-15T10:30:00.100Z"
+      }
+    },
+    "note": "§10.4 -- .100 is preserved, not normalized to .1"
+  },
+  {
+    "name": "temporal/ts-offset-zero",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T10:30:00+00:00)}",
+    "value": {
+      "a": {
+        "$": "ts",
+        "v": "2026-01-15T10:30:00+00:00"
+      }
+    },
+    "note": "§3.2 -- +00:00 is distinct from Z as a value"
+  },
+  {
+    "name": "temporal/date-not-padded",
+    "group": "temporal",
+    "input": "{a: DATE(2026-1-5)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/date-month-13",
+    "group": "temporal",
+    "input": "{a: DATE(2026-13-01)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/date-month-00",
+    "group": "temporal",
+    "input": "{a: DATE(2026-00-01)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/date-day-00",
+    "group": "temporal",
+    "input": "{a: DATE(2026-01-00)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/date-feb-31",
+    "group": "temporal",
+    "input": "{a: DATE(2026-02-31)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD",
+    "note": "§10.4 -- full calendar validity"
+  },
+  {
+    "name": "temporal/date-apr-31",
+    "group": "temporal",
+    "input": "{a: DATE(2026-04-31)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/date-non-leap-feb-29",
+    "group": "temporal",
+    "input": "{a: DATE(2025-02-29)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/date-century-non-leap",
+    "group": "temporal",
+    "input": "{a: DATE(1900-02-29)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD",
+    "note": "1900 is not a leap year: divisible by 100"
+  },
+  {
+    "name": "temporal/date-with-time",
+    "group": "temporal",
+    "input": "{a: DATE(2026-01-15T10:00:00Z)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/date-empty",
+    "group": "temporal",
+    "input": "{a: DATE()}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/ts-no-offset",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T10:30:00)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/ts-space-separator",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15 10:30:00Z)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/ts-lowercase-t",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15t10:30:00Z)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/ts-lowercase-z",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T10:30:00z)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/ts-hour-99",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T99:30:00Z)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/ts-hour-24",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T24:00:00Z)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/ts-minute-60",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T10:60:00Z)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/ts-leap-second",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T23:59:60Z)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD",
+    "note": "§10.4 -- leap seconds are not supported"
+  },
+  {
+    "name": "temporal/ts-offset-99",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T10:30:00+99:00)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/ts-empty-fraction",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T10:30:00.Z)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/ts-fraction-10-digits",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-01-15T10:30:00.1234567890Z)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/ts-invalid-date-part",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(2026-02-31T10:30:00Z)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "temporal/ts-garbage-right-length",
+    "group": "temporal",
+    "input": "{a: TIMESTAMP(XXXXXXXXXXXXXXXXXXZ)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "binary/hello",
+    "group": "binary",
+    "input": "{a: BINARY(SGVsbG8=)}",
+    "value": {
+      "a": {
+        "$": "bin",
+        "v": "SGVsbG8="
+      }
+    }
+  },
+  {
+    "name": "binary/empty",
+    "group": "binary",
+    "input": "{a: BINARY()}",
+    "value": {
+      "a": {
+        "$": "bin",
+        "v": ""
+      }
+    },
+    "note": "§10.5 -- the empty octet sequence is expressible"
+  },
+  {
+    "name": "binary/no-padding-needed",
+    "group": "binary",
+    "input": "{a: BINARY(SGVsbG9X)}",
+    "value": {
+      "a": {
+        "$": "bin",
+        "v": "SGVsbG9X"
+      }
+    },
+    "note": "length is a multiple of 4, so no '=' is required"
+  },
+  {
+    "name": "binary/single-pad",
+    "group": "binary",
+    "input": "{a: BINARY(SGVsbG9Xbw==)}",
+    "value": {
+      "a": {
+        "$": "bin",
+        "v": "SGVsbG9Xbw=="
+      }
+    }
+  },
+  {
+    "name": "binary/plus-slash",
+    "group": "binary",
+    "input": "{a: BINARY(+/+/)}",
+    "value": {
+      "a": {
+        "$": "bin",
+        "v": "+/+/"
+      }
+    }
+  },
+  {
+    "name": "binary/length-not-multiple-4",
+    "group": "binary",
+    "input": "{a: BINARY(SGVsbG8)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "binary/url-safe-dash",
+    "group": "binary",
+    "input": "{a: BINARY(SGVsb-8=)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "binary/url-safe-underscore",
+    "group": "binary",
+    "input": "{a: BINARY(SGVsb_8=)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "binary/inner-padding",
+    "group": "binary",
+    "input": "{a: BINARY(SG=sbG8=)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "binary/non-canonical-trailing-bits",
+    "group": "binary",
+    "input": "{a: BINARY(Zh==)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD",
+    "note": "unused low 4 bits of 'h' are non-zero"
+  },
+  {
+    "name": "binary/internal-whitespace",
+    "group": "binary",
+    "input": "{a: BINARY(SGVs bG8=)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "binary/invalid-char",
+    "group": "binary",
+    "input": "{a: BINARY(SGVs!G8=)}",
+    "error": "ERR_INVALID_CONSTRUCTOR_PAYLOAD"
+  },
+  {
+    "name": "comments/leading",
+    "group": "comments",
+    "input": "# note\n{a: 1}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "comments/trailing-member",
+    "group": "comments",
+    "input": "{a: 1, # note\n b: 2}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      },
+      "b": {
+        "$": "num",
+        "v": "2"
+      }
+    }
+  },
+  {
+    "name": "comments/eof-no-newline",
+    "group": "comments",
+    "input": "{a: 1} # note",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "comments/inside-array",
+    "group": "comments",
+    "input": "{a: [1, # note\n 2]}",
+    "value": {
+      "a": [
+        {
+          "$": "num",
+          "v": "1"
+        },
+        {
+          "$": "num",
+          "v": "2"
+        }
+      ]
+    }
+  },
+  {
+    "name": "comments/cr-terminated",
+    "group": "comments",
+    "input": "# note\r{a: 1}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    },
+    "note": "§4.2 -- a comment ends at CR as well as LF"
+  },
+  {
+    "name": "whitespace/tabs",
+    "group": "comments",
+    "input": "{\ta:\t1\t}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "whitespace/lone-cr",
+    "group": "comments",
+    "input": "{\ra: 1\r}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    },
+    "note": "§4.1 -- CR is whitespace on its own, not only within CRLF"
+  },
+  {
+    "name": "whitespace/crlf",
+    "group": "comments",
+    "input": "{\r\na: 1\r\n}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    }
+  },
+  {
+    "name": "depth/at-limit-64",
+    "group": "depth",
+    "input": "{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}",
+    "value": {
+      "a": {
+        "a": {
+          "a": {
+            "a": {
+              "a": {
+                "a": {
+                  "a": {
+                    "a": {
+                      "a": {
+                        "a": {
+                          "a": {
+                            "a": {
+                              "a": {
+                                "a": {
+                                  "a": {
+                                    "a": {
+                                      "a": {
+                                        "a": {
+                                          "a": {
+                                            "a": {
+                                              "a": {
+                                                "a": {
+                                                  "a": {
+                                                    "a": {
+                                                      "a": {
+                                                        "a": {
+                                                          "a": {
+                                                            "a": {
+                                                              "a": {
+                                                                "a": {
+                                                                  "a": {
+                                                                    "a": {
+                                                                      "a": {
+                                                                        "a": {
+                                                                          "a": {
+                                                                            "a": {
+                                                                              "a": {
+                                                                                "a": {
+                                                                                  "a": {
+                                                                                    "a": {
+                                                                                      "a": {
+                                                                                        "a": {
+                                                                                          "a": {
+                                                                                            "a": {
+                                                                                              "a": {
+                                                                                                "a": {
+                                                                                                  "a": {
+                                                                                                    "a": {
+                                                                                                      "a": {
+                                                                                                        "a": {
+                                                                                                          "a": {
+                                                                                                            "a": {
+                                                                                                              "a": {
+                                                                                                                "a": {
+                                                                                                                  "a": {
+                                                                                                                    "a": {
+                                                                                                                      "a": {
+                                                                                                                        "a": {
+                                                                                                                          "a": {
+                                                                                                                            "a": {
+                                                                                                                              "a": {
+                                                                                                                                "a": {
+                                                                                                                                  "a": {}
+                                                                                                                                }
+                                                                                                                              }
+                                                                                                                            }
+                                                                                                                          }
+                                                                                                                        }
+                                                                                                                      }
+                                                                                                                    }
+                                                                                                                  }
+                                                                                                                }
+                                                                                                              }
+                                                                                                            }
+                                                                                                          }
+                                                                                                        }
+                                                                                                      }
+                                                                                                    }
+                                                                                                  }
+                                                                                                }
+                                                                                              }
+                                                                                            }
+                                                                                          }
+                                                                                        }
+                                                                                      }
+                                                                                    }
+                                                                                  }
+                                                                                }
+                                                                              }
+                                                                            }
+                                                                          }
+                                                                        }
+                                                                      }
+                                                                    }
+                                                                  }
+                                                                }
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "note": "§11.3 -- 64 is the default limit, counting the root as depth 1"
+  },
+  {
+    "name": "depth/over-limit-65",
+    "group": "depth",
+    "input": "{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}",
+    "error": "ERR_NESTING_DEPTH"
+  },
+  {
+    "name": "depth/far-over-limit",
+    "group": "depth",
+    "input": "{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{a:{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}",
+    "error": "ERR_NESTING_DEPTH"
+  },
+  {
+    "name": "depth/arrays-over-limit",
+    "group": "depth",
+    "input": "{a:[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "error": "ERR_NESTING_DEPTH"
+  },
+  {
+    "name": "canonical/sorts-keys",
+    "group": "canonical",
+    "input": "{b: 2, a: 1, c: 3}",
+    "value": {
+      "b": {
+        "$": "num",
+        "v": "2"
+      },
+      "a": {
+        "$": "num",
+        "v": "1"
+      },
+      "c": {
+        "$": "num",
+        "v": "3"
+      }
+    },
+    "canonical": "{a:1,b:2,c:3}"
+  },
+  {
+    "name": "canonical/byte-order-not-case-insensitive",
+    "group": "canonical",
+    "input": "{a: 1, B: 2}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      },
+      "B": {
+        "$": "num",
+        "v": "2"
+      }
+    },
+    "canonical": "{B:2,a:1}",
+    "note": "§14 -- ascending UTF-8 byte order, so uppercase sorts first"
+  },
+  {
+    "name": "canonical/strips-comments",
+    "group": "canonical",
+    "input": "# lead\n{a: 1} # trail",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    },
+    "canonical": "{a:1}"
+  },
+  {
+    "name": "canonical/drops-trailing-comma",
+    "group": "canonical",
+    "input": "{a: 1,}",
+    "value": {
+      "a": {
+        "$": "num",
+        "v": "1"
+      }
+    },
+    "canonical": "{a:1}"
+  },
+  {
+    "name": "canonical/interpreted-strings",
+    "group": "canonical",
+    "input": "{a: `hi`}",
+    "value": {
+      "a": "hi"
+    },
+    "canonical": "{a:\"hi\"}"
+  },
+  {
+    "name": "canonical/preserves-decimal-scale",
+    "group": "canonical",
+    "input": "{a: DECIMAL(1.50)}",
+    "value": {
+      "a": {
+        "$": "dec",
+        "v": "1.50"
+      }
+    },
+    "canonical": "{a:DECIMAL(1.50)}"
+  },
+  {
+    "name": "canonical/nested",
+    "group": "canonical",
+    "input": "{b: {d: 1, c: 2}, a: [3, 1]}",
+    "value": {
+      "b": {
+        "d": {
+          "$": "num",
+          "v": "1"
+        },
+        "c": {
+          "$": "num",
+          "v": "2"
+        }
+      },
+      "a": [
+        {
+          "$": "num",
+          "v": "3"
+        },
+        {
+          "$": "num",
+          "v": "1"
+        }
+      ]
+    },
+    "canonical": "{a:[3,1],b:{c:2,d:1}}",
+    "note": "array order is data and must not be sorted"
+  },
+  {
+    "name": "stream/two-records",
+    "group": "stream",
+    "input": "{a:1}\n{a:2}\n",
+    "value": [
+      {
+        "a": {
+          "$": "num",
+          "v": "1"
+        }
+      },
+      {
+        "a": {
+          "$": "num",
+          "v": "2"
+        }
+      }
+    ],
+    "profile": "stream",
+    "note": "a stream's value is the sequence of its records"
+  },
+  {
+    "name": "stream/no-trailing-newline",
+    "group": "stream",
+    "input": "{a:1}\n{a:2}",
+    "value": [
+      {
+        "a": {
+          "$": "num",
+          "v": "1"
+        }
+      },
+      {
+        "a": {
+          "$": "num",
+          "v": "2"
+        }
+      }
+    ],
+    "profile": "stream"
+  },
+  {
+    "name": "stream/empty",
+    "group": "stream",
+    "input": "",
+    "value": [],
+    "profile": "stream"
+  },
+  {
+    "name": "stream/blank-lines-ignored",
+    "group": "stream",
+    "input": "{a:1}\n\n\n{a:2}\n",
+    "value": [
+      {
+        "a": {
+          "$": "num",
+          "v": "1"
+        }
+      },
+      {
+        "a": {
+          "$": "num",
+          "v": "2"
+        }
+      }
+    ],
+    "profile": "stream"
+  },
+  {
+    "name": "stream/comment-lines-ignored",
+    "group": "stream",
+    "input": "# header note\n{a:1}\n# mid\n{a:2}\n",
+    "value": [
+      {
+        "a": {
+          "$": "num",
+          "v": "1"
+        }
+      },
+      {
+        "a": {
+          "$": "num",
+          "v": "2"
+        }
+      }
+    ],
+    "profile": "stream"
+  },
+  {
+    "name": "stream/trailing-comment",
+    "group": "stream",
+    "input": "{a:1} # note\n",
+    "value": [
+      {
+        "a": {
+          "$": "num",
+          "v": "1"
+        }
+      }
+    ],
+    "profile": "stream"
+  },
+  {
+    "name": "stream/crlf",
+    "group": "stream",
+    "input": "{a:1}\r\n{a:2}\r\n",
+    "value": [
+      {
+        "a": {
+          "$": "num",
+          "v": "1"
+        }
+      },
+      {
+        "a": {
+          "$": "num",
+          "v": "2"
+        }
+      }
+    ],
+    "profile": "stream",
+    "note": "stream §2 -- CR before the terminating LF is discarded"
+  },
+  {
+    "name": "stream/header-directive",
+    "group": "stream",
+    "input": "@schema(event.schema.stf)\n{a:1}\n",
+    "value": [
+      {
+        "a": {
+          "$": "num",
+          "v": "1"
+        }
+      }
+    ],
+    "profile": "stream"
+  },
+  {
+    "name": "stream/heterogeneous",
+    "group": "stream",
+    "input": "{a:1}\n{b:`x`,c:T}\n",
+    "value": [
+      {
+        "a": {
+          "$": "num",
+          "v": "1"
+        }
+      },
+      {
+        "b": "x",
+        "c": true
+      }
+    ],
+    "profile": "stream",
+    "note": "stream §3.1 -- records need not share a shape"
+  },
+  {
+    "name": "stream/interpreted-newline",
+    "group": "stream",
+    "input": "{msg:\"line one\\nline two\"}\n",
+    "value": [
+      {
+        "msg": "line one\nline two"
+      }
+    ],
+    "profile": "stream",
+    "note": "stream §3.2 -- the correct way to carry a newline in a record"
+  },
+  {
+    "name": "stream/raw-newline-in-record",
+    "group": "stream",
+    "input": "{a:`x\ny`}\n",
+    "error": "ERR_STREAM_RAW_NEWLINE",
+    "profile": "stream",
+    "note": "stream §3.2 -- would break LF splitting"
+  },
+  {
+    "name": "stream/directive-after-record",
+    "group": "stream",
+    "input": "{a:1}\n@schema(x)\n",
+    "error": "ERR_STREAM_DIRECTIVE_IN_RECORD",
+    "profile": "stream"
+  },
+  {
+    "name": "stream/directive-with-object",
+    "group": "stream",
+    "input": "@schema(x) {a:1}\n",
+    "error": "ERR_STREAM_DIRECTIVE_IN_RECORD",
+    "profile": "stream"
+  },
+  {
+    "name": "stream/repeated-header-directive",
+    "group": "stream",
+    "input": "@schema(a) @schema(b)\n{a:1}\n",
+    "error": "ERR_SYNTAX",
+    "profile": "stream"
+  },
+  {
+    "name": "stream/record-root-array",
+    "group": "stream",
+    "input": "[1,2]\n",
+    "error": "ERR_ROOT_NOT_OBJECT",
+    "profile": "stream"
+  },
+  {
+    "name": "stream/two-objects-one-line",
+    "group": "stream",
+    "input": "{a:1}{b:2}\n",
+    "error": "ERR_TRAILING_CONTENT",
+    "profile": "stream"
+  },
+  {
+    "name": "stream/bom",
+    "group": "stream",
+    "input": "﻿{a:1}\n",
+    "error": "ERR_SYNTAX",
+    "profile": "stream"
+  }
+]

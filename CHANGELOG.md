@@ -43,6 +43,22 @@ the reference implementations may change incompatibly at any time.
   record does not invalidate the stream. An optional header line carries stream-wide
   directives. The core discrete-document format is unchanged.
 - Stream error codes `ERR_STREAM_RAW_NEWLINE` and `ERR_STREAM_DIRECTIVE_IN_RECORD`.
+- **STF 1.0 conformance corpus** (`tests/conformance/corpus.json`, 258 cases) authored by
+  `build_corpus.py`, with every case traced to a normative rule. Covers the full condition →
+  code table, the `binary64` number domain, calendar validation, canonical form, and the
+  stream profile.
+- Corpus format and runner contract in `tests/conformance/README.md`. Expected values use
+  tagged JSON (`{"$": "dec", "v": "1.50"}`) keyed on `$`, which is safe because `$` is not a
+  legal STF key character — so a tagged value can never collide with a real parsed object.
+- Strict JavaScript runner `tests/conformance/run_js.mjs`, which compares error codes exactly,
+  checks value kinds, compares numbers as `binary64` bit patterns, and compares decimals on
+  coefficient *and* scale.
+
+### Removed
+
+- Dead test files: `tests/conformance/run_all.mjs`, `run_conformance.mjs`, and the stale
+  `results_ts.json`, `results_python.json`, `results_zig.json` outputs (Zig was pruned
+  earlier). Nothing referenced them.
 
 ### Changed
 
