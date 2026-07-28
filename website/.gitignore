@@ -14,6 +14,3 @@ dist
 # environment files
 .env
 .env.local
-
-# Monaco, bundled from node_modules by `bun run monaco` — generated, not source.
-public/monaco

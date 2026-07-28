@@ -4,14 +4,15 @@
 // browser, so the diagnostics here are the ones `stf check` reports and the conversions are the
 // ones `stf convert` performs, refusals included. Nothing in this page decides what is valid.
 //
-// Monaco is loaded on mount, never during the static build: the editor touches `window` and
-// `self`, and the page is pre-rendered.
+// The editor is created on mount, never during the static build: it touches the DOM, and the
+// page is pre-rendered.
 
 import { onMount, RawHtml } from "@opentf/web";
+import { EditorView, basicSetup } from "codemirror";
 
-import { canonicalDigest, convert, SAMPLES, TARGETS, type Target } from "../../lib/convert.ts";
+import { canonicalDigest, convert, parseError, SAMPLES, TARGETS, type Target } from "../../lib/convert.ts";
 import { highlightToHtml, type TokenKind } from "../../lib/highlight.ts";
-import { LANGUAGE_ID, registerStf, THEME_ID } from "../../lib/monaco-stf.ts";
+import { stfExtensions } from "../../lib/codemirror-stf.ts";
 
 const TOKEN_CLASS: Record<TokenKind, string> = {
   comment: "cm",
@@ -33,95 +34,28 @@ export default function Playground() {
   let copied = $state(false);
 
   const editorHost = $ref();
-  let editor: import("monaco-editor").editor.IStandaloneCodeEditor | undefined;
-  let monaco: typeof import("monaco-editor") | undefined;
+  let view: EditorView | undefined;
 
   const outcome = $derived(convert(source, target));
   const targetNote = $derived(TARGETS.find((t) => t.id === target)?.note ?? "");
   const outputIsStf = $derived(target === "canonical" || target === "formatted");
 
   onMount(() => {
-    let disposed = false;
-
-    // Monaco is bundled separately by `bun run monaco` and served from /monaco/. It cannot go
-    // through the site's bundler: Monaco's modules import CSS, and Rolldown has removed CSS
-    // bundling. The specifier is held in a variable so the bundler leaves it alone and it
-    // stays a runtime import of a static file — the approach the docs theme's search uses for
-    // its pagefind index.
-    const url = "/monaco/editor.api.js";
-    if (!document.querySelector("link[data-monaco]")) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = "/monaco/editor.api.css";
-      link.dataset.monaco = "";
-      document.head.appendChild(link);
-    }
-
-    import(/* @vite-ignore */ url).then((m) => {
-      if (disposed) return;
-      monaco = m as typeof import("monaco-editor");
-
-      // Monaco asks for a worker for features this page does not use (diffing, links). A
-      // no-op worker satisfies the call without shipping a worker bundle; Monarch
-      // tokenization and the markers below both run on the main thread regardless.
-      (self as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
-        getWorker: () => new Worker(URL.createObjectURL(new Blob([""], { type: "text/javascript" }))),
-      };
-
-      registerStf(monaco);
-      editor = monaco.editor.create(editorHost, {
-        value: source,
-        language: LANGUAGE_ID,
-        theme: THEME_ID,
-        automaticLayout: true,
-        minimap: { enabled: false },
-        scrollBeyondLastLine: false,
-        fontSize: 13,
-        lineNumbersMinChars: 3,
-        padding: { top: 12, bottom: 12 },
-        renderLineHighlight: "line",
-        scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
-      });
-
-      editor.onDidChangeModelContent(() => {
-        source = editor!.getValue();
-      });
-
-      applyMarkers();
+    view = new EditorView({
+      doc: source,
+      parent: editorHost,
+      extensions: [
+        basicSetup,
+        // The squiggle is the reference parser's error at its own offset — the stream
+        // grammar only decides colour.
+        stfExtensions(parseError),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) source = update.state.doc.toString();
+        }),
+      ],
     });
 
-    return () => {
-      disposed = true;
-      editor?.dispose();
-    };
-  });
-
-  // The editor's red squiggle is the reference parser's error, positioned by its own
-  // line/column — not a guess made from the Monarch grammar.
-  function applyMarkers() {
-    if (!monaco || !editor) return;
-    const model = editor.getModel();
-    if (!model) return;
-    const error = outcome.parseError;
-    monaco.editor.setModelMarkers(model, "stf", error
-      ? [
-          {
-            severity: monaco.MarkerSeverity.Error,
-            message: error.message,
-            code: error.code,
-            startLineNumber: error.line,
-            startColumn: error.column,
-            endLineNumber: error.line,
-            endColumn: error.column + 1,
-          },
-        ]
-      : []);
-  }
-
-  $effect(() => {
-    // Depend on the outcome so markers follow every edit.
-    void outcome;
-    applyMarkers();
+    return () => view?.destroy();
   });
 
   $effect(() => {
@@ -133,7 +67,7 @@ export default function Playground() {
 
   function loadSample(index: number) {
     source = SAMPLES[index].source;
-    editor?.setValue(source);
+    view?.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: source } });
   }
 
   async function copyOutput() {

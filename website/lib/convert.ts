@@ -81,6 +81,23 @@ function countValues(value: STFValue): number {
   return 1;
 }
 
+/** The parse error for `source`, or null when it parses — what the editor's linter shows. */
+export function parseError(source: string): { code: string; message: string; offset: number } | null {
+  try {
+    parse(source);
+    return null;
+  } catch (error) {
+    const e = error as Partial<STFError>;
+    return {
+      code: e.code ?? "ERR_SYNTAX",
+      message: (error as Error).message,
+      // Offsets are UTF-16 code units, the same coordinates the editor uses. `-1` means the
+      // error has no position, and the caller clamps it.
+      offset: typeof e.offset === "number" ? e.offset : -1,
+    };
+  }
+}
+
 /** Parses `source` and renders it into `target`. */
 export function convert(source: string, target: Target): Outcome {
   let root: STFObject;

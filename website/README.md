@@ -33,7 +33,7 @@ bun newer than the build image's — regenerate it with a released bun.
 | `app/docs/` | Documentation, as MDX. `_meta.js` sets the sidebar order. |
 | `app/playground/` | Playground: Monaco plus the JavaScript reference implementation. |
 | `lib/convert.ts` | The playground's conversions, testable without a browser. |
-| `lib/monaco-stf.ts` | Monaco's STF language, theme, and Monarch grammar. |
+| `lib/codemirror-stf.ts` | CodeMirror's STF language, colours, theme, and parser-backed linter. |
 | `otfw.config.js` | Site origin, navbar, footer, and the repository the "Edit this page" links point at. |
 | `app/global.css` | Landing-page styles. The docs shell comes from `@opentf/web-docs/theme`. |
 
@@ -48,9 +48,6 @@ bun newer than the build image's — regenerate it with a released bun.
   generate instead is still open.
 - **The playground converts to JSON, tagged kinds, canonical form, and formatted STF.** YAML,
   TOML, JSON5, NDJSON, MessagePack, and CBOR are not wired up yet, and neither is a share link.
-- **Monaco is bundled separately** by `bun run monaco`, which `dev` and `build` both run first.
-  It cannot go through the site's bundler: Monaco's modules import CSS and Rolldown has removed
-  CSS bundling. The output lands in `public/monaco/` and is gitignored.
 - **The playground depends on `../ref-impl/js` through a `file:` dependency.** When that package
   is published, only `website/package.json` changes.
 - **`site.url`** in `otfw.config.js` is provisional (`stf.opentechf.org`), and no workflow

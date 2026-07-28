@@ -35,7 +35,7 @@ the reference implementations may change incompatibly at any time.
   normative documents under `doc/` are unchanged and remain the source of truth; migrating
   them onto the site, and building the playground on the JavaScript reference implementation,
   are still to do. `site.url` is provisional.
-  - **Playground**: Monaco with an STF language and theme, wired to the JavaScript reference
+  - **Playground**: CodeMirror with an STF language and theme, wired to the JavaScript reference
     implementation through a `file:` dependency on `ref-impl/js`. Diagnostics are the parser's
     own errors, positioned by its line and column and shown as editor markers, so the
     playground reports exactly what `stf check` reports. Conversions cover JSON, lossy JSON,
