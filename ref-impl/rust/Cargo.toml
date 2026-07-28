@@ -1,53 +1,29 @@
 [package]
-name = "dtxt"
+name = "stf"
 version = "0.1.0"
 edition = "2021"
+description = "Reference implementation of STF 1.0 — the Structured Text Format"
+license = "CC0-1.0"
+repository = "https://github.com/Open-Tech-Foundation/STF"
 
 [lib]
-name = "dtxt_rs"
-crate-type = ["cdylib", "rlib", "cdylib"]
+name = "stf"
+path = "src/lib.rs"
 
 [[bin]]
-name = "run_conformance"
-path = "src/run_conformance.rs"
+name = "stf-conformance"
+path = "src/bin/stf_conformance.rs"
 
 [[bin]]
-name = "benchmark"
-path = "src/main.rs"
+name = "stf-benchmark"
+path = "src/bin/benchmark.rs"
 
 [dependencies]
-ryu = "1.0"
-memchr = "2.7"
-rustc-hash = "2.1"
-pyo3 = { version = "0.23", features = ["extension-module"] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-num-bigint = "0.4.6"
-hex = "0.4.3"
-num-traits = "0.2.19"
-
-[dependencies.wasm-bindgen]
-version = "0.2"
-optional = true
-
-[dependencies.getrandom]
-version = "0.2"
-features = ["js"]
-optional = true
-
-[dependencies.rand]
-version = "0.8"
-optional = true
-
-[features]
-default = ["rand"]
-wasm-pack = ["dep:wasm-bindgen", "dep:getrandom"]
-
-[dev-dependencies]
-wasm-pack = "0.12"
+num-bigint = "0.4"
+serde_json = { version = "1", features = ["preserve_order"] }
 
 [profile.dev]
-opt-level = 2
+opt-level = 1
 
 [profile.release]
 opt-level = 3

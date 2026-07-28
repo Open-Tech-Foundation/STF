@@ -260,6 +260,12 @@ The following **MUST** be rejected with `ERR_INVALID_IDENTIFIER`:
 }
 ```
 
+**Whitespace inside a key versus a missing colon.** Both `{ a b: 1 }` and `{ a 1 }` are a key
+followed by whitespace and then an unexpected token. They are distinguished by what follows:
+if the text after the whitespace is an identifier that is itself followed by `:`, the input is
+one key containing whitespace and **MUST** be rejected with `ERR_INVALID_IDENTIFIER`.
+Otherwise the key is complete and its `:` is missing, which is `ERR_MISSING_COLON`.
+
 > **Note.** Because keys cannot be quoted, not every host-language map is representable in
 > STF. Serializers MUST fail rather than emit an invalid key — see §13.6.
 
@@ -460,10 +466,17 @@ The five names defined by STF 1.0 are `BIGINT`, `DECIMAL`, `DATE`, `TIMESTAMP`, 
 
 * Names are matched **byte-for-byte**. Parsers **MUST NOT** case-fold. `Date(…)`, `date(…)`,
   `BigNumber(…)`, and `Binary(…)` are **not** aliases.
-* Any identifier matching `[A-Z][A-Z0-9_]*` immediately followed by `(` is **reserved** for
-  future standard builtins. An unrecognized reserved name **MUST** be rejected with
-  `ERR_UNKNOWN_CONSTRUCTOR`. This covers both `CUSTOM(…)` and `Date(…)`.
-* Any other identifier immediately followed by `(` in value position is `ERR_SYNTAX`.
+* An identifier immediately followed by `(` in value position is in the **reserved namespace**
+  if either:
+  1. it begins with an ASCII uppercase letter (`A–Z`), or
+  2. it is an ASCII case-insensitive match of one of the five names above.
+
+  A reserved name that is not a byte-for-byte match of one of the five **MUST** be rejected with
+  `ERR_UNKNOWN_CONSTRUCTOR`. Rule 1 covers `CUSTOM(…)`, `MY_TYPE(…)`, `Date(…)`, and
+  `BigNumber(…)`; rule 2 additionally covers `date(…)` and `binary(…)`, so a near-miss of
+  spelling is reported as a wrong constructor rather than as generic syntax.
+* Any other identifier immediately followed by `(` in value position is `ERR_SYNTAX`
+  (for example `foo(1)`).
 
 ### 10.2 `DECIMAL(...)` — Exact Decimal
 

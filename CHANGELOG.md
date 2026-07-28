@@ -69,6 +69,28 @@ the reference implementations may change incompatibly at any time.
   `ERR_SCHEMA_ENUM`, and `ERR_SCHEMA_UNKNOWN_FIELD`.
 - Schema keywords `optional`, `nullable`, `const`, `enum`, `integer`, `items`, `fields`, and
   `additional`, joining `type`, `min`, `max`, and `scale`.
+- **Rust reference implementation rewritten for STF 1.0** — the first implementation to pass
+  the corpus, **258/258**, plus 85 unit tests. It is now the normative reference.
+  - A real data model: `Value` has all eleven kinds of spec §3, with `Decimal`, `Date`,
+    `Timestamp`, `Binary`, and `BigInt` as distinct host types. No `$type:` string sentinels.
+  - `Object` preserves member order (§11.2) while comparing order-independently (§3.2), which
+    the previous `FxHashMap` could not do.
+  - Full constructor payload validation: the `DECIMAL` plain-notation grammar with 34
+    significant digits and scale 6143, `BIGINT` with one spelling per value, proleptic
+    Gregorian calendar validation with leap years and no leap seconds, and canonical
+    RFC 4648 §4 base64 including trailing-bit checks.
+  - Serializer with `parse(serialize(v)) == v` enforced, `ERR_UNREPRESENTABLE` instead of
+    invalid output, and STF Canonical Form (§14).
+  - STF Stream support (`.stfs`): `parse_stream` aborts on the first bad record, and
+    `StreamReader` continues, reporting 1-based line numbers — both policies that stream §5
+    requires implementations to offer.
+  - JSON interchange that fails loudly in both directions, including on integers that
+    `binary64` cannot hold exactly.
+  - Exact error codes throughout, as a `Code` enum with byte offset, line, and column.
+- `stf-conformance` binary implementing the runner contract of `tests/conformance/README.md` §3,
+  including the round-trip check across compact, pretty, and canonical output.
+- Rust benchmark rewritten with a fixed-seed generator and, for the first time, a
+  `serde_json` baseline, so the Rust figures are reproducible and actually comparative.
 
 ### Changed
 
@@ -105,6 +127,10 @@ the reference implementations may change incompatibly at any time.
 
 ### Removed
 
+- The non-functional PyO3 bindings from the Rust crate. Its `dumps` was a placeholder that
+  returned `# Serialized from Rust\n{:?}`, its parser recognized `BigNumber`, `Binary`, and
+  `Date` — none of which are STF constructors — and it contained a duplicated block of dead
+  code. Nothing imported it. The Python reference implementation is pure Python.
 - Dead test files: `tests/conformance/run_all.mjs`, `run_conformance.mjs`, and the stale
   `results_ts.json`, `results_python.json`, `results_zig.json` outputs (Zig was pruned
   earlier). Nothing referenced them.
@@ -134,6 +160,18 @@ the reference implementations may change incompatibly at any time.
   STF implementations "outperform standard JSON parsers and serializers" and labelled Rust
   "Overall Fastest" with no JSON baseline measured, while the same table showed Go's Sonic
   parsing faster.
+- `ref-impl/rust/Cargo.toml` listed `cdylib` twice in `crate-type`, which made Cargo panic
+  (`assertion failed: mtimes.insert(...).is_none()`) on every rebuild after a clean build.
+- Spec §10.1 defined the reserved constructor namespace as `[A-Z][A-Z0-9_]*` while claiming
+  it covered `Date(…)`, which it does not match. The rule is now stated as it must be
+  implemented: an uppercase-initial identifier, or a case-insensitive match of a defined name.
+- Spec §6.2 now says how to distinguish whitespace inside a key (`{a b: 1}`,
+  `ERR_INVALID_IDENTIFIER`) from a missing colon (`{a 1}`, `ERR_MISSING_COLON`). Both are a
+  key followed by whitespace and an unexpected token; only the following context separates them.
+- `scripts/check_conformance.sh` ran the superseded pre-1.0 per-implementation suites, stopped
+  at the first failure because of `set -e`, and then printed "All reference implementations
+  passed" regardless. It now runs the 1.0 corpus runners, reports every implementation, and
+  exits non-zero when any of them fails.
 - The EBNF grammar now threads `ws` through objects and arrays. The previous grammar rejected
   `{ a: 1 }` with spaces around the braces and commas, contradicting the prose and every example.
 - Carriage return is defined as whitespace on its own. The prose previously described it only

@@ -124,6 +124,7 @@ This table is the authority for conformance testing. Where two rows could apply,
 | Key contains a disallowed character | `{ a.b: 1 }` | `ERR_INVALID_IDENTIFIER` |
 | Non-ASCII key | `{ café: 1 }`, `{ 🔑: 1 }` | `ERR_INVALID_IDENTIFIER` |
 | Quoted key | `{ "a": 1 }`, ``{ `a`: 1 }`` | `ERR_SYNTAX` |
+| Whitespace inside a key | `{ a b: 1 }` | `ERR_INVALID_IDENTIFIER` |
 | Missing `:` after key | `{ a 1 }` | `ERR_MISSING_COLON` |
 | Missing value after `:` | `{ a: }` | `ERR_SYNTAX` |
 | Missing `,` between members | `{ a:1 b:2 }` | `ERR_MISSING_COMMA` |
@@ -189,7 +190,8 @@ A `T`, `F`, or `N` literal **MUST NOT** be immediately followed by an identifier
 | :--- | :--- | :--- |
 | Whitespace before `(` | `{a: DATE (2026-01-15)}` | `ERR_SYNTAX` |
 | Reserved name, not an STF 1.0 constructor | `{a: CUSTOM(1)}`, `{a: TIME(1)}` | `ERR_UNKNOWN_CONSTRUCTOR` |
-| Lowercase or mixed-case name | `{a: date(…)}`, `{a: Date(…)}`, `{a: BigNumber(…)}` | `ERR_UNKNOWN_CONSTRUCTOR` |
+| Uppercase-initial name before `(` | `{a: Date(…)}`, `{a: BigNumber(…)}` | `ERR_UNKNOWN_CONSTRUCTOR` |
+| Case-insensitive match of a constructor | `{a: date(…)}`, `{a: binary(…)}` | `ERR_UNKNOWN_CONSTRUCTOR` |
 | Non-reserved identifier before `(` | `{a: foo(1)}` | `ERR_SYNTAX` |
 | `(` inside payload | `{a: DATE(DATE(x))}` | `ERR_NESTED_CONSTRUCTOR` |
 | End of input before `)` | `{a: DATE(2026-01-15}` | `ERR_UNTERMINATED` |

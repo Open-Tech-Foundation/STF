@@ -27,7 +27,8 @@ htmlcov/
 *.dll
 *.so
 *.dylib
-bin/
+# Compiled Go output only. Cargo's src/bin/ holds source, so it must not match.
+/ref-impl/go/bin/
 
 # TypeScript / JS
 npm-debug.log*

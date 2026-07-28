@@ -1,38 +1,61 @@
 #!/bin/bash
 
-# STF Conformance Test Unified Runner
-# This script runs the conformance tests for all active reference implementations (JS, Python, Go, Rust).
-
-set -e
+# STF 1.0 conformance — runs every implementation that has a 1.0 corpus runner.
+#
+# The corpus (tests/conformance/corpus.json) is the executable contract. Runners must compare
+# error codes exactly and check value kinds; see tests/conformance/README.md §3.
+#
+# This script does NOT stop at the first failure: the point is to see where every
+# implementation stands. It exits non-zero if any runner failed.
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
 NC='\033[0m'
 
-ROOT_DIR=$(pwd)
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+FAILED=()
+SKIPPED=()
 
-echo -e "${BLUE}STF Conformance Test Suite${NC}"
-echo "================================="
+run_impl() {
+  local name="$1"
+  shift
+  echo -e "\n${BLUE}== ${name} ==${NC}"
+  if ! (cd "$ROOT_DIR" && "$@"); then
+    FAILED+=("$name")
+  fi
+}
 
-# JavaScript / TypeScript
-echo -e "\n${BLUE}Running JS/TS conformance tests...${NC}"
-cd "$ROOT_DIR/ref-impl/js"
-bun run run_conformance.ts
+echo -e "${BLUE}STF 1.0 Conformance${NC}"
+echo "==================="
 
-# Python
-echo -e "\n${BLUE}Running Python conformance tests...${NC}"
-cd "$ROOT_DIR/ref-impl/python"
-python3 run_conformance.py
+if command -v node >/dev/null 2>&1; then
+  run_impl "JavaScript" node tests/conformance/run_js.mjs
+else
+  SKIPPED+=("JavaScript (node not found)")
+fi
 
-# Go
-echo -e "\n${BLUE}Running Go conformance tests...${NC}"
-cd "$ROOT_DIR/ref-impl/go"
-go run cmd/conformance/main.go
+if command -v cargo >/dev/null 2>&1; then
+  run_impl "Rust" env CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/cargo-stf}" \
+    cargo run --quiet --release --manifest-path ref-impl/rust/Cargo.toml --bin stf-conformance
+else
+  SKIPPED+=("Rust (cargo not found)")
+fi
 
-# Rust
-echo -e "\n${BLUE}Running Rust conformance tests...${NC}"
-cd "$ROOT_DIR/ref-impl/rust"
-CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/cargo-stf}" cargo run --quiet --bin run_conformance
+# Python and Go still run the superseded pre-1.0 suite; they are migrated in a later change.
+SKIPPED+=("Python (no 1.0 corpus runner yet)")
+SKIPPED+=("Go (no 1.0 corpus runner yet)")
 
-echo -e "\n${GREEN}All reference implementations passed conformance tests successfully!${NC}"
+echo
+for s in "${SKIPPED[@]}"; do
+  echo -e "${YELLOW}skipped${NC} $s"
+done
+
+if [ ${#FAILED[@]} -eq 0 ]; then
+  echo -e "\n${GREEN}All runnable implementations are conformant.${NC}"
+  exit 0
+fi
+
+echo -e "\n${RED}Not conformant: ${FAILED[*]}${NC}"
+exit 1
