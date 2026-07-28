@@ -31,10 +31,16 @@ the reference implementations may change incompatibly at any time.
 - **`website/` — the new site**, scaffolded with [OTF Web](https://github.com/Open-Tech-Foundation/Web-App-Framework),
   the Open Tech Foundation's own framework, using its documentation template (MDX pages,
   generated sidebar and table of contents, static output). It carries an STF landing page, a
-  documentation section of nine pages, and a placeholder playground route. The
+  documentation section of nine pages, and a working playground. The
   normative documents under `doc/` are unchanged and remain the source of truth; migrating
   them onto the site, and building the playground on the JavaScript reference implementation,
   are still to do. `site.url` is provisional.
+  - **Playground**: Monaco with an STF language and theme, wired to the JavaScript reference
+    implementation through a `file:` dependency on `ref-impl/js`. Diagnostics are the parser's
+    own errors, positioned by its line and column and shown as editor markers, so the
+    playground reports exactly what `stf check` reports. Conversions cover JSON, lossy JSON,
+    tagged kinds, canonical form (with its SHA-256), and formatted STF — and a conversion the
+    target cannot represent is *refused*, with the reason, rather than approximated.
   - **Documentation**: introduction, syntax, data model, typed constructors, canonical form,
     error codes, record streams, command-line tool, and migrating from JSON — written from the
     normative documents in `doc/`, which remain the source of truth.

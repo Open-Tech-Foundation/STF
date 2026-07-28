@@ -3,12 +3,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "otfw dev",
-    "build": "otfw build --ssg"
+    "monaco": "bun build ./node_modules/monaco-editor/esm/vs/editor/editor.api.js --outdir public/monaco --format esm --minify",
+    "dev": "bun run monaco && otfw dev",
+    "build": "bun run monaco && otfw build --ssg"
   },
   "dependencies": {
+    "@open-tech-foundation/stf": "file:../ref-impl/js",
     "@opentf/web": "^0.24.0",
-    "@opentf/web-docs": "^0.21.0"
+    "@opentf/web-docs": "^0.21.0",
+    "monaco-editor": "^0.56.0"
   },
   "devDependencies": {
     "@opentf/web-cli": "^1.22.0",

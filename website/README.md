@@ -47,7 +47,9 @@ about the lockfile and only one of them fails.
 | :--- | :--- |
 | `app/page.tsx` | Landing page. |
 | `app/docs/` | Documentation, as MDX. `_meta.js` sets the sidebar order. |
-| `app/playground/` | Playground route — a placeholder for now. |
+| `app/playground/` | Playground: Monaco plus the JavaScript reference implementation. |
+| `lib/convert.ts` | The playground's conversions, testable without a browser. |
+| `lib/monaco-stf.ts` | Monaco's STF language, theme, and Monarch grammar. |
 | `otfw.config.js` | Site origin, navbar, footer, and the repository the "Edit this page" links point at. |
 | `app/global.css` | Landing-page styles. The docs shell comes from `@opentf/web-docs/theme`. |
 
@@ -60,9 +62,12 @@ about the lockfile and only one of them fails.
 - **Docs are written from `doc/*.md`, not generated from them.** The normative documents remain
   the source of truth, so a change to the specification needs a matching edit here. Whether to
   generate instead is still open.
-- **The playground** is a placeholder. It will run the JavaScript reference implementation
-  (`ref-impl/js`) in the browser: an editor with live diagnostics carrying their normative
-  error codes, and conversion to and from JSON, JSON5, NDJSON, YAML, TOML, MessagePack, and
-  CBOR — refusing what a target format cannot represent rather than guessing.
+- **The playground converts to JSON, tagged kinds, canonical form, and formatted STF.** YAML,
+  TOML, JSON5, NDJSON, MessagePack, and CBOR are not wired up yet, and neither is a share link.
+- **Monaco is bundled separately** by `bun run monaco`, which `dev` and `build` both run first.
+  It cannot go through the site's bundler: Monaco's modules import CSS and Rolldown has removed
+  CSS bundling. The output lands in `public/monaco/` and is gitignored.
+- **The playground depends on `../ref-impl/js` through a `file:` dependency.** When that package
+  is published, only `website/package.json` changes.
 - **`site.url`** in `otfw.config.js` is provisional (`stf.opentechf.org`), and no workflow
   deploys the site yet.
