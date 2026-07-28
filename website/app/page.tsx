@@ -11,14 +11,15 @@ export default function Home() {
       <section class="hero">
         <p class="status">
           <span class="status-dot" aria-hidden="true" />
-          STF 1.0 — draft specification · four conformant implementations
+          STF 1.0 · Draft specification
         </p>
         <h1>A replacement for JSON, not a superset of it.</h1>
         <p class="lead">
-          STF is a text format whose dates, timestamps, decimals, big integers, and binary
-          values are part of the grammar rather than conventions layered on strings. It is
-          defined by a normative specification, an exact condition-to-error-code mapping, and a
-          258-case conformance corpus that four independent implementations pass.
+          STF is a specification for a text format whose dates, timestamps, decimals, big
+          integers, and binary values are part of the grammar rather than conventions layered
+          on strings. It defines the data model, the canonical byte encoding, and the exact
+          error code for every rejection — so parsers in Rust, JavaScript, Python, and Go
+          accept the same documents and refuse the same documents, case for case.
         </p>
         <div class="actions">
           <a href="/docs" class="btn primary">
@@ -87,11 +88,12 @@ export default function Home() {
       </section>
 
       <section class="conformance" aria-labelledby="conformance-heading">
-        <h2 id="conformance-heading">Conformance</h2>
+        <h2 id="conformance-heading">Implementations</h2>
         <p class="section-lead">
-          The corpus is the contract. Each case is traced to a normative rule, runners compare
-          error codes exactly rather than by message, and a string can never satisfy a{" "}
-          <code>DECIMAL</code> expectation.
+          A document written by one of these is read identically by the others: the same eleven
+          value kinds, the same error code for every rejection, and the same canonical bytes.
+          That is checked, not asserted — 258 shared cases, each traced to a rule in the
+          specification, compared on error code and value kind rather than on message text.
         </p>
         <ul class="impls">
           {IMPLEMENTATIONS.map((impl) => (
@@ -118,7 +120,7 @@ export default function Home() {
       <section class="status-note" aria-labelledby="status-heading">
         <h2 id="status-heading">Stability</h2>
         <p>
-          STF is pre-release. The 1.0 draft is complete and all four implementations pass the
+          STF is pre-release. The 1.0 draft is complete and every implementation passes the
           corpus, but the specification may still change incompatibly, and no compatibility
           guarantee is offered until 1.0 is tagged. It is published for review and feedback.
         </p>
@@ -201,9 +203,15 @@ const COMPARISON = [
   { capability: "Canonical form in the same specification", cells: ["Yes", "No", "No", "Varies", "No"] },
 ];
 
+// The note is the reason a reader would pick one: what it costs to adopt, and what it gives
+// beyond parsing.
 const IMPLEMENTATIONS = [
-  { name: "Rust", score: "258/258", note: "The reference; also ships the stf CLI and language server" },
-  { name: "JavaScript", score: "258/258", note: "TypeScript sources, no dependencies" },
-  { name: "Python", score: "258/258", note: "Pure Python" },
-  { name: "Go", score: "258/258", note: "No module dependencies" },
+  {
+    name: "Rust",
+    score: "258/258",
+    note: "The normative reference. Ships the stf command-line tool and the language server.",
+  },
+  { name: "JavaScript", score: "258/258", note: "TypeScript sources. No runtime dependencies." },
+  { name: "Python", score: "258/258", note: "Pure Python. No extension module to build." },
+  { name: "Go", score: "258/258", note: "No module dependencies." },
 ];
