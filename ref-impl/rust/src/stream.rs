@@ -163,6 +163,41 @@ impl<'a> Iterator for StreamReader<'a> {
     }
 }
 
+/// The header line and its 1-based line number, if the stream has one.
+///
+/// A header is the first non-ignorable line, and only when it begins with `@` (stream §2). A
+/// later line that begins with `@` is a malformed record, not a second header.
+pub fn header_line(input: &str) -> Option<(usize, &str)> {
+    let (line_no, text, _) =
+        split_lines(input).into_iter().find(|(_, text, _)| !is_ignorable(text))?;
+    text.trim_start_matches([' ', '\t']).starts_with('@').then_some((line_no, text))
+}
+
+/// The lines a reader will try to parse as records, each with its 1-based line number.
+///
+/// Blank and comment lines are skipped, as is the optional header (stream §2), so this is
+/// exactly the set [`StreamReader`] yields — but as source text. Tools that need to re-read a
+/// record's own bytes, to record spans over it for instance, use this rather than re-deriving
+/// the framing.
+pub fn record_lines(input: &str) -> Vec<(usize, &str)> {
+    let lines = split_lines(input);
+    let mut out = Vec::new();
+    let mut header_possible = true;
+    for (line_no, text, _) in lines {
+        if is_ignorable(text) {
+            continue;
+        }
+        if header_possible {
+            header_possible = false;
+            if text.trim_start_matches([' ', '\t']).starts_with('@') {
+                continue;
+            }
+        }
+        out.push((line_no, text));
+    }
+    out
+}
+
 /// Reads a whole stream, aborting at the first malformed record — the default policy required
 /// by stream §5.
 pub fn parse_stream(input: &str) -> Result<Stream> {
@@ -220,6 +255,22 @@ mod tests {
 
     fn code(input: &str) -> Code {
         parse_stream(input).unwrap_err().code
+    }
+
+    /// `record_lines` and `header_line` must agree with what the reader actually parses,
+    /// since tools use them to re-read a record's own bytes.
+    #[test]
+    fn record_lines_skip_the_header_and_ignorable_lines() {
+        let input = "# notes\n\n@version(1.0)\n{a:1}\n\n  # comment\n{a:2}\n";
+        assert_eq!(record_lines(input), vec![(4, "{a:1}"), (7, "{a:2}")]);
+        assert_eq!(header_line(input), Some((3, "@version(1.0)")));
+        assert_eq!(record_lines(input).len(), parse_stream(input).unwrap().records.len());
+    }
+
+    #[test]
+    fn a_stream_without_a_header_has_none() {
+        assert_eq!(header_line("{a:1}\n@version(1.0)\n"), None);
+        assert_eq!(record_lines("{a:1}\n"), vec![(1, "{a:1}")]);
     }
 
     #[test]

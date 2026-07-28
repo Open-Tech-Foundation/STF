@@ -21,6 +21,7 @@ cargo run --manifest-path ref-impl/rust/Cargo.toml --bin stf -- <args>
 | `stf parse` | Print the parsed data model as tagged JSON. |
 | `stf canon` | Print [STF Canonical Form](spec.md#14-canonical-form). |
 | `stf convert` | Convert between STF and JSON. |
+| `stf lsp` | Serve the Language Server Protocol over stdio, for editors. |
 
 `FILE` may be `-`, or omitted, to read standard input.
 
@@ -83,9 +84,12 @@ preserved: they are equivalent to whitespace (spec §4.2) and do not survive int
 
 ```
 $ stf lint config.stf
-config.stf: warning: unknown directive `@nope`
-config.stf: warning: created is a string that looks like a typed value; consider DATE(2026-01-15)
+config.stf:1:1: warning: unknown directive `@nope`
+config.stf:4:12: warning: created is a string that looks like a typed value; consider DATE(2026-01-15)
 ```
+
+Warnings are positioned the way errors are — `FILE:LINE:COLUMN:` — and the same rules, with the
+same positions, are what [`stf lsp`](#8-lsp--editor-integration) publishes to an editor.
 
 Nothing here is an error, and none of it is inferred automatically — `fmt` and `convert` will
 never rewrite a string into a constructor, because spec §13.2 forbids exactly that.
@@ -152,7 +156,47 @@ number, per stream §8.
 
 ---
 
-## 8. Options
+## 8. `lsp` — editor integration
+
+```sh
+stf lsp
+```
+
+Serves [LSP 3.17](https://microsoft.github.io/language-server-protocol/) over stdin/stdout.
+Editors launch it; it is not useful to run by hand. There is nothing to configure, and it takes
+no options — the document URI's extension selects the framing, so a `.stfs` file is diagnosed
+per record rather than as one document with trailing content.
+
+| Capability | Behaviour |
+| :--- | :--- |
+| `textDocument/publishDiagnostics` | Parse errors carrying their normative `ERR_*` code as the diagnostic code, plus `lint` warnings. Recomputed on open, change, and save. |
+| `textDocument/formatting` | What `fmt` produces. The client's `tabSize` and `insertSpaces` choose the indent. A document that does not parse yields **no** edit, never a guess. |
+
+Diagnostic positions are UTF-16 code unit offsets, the protocol's default encoding, which the
+server advertises explicitly as `positionEncoding`.
+
+Because the server, `check`, and `lint` all run the same parser, a document is never clean in
+the editor and rejected in CI.
+
+**Editor configuration**
+
+Most clients need the command and the file extensions. For Neovim's built-in client:
+
+```lua
+vim.lsp.config.stf = {
+  cmd = { 'stf', 'lsp' },
+  filetypes = { 'stf' },
+  root_markers = { '.git' },
+}
+vim.lsp.enable('stf')
+```
+
+The VS Code extension under [`vscode-stf/`](../vscode-stf/) still does its own heuristic
+checking and does not yet launch this server.
+
+---
+
+## 9. Options
 
 | Option | Applies to | Meaning |
 | :--- | :--- | :--- |

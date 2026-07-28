@@ -40,6 +40,20 @@ pub(crate) enum Mode {
     StreamRecord { newline_follows: bool },
 }
 
+/// Byte offsets of the source text a value or directive was parsed from.
+///
+/// Positions are not part of the data model (spec §3), so recording them is opt-in: the
+/// parser collects nothing unless asked. Tools that report on source — the linter and the
+/// language server — need them; a plain `parse` does not pay for them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Spans {
+    /// One `[start, end)` byte range per value, in document (pre-order) order — the order a
+    /// pre-order walk of the parsed tree visits them, so the two can be zipped.
+    pub values: Vec<(usize, usize)>,
+    /// One `[start, end)` byte range per directive, in source order.
+    pub directives: Vec<(usize, usize)>,
+}
+
 pub(crate) struct Parser<'a> {
     src: &'a str,
     bytes: &'a [u8],
@@ -47,6 +61,8 @@ pub(crate) struct Parser<'a> {
     depth: usize,
     limits: Limits,
     mode: Mode,
+    /// `Some` once span recording is switched on by [`Parser::recording_spans`].
+    spans: Option<Spans>,
 }
 
 #[inline]
@@ -56,7 +72,37 @@ fn is_ident_byte(b: u8) -> bool {
 
 impl<'a> Parser<'a> {
     pub(crate) fn new(src: &'a str, limits: Limits, mode: Mode) -> Self {
-        Parser { src, bytes: src.as_bytes(), pos: 0, depth: 0, limits, mode }
+        Parser { src, bytes: src.as_bytes(), pos: 0, depth: 0, limits, mode, spans: None }
+    }
+
+    /// Switches on span recording. See [`Spans`].
+    pub(crate) fn recording_spans(mut self) -> Self {
+        self.spans = Some(Spans::default());
+        self
+    }
+
+    /// Takes the recorded spans, if recording was switched on.
+    pub(crate) fn take_spans(&mut self) -> Option<Spans> {
+        self.spans.take()
+    }
+
+    /// Reserves a slot in pre-order and returns its index, or `None` when not recording.
+    ///
+    /// The slot is reserved *before* the value's children are parsed so that the recorded
+    /// order matches a pre-order walk of the finished tree; [`Parser::close_value`] fills in
+    /// the end offset once the extent is known.
+    #[inline]
+    fn open_value(&mut self, start: usize) -> Option<usize> {
+        let spans = self.spans.as_mut()?;
+        spans.values.push((start, start));
+        Some(spans.values.len() - 1)
+    }
+
+    #[inline]
+    fn close_value(&mut self, slot: Option<usize>, start: usize) {
+        if let (Some(slot), Some(spans)) = (slot, self.spans.as_mut()) {
+            spans.values[slot] = (start, self.pos);
+        }
     }
 
     fn err<T>(&self, code: Code, offset: usize, msg: impl Into<String>) -> Result<T> {
@@ -112,7 +158,11 @@ impl<'a> Parser<'a> {
         let mut directives: Vec<Directive> = Vec::new();
         self.skip_ws();
         while self.peek() == Some(b'@') {
+            let at = self.pos;
             let d = self.parse_directive()?;
+            if let Some(spans) = self.spans.as_mut() {
+                spans.directives.push((at, self.pos));
+            }
             if directives.iter().any(|e| e.name == d.name) {
                 return self.err(
                     Code::Syntax,
@@ -132,7 +182,12 @@ impl<'a> Parser<'a> {
             return self.err(Code::RootNotObject, self.pos, what);
         }
 
+        // The root is parsed directly rather than through `parse_value`, so its span is
+        // reserved here to keep it first in pre-order.
+        let root_at = self.pos;
+        let slot = self.open_value(root_at);
         let root = self.parse_object()?;
+        self.close_value(slot, root_at);
         self.skip_ws();
         if self.pos < self.bytes.len() {
             return self.err(Code::TrailingContent, self.pos, "content follows the root object");
@@ -352,7 +407,9 @@ impl<'a> Parser<'a> {
             Some(b) => b,
             None => return self.err(Code::Unterminated, self.pos, "expected a value"),
         };
-        match b {
+        let start = self.pos;
+        let slot = self.open_value(start);
+        let value = match b {
             b'{' => Ok(Value::Object(self.parse_object()?)),
             b'[' => Ok(Value::Array(self.parse_array()?)),
             b'`' => Ok(Value::String(self.parse_raw_string()?)),
@@ -362,7 +419,9 @@ impl<'a> Parser<'a> {
             b'+' | b'-' | b'.' | b'0'..=b'9' => Ok(Value::Number(self.parse_number()?)),
             b'A'..=b'Z' | b'a'..=b'z' | b'_' => self.parse_word(),
             _ => self.err(Code::Syntax, self.pos, "expected a value"),
-        }
+        }?;
+        self.close_value(slot, start);
+        Ok(value)
     }
 
     /// A bare word in value position: a `T`/`F`/`N` literal, or a constructor when `(` follows.
@@ -660,7 +719,10 @@ impl<'a> Parser<'a> {
         if self.peek() != Some(b'{') {
             return self.err(Code::RootNotObject, self.pos, "a record root must be an object");
         }
+        let root_at = self.pos;
+        let slot = self.open_value(root_at);
         let root = self.parse_object()?;
+        self.close_value(slot, root_at);
         self.skip_ws();
         if self.pos < self.bytes.len() {
             return self.err(Code::TrailingContent, self.pos, "content follows the record");

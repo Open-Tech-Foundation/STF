@@ -130,7 +130,9 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 /// Resolves a byte offset to a 1-based line and column, counting columns in scalar values.
-fn line_column(input: &str, offset: usize) -> (usize, usize) {
+/// Resolves a byte offset into a 1-based line and column, the column counted in Unicode
+/// scalar values. This is how every position the tools print is derived.
+pub fn line_column(input: &str, offset: usize) -> (usize, usize) {
     let offset = offset.min(input.len());
     let mut line = 1;
     let mut line_start = 0;

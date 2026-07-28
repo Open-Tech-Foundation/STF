@@ -18,13 +18,15 @@
 pub mod constructors;
 pub mod error;
 pub mod json;
+pub mod lint;
+pub mod lsp;
 mod parser;
 pub mod ser;
 pub mod stream;
 pub mod value;
 
 pub use error::{Code, Error, Result};
-pub use parser::{Limits, DEFAULT_MAX_DEPTH};
+pub use parser::{Limits, Spans, DEFAULT_MAX_DEPTH};
 pub use ser::{document_to_string, to_string, Format};
 pub use stream::{parse_stream, Record, Stream, StreamReader};
 pub use value::{
@@ -46,6 +48,28 @@ pub fn parse_document(input: &str) -> Result<Document> {
 /// Parses with explicit resource limits (spec §15).
 pub fn parse_with_limits(input: &str, limits: Limits) -> Result<Document> {
     Parser::new(input, limits, Mode::Document).parse_document()
+}
+
+/// Parses a document and records where each value and directive came from in the source.
+///
+/// For tools that report on source rather than consume data — the linter and the language
+/// server. [`Spans::values`] is in pre-order, so it zips with a pre-order walk of the tree;
+/// [`lint::walk`] does exactly that.
+pub fn parse_document_with_spans(input: &str, limits: Limits) -> Result<(Document, Spans)> {
+    let mut parser = Parser::new(input, limits, Mode::Document).recording_spans();
+    let document = parser.parse_document()?;
+    let spans = parser.take_spans().expect("recording was switched on");
+    Ok((document, spans))
+}
+
+/// Parses one stream record (stream §2), recording spans as
+/// [`parse_document_with_spans`] does. Offsets are relative to `input`.
+pub fn parse_record_with_spans(input: &str, limits: Limits) -> Result<(Object, Spans)> {
+    let mut parser = Parser::new(input, limits, Mode::StreamRecord { newline_follows: false })
+        .recording_spans();
+    let root = parser.parse_record()?;
+    let spans = parser.take_spans().expect("recording was switched on");
+    Ok((root, spans))
 }
 
 /// Parses raw bytes, enforcing the UTF-8 requirement of spec §2.

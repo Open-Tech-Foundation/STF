@@ -108,9 +108,19 @@ stf fmt --write config.stf            # format in place
 stf lint config.stf                   # flag stringly-typed values
 stf canon config.stf | sha256sum      # canonical form, for hashing and signing
 stf convert data.json --to stf        # refuses what STF cannot represent
+stf lsp                               # language server, for editors
 ```
 
 Full reference: [doc/cli.md](doc/cli.md).
+
+## Editor Support
+
+`stf lsp` serves the Language Server Protocol over stdio, so any LSP-capable editor gets
+diagnostics and formatting from the reference parser itself — the same normative error codes
+`stf check` reports in CI, and the same warnings as `stf lint`, never a second approximate
+implementation. `.stf` documents and `.stfs` streams are both served.
+
+Configuration is per editor; see [doc/cli.md §8](doc/cli.md#8-lsp--editor-integration).
 
 ## Reference Implementations
 

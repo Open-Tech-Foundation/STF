@@ -12,6 +12,34 @@ the reference implementations may change incompatibly at any time.
 
 ### Added
 
+- **`stf lsp` — a Language Server Protocol server** (`ref-impl/rust/src/lsp.rs`), replacing the
+  editor tooling the deleted ESLint and Prettier plugins used to provide, and doing it for every
+  LSP-capable editor rather than only JavaScript projects. It speaks LSP 3.17 over stdio and is
+  a layer over the reference parser, not a second approximate one: the diagnostics an author
+  sees while typing carry the same normative `ERR_*` code `stf check` reports in CI.
+  - `textDocument/publishDiagnostics` — one error per malformed document, or one per malformed
+    record for a `.stfs` stream (stream §5), plus `stf lint`'s warnings. Recomputed on open,
+    change, and save; cleared on close.
+  - `textDocument/formatting` — what `stf fmt` produces, honouring the client's `tabSize` and
+    `insertSpaces`. A document that does not parse yields no edit at all, because a formatter
+    that guesses at malformed input is worse than one that declines.
+  - Framing follows the document URI's extension, so a `.stfs` file is diagnosed per record
+    rather than as a document with trailing content.
+  - Positions are converted to UTF-16 code units, the protocol's default encoding, which is
+    neither what `Error` carries (byte offsets) nor what it reports (Unicode scalar columns).
+    The server advertises `positionEncoding` explicitly.
+- **`stf::lint`** — the lint rules as a library module returning structured warnings anchored to
+  byte ranges. `stf lint` and the language server now share it, so the two cannot drift apart.
+- **Source spans in the parser**, opt-in via `parse_document_with_spans` and
+  `parse_record_with_spans`. `Spans::values` is recorded in pre-order, so it zips with a
+  pre-order walk of the parsed tree (`lint::walk`); a plain `parse` records nothing and pays
+  nothing. Positions are not part of the data model (spec §3), which is why this is opt-in
+  rather than carried on `Value`.
+- `stream::header_line` and `stream::record_lines`, which expose the framing a reader applies,
+  so a tool can re-read a record's own bytes without re-deriving the line rules.
+- `error::line_column` is now public: the one place a byte offset becomes a 1-based line and
+  column, which every printed position goes through.
+
 - `CHANGELOG.md`.
 - Contribution rules for coding agents in `AGENTS.md`: Conventional Commits, no AI
   attribution trailers, changelog updates, and test requirements.
@@ -155,6 +183,10 @@ the reference implementations may change incompatibly at any time.
 
 ### Changed
 
+- **`stf lint` warnings now carry a line and column** — `FILE:LINE:COLUMN: warning: …`, the form
+  errors already used. Previously a document warning carried no position at all and a stream
+  warning carried the record's index rather than its line number, so neither could be clicked
+  through in an editor or matched by a problem matcher.
 - **BREAKING — Number domain.** Bare numbers are now defined as IEEE 754 `binary64`
   (spec §7.2). Precision loss past 2^53 is conformant; returning an arbitrary-precision
   integer for a large literal is now explicitly non-conformant. Use `BIGINT`/`DECIMAL` for

@@ -296,3 +296,67 @@ fn invalid_utf8_is_rejected_before_parsing() {
     assert_eq!(code(&o), 1);
     assert!(err(&o).contains("ERR_INVALID_UTF8"), "{}", err(&o));
 }
+
+/// Frames LSP messages as a client would and returns everything the server wrote back.
+fn lsp_exchange(messages: &[&str]) -> (Output, Vec<String>) {
+    let mut input = String::new();
+    for body in messages {
+        input.push_str(&format!("Content-Length: {}\r\n\r\n{}", body.len(), body));
+    }
+    let o = stf_stdin(&["lsp"], &input);
+    let text = out(&o);
+    // Split the framed replies back apart on the header that starts each one.
+    let bodies = text
+        .split("Content-Length: ")
+        .skip(1)
+        .map(|chunk| chunk.split_once("\r\n\r\n").expect("a framed message").1.to_string())
+        .collect();
+    (o, bodies)
+}
+
+#[test]
+fn lsp_serves_diagnostics_and_exits_cleanly() {
+    let (o, replies) = lsp_exchange(&[
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///c.stf","languageId":"stf","version":1,"text":"{ a: 0x10 }"}}}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"shutdown"}"#,
+        r#"{"jsonrpc":"2.0","method":"exit"}"#,
+    ]);
+    assert_eq!(code(&o), 0);
+    assert_eq!(replies.len(), 3, "initialize, diagnostics, shutdown: {:?}", replies);
+    assert!(replies[0].contains("\"documentFormattingProvider\":true"), "{}", replies[0]);
+    assert!(replies[1].contains("publishDiagnostics"), "{}", replies[1]);
+    assert!(replies[1].contains("ERR_INVALID_NUMBER"), "{}", replies[1]);
+}
+
+#[test]
+fn lsp_formats_a_document_on_request() {
+    let (o, replies) = lsp_exchange(&[
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///c.stf","languageId":"stf","version":1,"text":"{a:1}"}}}"#,
+        r#"{"jsonrpc":"2.0","id":9,"method":"textDocument/formatting","params":{"textDocument":{"uri":"file:///c.stf"},"options":{"tabSize":2,"insertSpaces":true}}}"#,
+        r#"{"jsonrpc":"2.0","id":10,"method":"shutdown"}"#,
+        r#"{"jsonrpc":"2.0","method":"exit"}"#,
+    ]);
+    assert_eq!(code(&o), 0);
+    assert!(replies[1].contains(r#""newText":"{\n  a: 1,\n}\n""#), "{}", replies[1]);
+}
+
+/// The server's warnings and `stf lint`'s must agree, since both come from `stf::lint`.
+#[test]
+fn lsp_lint_warnings_match_the_lint_command() {
+    let dir = TempDir::new("lsp-lint");
+    let path = dir.write("l.stf", "{ created: `2026-01-15` }\n");
+    let o = stf(&["lint", &path]);
+    assert_eq!(code(&o), 1);
+    assert!(err(&o).contains("created is a string that looks like a typed value"), "{}", err(&o));
+    // Column 12 on the command line is character 11 zero-based in the protocol.
+    assert!(err(&o).contains(":1:12: warning:"), "{}", err(&o));
+
+    let (_, replies) = lsp_exchange(&[
+        r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///l.stf","languageId":"stf","version":1,"text":"{ created: `2026-01-15` }\n"}}}"#,
+        r#"{"jsonrpc":"2.0","method":"exit"}"#,
+    ]);
+    assert!(replies[0].contains("created is a string that looks like a typed value"));
+    assert!(replies[0].contains(r#""character":11"#), "{}", replies[0]);
+    assert!(replies[0].contains(r#""code":"stringly-typed""#), "{}", replies[0]);
+}

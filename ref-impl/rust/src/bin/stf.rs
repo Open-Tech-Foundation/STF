@@ -1,8 +1,8 @@
 //! The `stf` command-line tool.
 //!
-//! Six subcommands over the reference library: `check`, `fmt`, `lint`, `parse`, `canon`, and
-//! `convert`. Every one reports the normative error code from `doc/error-codes.md`, so a
-//! script can branch on `ERR_INVALID_NUMBER` rather than on message text.
+//! Seven subcommands over the reference library: `check`, `fmt`, `lint`, `parse`, `canon`,
+//! `convert`, and `lsp`. Every one reports the normative error code from `doc/error-codes.md`,
+//! so a script can branch on `ERR_INVALID_NUMBER` rather than on message text.
 //!
 //! Conversion is deliberately strict. STF replaces JSON rather than extending it, so a JSON
 //! document STF cannot represent is reported and refused, never silently repaired.
@@ -12,9 +12,10 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use stf::json::{from_json, to_json, to_tagged_json, TypedValuePolicy};
-use stf::stream::{stream_to_string, Stream, StreamReader};
+use stf::stream::{record_lines, stream_to_string, Stream, StreamReader};
 use stf::value::{Object, Value};
-use stf::{document_to_string, parse_document, to_string, Format};
+use stf::{document_to_string, lint, to_string, Format};
+use stf::{parse_document_with_spans, parse_record_with_spans, Limits};
 
 const USAGE: &str = "\
 stf — the Structured Text Format toolkit
@@ -29,6 +30,7 @@ COMMANDS:
     parse      Print the parsed data model as tagged JSON, one kind per value.
     canon      Print STF Canonical Form (spec §14), for hashing and signing.
     convert    Convert between STF and JSON. Refuses what the target cannot express.
+    lsp        Serve the Language Server Protocol over stdin/stdout, for editors.
 
 COMMON OPTIONS:
     -h, --help          Show this help.
@@ -64,6 +66,20 @@ fn main() -> ExitCode {
 
     let command = args[0].clone();
     let rest = &args[1..];
+
+    // The language server owns stdin and stdout for its whole run, so it never reaches the
+    // file-oriented plumbing below.
+    if command == "lsp" {
+        return match stf::lsp::serve_stdio() {
+            Ok(0) => ExitCode::SUCCESS,
+            Ok(_) => ExitCode::FAILURE,
+            Err(e) => {
+                eprintln!("stf: language server: {}", e);
+                ExitCode::FAILURE
+            }
+        };
+    }
+
     let result = match command.as_str() {
         "check" => run(rest, Action::Check),
         "fmt" => run(rest, Action::Fmt),
@@ -269,7 +285,7 @@ fn handle_one(
         return handle_stream(text, o, action, label);
     }
 
-    let document = parse_document(text).map_err(|e| {
+    let (document, spans) = parse_document_with_spans(text, Limits::default()).map_err(|e| {
         vec![format!("{}:{}:{}: {}: {}", label, e.line, e.column, e.code, e.message)]
     })?;
     let root = Value::Object(document.root.clone());
@@ -280,7 +296,10 @@ fn handle_one(
             Ok(None)
         }
         Action::Lint => {
-            let warnings = lint_document(&document, label);
+            let warnings: Vec<String> = lint::lint(&document, &spans)
+                .iter()
+                .map(|w| render_warning(text, w, label, 0))
+                .collect();
             if warnings.is_empty() {
                 Ok(None)
             } else {
@@ -329,13 +348,29 @@ fn handle_stream(
         }
         Action::Lint => {
             let mut warnings = Vec::new();
-            for d in &directives {
-                if !matches!(d.name.as_str(), "schema" | "version") {
-                    warnings.push(format!("{}:1: warning: unknown directive `@{}`", label, d.name));
+            if !directives.is_empty() {
+                // The header is one line of directives, so linting it as a document — with an
+                // empty root appended — reuses the same rule and the same span table.
+                if let Some((header_line, header)) = stf::stream::header_line(text) {
+                    let source = format!("{}\n{{}}", header);
+                    let parsed = parse_document_with_spans(&source, Limits::default());
+                    if let Ok((document, spans)) = parsed {
+                        for w in lint::lint(&document, &spans) {
+                            warnings.push(render_warning(&source, &w, label, header_line));
+                        }
+                    }
                 }
             }
-            for (i, record) in records.iter().enumerate() {
-                lint_value(&Value::Object(record.clone()), "", &mut warnings, label, i + 1);
+            // Each record is re-parsed with spans so a warning points at the column it is
+            // about, not merely at the line.
+            for (line, record_text) in record_lines(text) {
+                let Ok((record, spans)) = parse_record_with_spans(record_text, Limits::default())
+                else {
+                    continue;
+                };
+                for w in lint::lint_record(&record, &spans) {
+                    warnings.push(render_warning(record_text, &w, label, line));
+                }
             }
             if warnings.is_empty() {
                 Ok(None)
@@ -363,65 +398,19 @@ fn handle_stream(
     }
 }
 
-fn lint_document(document: &stf::Document, label: &str) -> Vec<String> {
-    let mut warnings = Vec::new();
-    for d in &document.directives {
-        // Spec §5.1: a parser must accept an unknown directive but should warn.
-        if !matches!(d.name.as_str(), "schema" | "version") {
-            warnings.push(format!("{}: warning: unknown directive `@{}`", label, d.name));
-        }
-    }
-    lint_value(&Value::Object(document.root.clone()), "", &mut warnings, label, 0);
-    warnings
-}
-
-/// Flags the JSON habits STF exists to remove: a date, an instant, or a big integer smuggled
-/// through a string because JSON had no other way to carry it.
-fn lint_value(value: &Value, path: &str, out: &mut Vec<String>, label: &str, line: usize) {
-    let here = |p: &str| if p.is_empty() { "root".to_string() } else { p.to_string() };
-    match value {
-        Value::String(s) => {
-            let suggestion = if stf::constructors::date(s).is_ok() {
-                Some(format!("DATE({})", s))
-            } else if stf::constructors::timestamp(s).is_ok() {
-                Some(format!("TIMESTAMP({})", s))
-            } else if s.len() > 15
-                && s.bytes().all(|b| b.is_ascii_digit())
-                && stf::constructors::bigint(s).is_ok()
-            {
-                Some(format!("BIGINT({})", s))
-            } else {
-                None
-            };
-            if let Some(suggestion) = suggestion {
-                let where_ = if line > 0 {
-                    format!("{}:{}", label, line)
-                } else {
-                    label.to_string()
-                };
-                out.push(format!(
-                    "{}: warning: {} is a string that looks like a typed value; \
-                     consider {}",
-                    where_,
-                    here(path),
-                    suggestion
-                ));
-            }
-        }
-        Value::Array(items) => {
-            for (i, item) in items.iter().enumerate() {
-                lint_value(item, &format!("{}[{}]", path, i), out, label, line);
-            }
-        }
-        Value::Object(object) => {
-            for (key, item) in object.iter() {
-                let child =
-                    if path.is_empty() { key.to_string() } else { format!("{}.{}", path, key) };
-                lint_value(item, &child, out, label, line);
-            }
-        }
-        _ => {}
-    }
+/// Formats one warning the way errors are formatted: `file:line:column: warning: …`.
+///
+/// `text` is what the offsets are relative to. For a stream record that is the record's own
+/// line, so `record_line` supplies the line number the file actually uses.
+fn render_warning(
+    text: &str,
+    warning: &stf::lint::Warning,
+    label: &str,
+    record_line: usize,
+) -> String {
+    let (line, column) = stf::error::line_column(text, warning.start);
+    let line = if record_line > 0 { record_line } else { line };
+    format!("{}:{}:{}: warning: {}", label, line, column, warning.message)
 }
 
 /// Which side of the conversion the target is.
