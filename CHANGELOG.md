@@ -28,6 +28,15 @@ the reference implementations may change incompatibly at any time.
   - Positions are converted to UTF-16 code units, the protocol's default encoding, which is
     neither what `Error` carries (byte offsets) nor what it reports (Unicode scalar columns).
     The server advertises `positionEncoding` explicitly.
+- **Continuous integration** (`.github/workflows/ci.yml`), on every push to `main` and every
+  pull request. Until now the repository's only workflow deployed the playground, so nothing
+  checked that the four implementations still agreed — the conformance corpus was the
+  executable contract and no machine ran it. Seven jobs: the full conformance script across
+  all four implementations, a check that `corpus.json` is exactly what `build_corpus.py`
+  emits, the Rust library/CLI/language-server tests plus a release-build smoke test, the
+  JavaScript, Python, and Go unit tests, and the VS Code extension's tests.
+- Root `package.json` scripts for each implementation's tests (`test:rust`, `test:python`,
+  `test:go`, `test:vscode`), so the CI jobs can be reproduced locally one at a time.
 - **Directive highlighting** in the TextMate grammar (`syntax/stf.tmLanguage.json`), which had
   no rule for `@name(payload)` at all, and `.stfs` added to its file types.
 - **`stf::lint`** — the lint rules as a library module returning structured warnings anchored to
@@ -251,6 +260,12 @@ the reference implementations may change incompatibly at any time.
   normative parser, with an LSP server serving editors. Migrating to Biome instead was considered
   and rejected: its plugin system queries the CST of languages Biome already parses and cannot
   register a new one, so STF cannot be supported there by a third party at all.
+- **The `web/` playground and the GitHub Pages workflow that deployed it.** The playground
+  imported a `stringify` binding that `ref-impl/js` stopped exporting in the 1.0 rewrite, so it
+  had not built since — and because deploying it was the repository's only workflow, CI was
+  red on every push while nothing else was checked at all. It is superseded by the new site,
+  which will carry the playground and the format-conversion tool. The README's link to the old
+  Pages deployment is gone with it.
 - The VS Code extension's committed build output (`vscode-stf/out/`), now gitignored and
   produced by `npm run compile`, and a stray `package.json.tmp`. Its `.vscodeignore` no longer
   excludes `node_modules`, which would have packaged an extension whose runtime dependency was

@@ -1,0 +1,137 @@
+# The executable contract, enforced.
+#
+# The corpus is what makes STF a specification rather than four programs that mostly agree, so
+# `conformance` is the job that matters: it runs every implementation against the same 258
+# cases and fails if any of them drifts. The rest guard the tooling around it.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  conformance:
+    name: Conformance (all implementations)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          # The module has no dependencies, so there is no go.sum to key a cache on.
+          cache: false
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ref-impl/rust
+
+      # The script runs every implementation and only then reports, so one failure does not
+      # hide the state of the other three.
+      - run: ./scripts/check_conformance.sh
+
+  corpus:
+    name: Corpus is reproducible
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # corpus.json is generated. If a case is edited by hand it silently stops matching the
+      # rule it claims to trace to, so the committed file must be exactly what the builder emits.
+      - run: python3 tests/conformance/build_corpus.py
+      - name: corpus.json matches build_corpus.py
+        run: |
+          if ! git diff --quiet tests/conformance/corpus.json; then
+            echo "::error file=tests/conformance/corpus.json::Regenerate with: python3 tests/conformance/build_corpus.py"
+            git diff --stat tests/conformance/corpus.json
+            exit 1
+          fi
+
+  rust:
+    name: Rust (library, CLI, language server)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ref-impl/rust
+      - run: cargo test --manifest-path ref-impl/rust/Cargo.toml
+      - run: cargo build --release --manifest-path ref-impl/rust/Cargo.toml
+      - name: The CLI runs
+        run: |
+          ./ref-impl/rust/target/release/stf check example.stf
+          ./ref-impl/rust/target/release/stf canon example.stf | head -c 64
+
+  javascript:
+    name: JavaScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test "ref-impl/js/*.test.ts"
+
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s tests -t .
+        working-directory: ref-impl/python
+
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          # The module has no dependencies, so there is no go.sum to key a cache on.
+          cache: false
+      - run: go test ./...
+        working-directory: ref-impl/go
+      - run: go vet ./...
+        working-directory: ref-impl/go
+
+  vscode:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: vscode-stf/package-lock.json
+      - run: npm ci
+        working-directory: vscode-stf
+      - run: npm test
+        working-directory: vscode-stf
