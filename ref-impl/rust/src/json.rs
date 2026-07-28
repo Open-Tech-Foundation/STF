@@ -170,6 +170,41 @@ fn convert_to(value: &Value, path: &str, policy: TypedValuePolicy) -> Result<Jso
     }
 }
 
+/// Encodes a value in the corpus's **tagged JSON**, which is lossless where plain JSON is not.
+///
+/// Non-obvious kinds become `{"$": "<tag>", "v": "<text>"}`. `$` is safe as an escape key
+/// because it is not a legal STF key character (spec §6.1), so a tag can never collide with a
+/// real parsed object. See `tests/conformance/README.md` §2.
+pub fn to_tagged_json(value: &Value) -> Json {
+    fn tag(name: &str, text: String) -> Json {
+        let mut map = serde_json::Map::with_capacity(2);
+        map.insert("$".to_string(), Json::String(name.to_string()));
+        map.insert("v".to_string(), Json::String(text));
+        Json::Object(map)
+    }
+
+    match value {
+        Value::Null => Json::Null,
+        Value::Bool(b) => Json::Bool(*b),
+        Value::String(s) => Json::String(s.clone()),
+        Value::Array(items) => Json::Array(items.iter().map(to_tagged_json).collect()),
+        Value::Object(object) => Json::Object(
+            object.iter().map(|(k, v)| (k.to_string(), to_tagged_json(v))).collect(),
+        ),
+        // Numbers are tagged with a string too, because JSON numbers cannot express -0 and
+        // give no binary64 round-trip guarantee, both of which §7.2 and §7.3 make observable.
+        Value::Number(n) => tag(
+            "num",
+            crate::ser::format_number(*n).unwrap_or_else(|_| n.to_string()),
+        ),
+        Value::BigInt(n) => tag("bigint", n.to_string()),
+        Value::Decimal(d) => tag("dec", d.payload()),
+        Value::Date(d) => tag("date", d.payload()),
+        Value::Timestamp(t) => tag("ts", t.payload()),
+        Value::Binary(b) => tag("bin", constructors::binary_to_base64(b)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,6 +258,25 @@ mod tests {
         assert_eq!(out["price"], Json::String("19.99".into()));
         assert_eq!(out["at"], Json::String("2026-01-15".into()));
         assert_eq!(out["k"], Json::String("SGVsbG8=".into()));
+    }
+
+    #[test]
+    fn tagged_json_distinguishes_every_kind() {
+        let v = parse(
+            "{s:`1.5`,d:DECIMAL(1.50),n:1,z:-0,b:BIGINT(9007199254740993),\
+             dt:DATE(2026-01-15),t:TIMESTAMP(2026-01-15T10:30:00Z),bin:BINARY(SGVsbG8=)}",
+        )
+        .unwrap();
+        let out = to_tagged_json(&v);
+        assert_eq!(out["s"], Json::String("1.5".into()));
+        assert_eq!(out["d"]["$"], Json::String("dec".into()));
+        assert_eq!(out["d"]["v"], Json::String("1.50".into()));
+        assert_eq!(out["n"]["v"], Json::String("1".into()));
+        assert_eq!(out["z"]["v"], Json::String("-0".into()));
+        assert_eq!(out["b"]["v"], Json::String("9007199254740993".into()));
+        assert_eq!(out["dt"]["$"], Json::String("date".into()));
+        assert_eq!(out["t"]["v"], Json::String("2026-01-15T10:30:00Z".into()));
+        assert_eq!(out["bin"]["v"], Json::String("SGVsbG8=".into()));
     }
 
     #[test]

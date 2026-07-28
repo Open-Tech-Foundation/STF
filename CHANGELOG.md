@@ -91,6 +91,25 @@ the reference implementations may change incompatibly at any time.
   including the round-trip check across compact, pretty, and canonical output.
 - Rust benchmark rewritten with a fixed-seed generator and, for the first time, a
   `serde_json` baseline, so the Rust figures are reproducible and actually comparative.
+- **`stf` command-line tool** (`doc/cli.md`), built on the Rust library:
+  - `stf check` — verify, reporting `FILE:LINE:COLUMN: ERR_CODE: message`. For a stream it
+    reports every malformed record rather than stopping at the first, since stream §5 makes
+    records independently recoverable.
+  - `stf fmt` — format, with `--write`, `--check` for CI, `--indent`, and `--compact`.
+    Idempotent, and the output always reparses to an equal value.
+  - `stf lint` — warn about what conformance cannot catch: unknown directives, and strings
+    that are exactly a `DATE`/`TIMESTAMP` payload or a long digit run. Warnings only; nothing
+    is ever rewritten into a constructor, which spec §13.2 forbids.
+  - `stf parse` — print the data model as the corpus's tagged JSON, so the eleven kinds stay
+    distinguishable.
+  - `stf canon` — STF Canonical Form, for hashing and signing.
+  - `stf convert` — STF ↔ JSON and STF Stream ↔ NDJSON/JSONL, refusing anything the target
+    cannot express: a non-object JSON root, a key outside `[A-Za-z0-9_-]+`, an integer outside
+    the exact `binary64` range, or a typed value on the way to JSON. `--lossy` opts into
+    degrading typed values to JSON strings.
+  - Exit codes: `0` success, `1` rejected input, `2` usage error.
+- 21 end-to-end CLI tests driving the real binary, covering exit codes, the stdout/stderr
+  split, in-place rewriting, idempotence, and stream line numbering.
 
 ### Changed
 
@@ -127,6 +146,9 @@ the reference implementations may change incompatibly at any time.
 
 ### Removed
 
+- `stf-convert.ts`, superseded by the `stf` binary. Nothing referenced it, and it did the
+  silent repair the project now refuses: given JSON whose root is not an object it invented a
+  wrapper key, and given ordinary JSON it could emit STF that no parser accepts.
 - The non-functional PyO3 bindings from the Rust crate. Its `dumps` was a placeholder that
   returned `# Serialized from Rust\n{:?}`, its parser recognized `BigNumber`, `Binary`, and
   `Date` — none of which are STF constructors — and it contained a duplicated block of dead

@@ -11,6 +11,10 @@ name = "stf"
 path = "src/lib.rs"
 
 [[bin]]
+name = "stf"
+path = "src/bin/stf.rs"
+
+[[bin]]
 name = "stf-conformance"
 path = "src/bin/stf_conformance.rs"
 

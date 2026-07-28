@@ -72,6 +72,7 @@ the point of use, with no schema or convention required:
 
 **Non-normative**
 
+- [`stf` Command-Line Tool](doc/cli.md) — check, format, lint, canonicalize, convert
 - [Migration Guide](doc/migration-guide.md) — from JSON, JSON5, NDJSON, DTXT, and pre-1.0 drafts
 - [Comparison with Other Formats](doc/comparison.md)
 
@@ -97,6 +98,20 @@ a string can never satisfy a `DECIMAL` expectation.
 The remaining gap in the other three is spec §3.1: typed values are represented as strings with
 a marker prefix (`"$decimal:1.5"`), which cannot be distinguished from a user string of the same
 text and causes serialization to emit unparseable documents.
+
+## Command-Line Tool
+
+```sh
+cargo install --path ref-impl/rust
+
+stf check config.stf                  # verify, with normative error codes
+stf fmt --write config.stf            # format in place
+stf lint config.stf                   # flag stringly-typed values
+stf canon config.stf | sha256sum      # canonical form, for hashing and signing
+stf convert data.json --to stf        # refuses what STF cannot represent
+```
+
+Full reference: [doc/cli.md](doc/cli.md).
 
 ## Reference Implementations
 
