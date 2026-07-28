@@ -60,3 +60,7 @@ zig-out/
 
 # Python build artifacts from the removed PyO3 bindings
 *.so
+
+# Benchmark datasets. Regenerable from a fixed seed by each implementation's benchmark.
+benchmarks/*/bench_*.stf
+benchmarks/*/bench_*.json

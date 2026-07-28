@@ -49,8 +49,15 @@ else
   SKIPPED+=("Rust (cargo not found)")
 fi
 
-# Go still runs the superseded pre-1.0 suite; it is migrated in a later change.
-SKIPPED+=("Go (no 1.0 corpus runner yet)")
+if command -v go >/dev/null 2>&1; then
+  # The Go runner resolves the corpus relative to its own module directory.
+  echo -e "\n${BLUE}== Go ==${NC}"
+  if ! (cd "$ROOT_DIR/ref-impl/go" && go run ./cmd/conformance); then
+    FAILED+=("Go")
+  fi
+else
+  SKIPPED+=("Go (go not found)")
+fi
 
 echo
 for s in "${SKIPPED[@]}"; do

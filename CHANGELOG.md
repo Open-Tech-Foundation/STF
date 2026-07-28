@@ -138,6 +138,20 @@ the reference implementations may change incompatibly at any time.
 - Python benchmark rewritten with a seeded generator. Its JSON baseline now uses
   `separators=(",", ":")`; Python's `json.dumps` default inserts a space after every
   separator, which had been inflating the JSON side by roughly the margin being measured.
+- **Go reference implementation rewritten for STF 1.0** — **258/258**, plus 30 unit tests.
+  `stf.go` becomes seven files with the same layout as the other three.
+  - `*Object` replaces `map[string]STFValue`, so member order survives a round trip as
+    spec §11.2 requires. Go maps have no order at all, so the previous implementation could
+    not have complied.
+  - Typed values are distinct Go types: `*big.Int`, `*Decimal`, `Date`, `Timestamp`, `[]byte`.
+  - Interpreted strings decode and re-encode runes explicitly, so supplementary characters
+    survive. The previous implementation dropped every non-BMP character.
+  - `ParseBinary` decodes base64 directly, because `base64.StdEncoding` accepts non-canonical
+    trailing bits that spec §10.5 requires rejecting.
+  - `Error` carries `Code`, `Line`, and `Column`; `CodeOf` extracts the normative code.
+  - Adds Canonical Form, the STF Stream profile with both read policies, and JSON interchange.
+- Go benchmark rewritten with a seeded generator, moved to `cmd/benchmark`.
+- `benchmarks/RESULTS.md` rewritten from fresh measurements of all four implementations.
 
 ### Changed
 
@@ -174,6 +188,12 @@ the reference implementations may change incompatibly at any time.
 
 ### Removed
 
+- The generated benchmark datasets (`benchmarks/*/bench_*.{stf,json}`) from version control —
+  **81 MB** of regenerable output, including three orphaned copies under `benchmarks/rust/`
+  from earlier naming. Every benchmark now generates its dataset from a fixed seed, so the
+  files are reproducible on demand and are gitignored instead.
+- The `bytedance/sonic` dependency from the Go module, which only the benchmark used. The Go
+  module now has no dependencies at all, and its `go.sum` is gone with it.
 - `ref-impl/python/run_conformance.py`, superseded by `tests/conformance/run_python.py`, and
   the checked-in `dtxt_rs.so` / `libdtxt_rs.so` build artifacts, which were outputs of the
   removed PyO3 bindings.
@@ -224,6 +244,11 @@ the reference implementations may change incompatibly at any time.
 - Spec §6.2 now says how to distinguish whitespace inside a key (`{a b: 1}`,
   `ERR_INVALID_IDENTIFIER`) from a missing colon (`{a 1}`, `ERR_MISSING_COLON`). Both are a
   key followed by whitespace and an unexpected token; only the following context separates them.
+- `benchmarks/RESULTS.md` claimed all four implementations passed a "93-test STF 1.0
+  conformance suite" at 100%, and reported per-language payload sizes that disagreed by three
+  percentage points because each generated a differently-shaped dataset and Python measured
+  against a non-minified JSON baseline. All four now agree at 18.3%.
+- The Go module path said `dtxt`; it is now `github.com/Open-Tech-Foundation/stf/ref-impl/go`.
 - The root `package.json` was not valid JSON — it carried a stray trailing `}`, so every tool
   that read it failed. It also declared an `@assemblyscript/loader` dependency that nothing
   imported. `ref-impl/js/package.json` pointed `main` at a non-existent `index.js` and ran a

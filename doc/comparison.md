@@ -103,7 +103,7 @@ Differences:
 Claims here are limited to what this repository's benchmarks actually measure. See
 [benchmarks/RESULTS.md](../benchmarks/RESULTS.md).
 
-**Payload size.** STF is consistently **15–18% smaller than JSON** on equivalent data, from
+**Payload size.** STF is consistently **18.3% smaller than JSON** on equivalent data, from
 unquoted keys and the one-character `T` / `F` / `N` literals. Measured on a dataset of
 JSON-native types only, so it reflects base format overhead and does not exercise the
 constructor types.
@@ -112,20 +112,23 @@ constructor types.
 
 | | STF | Native JSON | |
 | :--- | ---: | ---: | :--- |
-| Go | 65.6 ms | 82.6 ms (`encoding/json`) | STF ~21% faster |
-| Go | 65.6 ms | 42.2 ms (Sonic) | a tuned JSON parser is faster |
-| JS (Bun) | 66.8 ms | 28.4 ms (`JSON.parse`) | native parser is C++ |
-| Python | 1348 ms | 81.2 ms (`json.loads`) | pure-Python scanner vs C |
+| Rust | 70 ms | 113 ms (`serde_json`) | STF ~38% faster |
+| Go | 73 ms | 95 ms (`encoding/json`) | STF ~23% faster |
+| JS (Node) | 164 ms | 33 ms (`JSON.parse`) | native parser is C++ |
+| Python | 1837 ms | 79 ms (`json.loads`) | pure-Python scanner vs C |
 
 The honest summary: **STF's grammar is cheap to parse, but a reference implementation written
-in the host language does not beat a native JSON parser written in C.** Go's result shows what
-comparable implementations look like; the JS and Python results compare an STF implementation in
-the language against a JSON parser in C, and should not be read as a property of the format.
+in the host language does not beat a native JSON parser written in C.** The Rust and Go rows
+compare two parsers in the same language and show what a like-for-like comparison looks like;
+the JS and Python rows compare an STF parser in the language against a JSON parser in C, and
+should not be read as a property of the format.
 
-> **Caveat.** These figures are not directly comparable across languages: each implementation's
-> benchmark generates its own randomly-seeded dataset, and the Python run measures against a
-> `json.dumps` baseline that includes default separator spacing. Treat them as within-language
-> comparisons only, pending a benchmark rework.
+Serialization is less flattering: `serde_json` writes four times faster than the Rust STF
+serializer. That is an implementation gap in this codebase, not a format one.
+
+> **Caveat.** These figures are not comparable across languages. Each implementation benchmarks
+> its own dataset on its own machine against its own host's JSON library. Compare within a row,
+> not down a column.
 
 ---
 
