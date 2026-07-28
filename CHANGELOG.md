@@ -65,26 +65,10 @@ the reference implementations may change incompatibly at any time.
   explicitly in scope.
 - `README.md` — a Conformance Status table recording that no reference implementation yet meets
   the 1.0 draft, so the corpus being red is not mistaken for a regression.
-
-### Removed
-
-- Dead test files: `tests/conformance/run_all.mjs`, `run_conformance.mjs`, and the stale
-  `results_ts.json`, `results_python.json`, `results_zig.json` outputs (Zig was pruned
-  earlier). Nothing referenced them.
-- `doc/edge-cases.md`. Every rule it stated is now in the specification with more precision
-  (§6.3, §10.2, §10.4, §10.5), and the duplicate had already drifted — it claimed `BINARY`
-  padding was mandatory, which is wrong for payloads whose length is already a multiple of 4.
-
-### Fixed
-
-- `comparison.md` no longer rates STF's parsing speed as "Extreme" against JSON's "Very Fast",
-  and drops the claim of SIMD-accelerated parsing, which no implementation performs. Performance
-  claims now match what the repository's benchmarks measure, including the cases where a native
-  JSON parser is faster, and carry a caveat that the figures are not comparable across languages.
-- `README.md` performance section rewritten on the same basis. It previously claimed compiled
-  STF implementations "outperform standard JSON parsers and serializers" and labelled Rust
-  "Overall Fastest" with no JSON baseline measured, while the same table showed Go's Sonic
-  parsing faster.
+- Schema error codes `ERR_SCHEMA_INVALID`, `ERR_SCHEMA_REQUIRED`, `ERR_SCHEMA_RANGE`,
+  `ERR_SCHEMA_ENUM`, and `ERR_SCHEMA_UNKNOWN_FIELD`.
+- Schema keywords `optional`, `nullable`, `const`, `enum`, `integer`, `items`, `fields`, and
+  `additional`, joining `type`, `min`, `max`, and `scale`.
 
 ### Changed
 
@@ -119,8 +103,37 @@ the reference implementations may change incompatibly at any time.
 - `ERR_NESTED_CONSTRUCTOR` has a precise trigger: `(` encountered while scanning a payload.
 - `ERR_DOCUMENT_SIZE` and `ERR_PAYLOAD_SIZE` are marked OPTIONAL with no default limit.
 
+### Removed
+
+- Dead test files: `tests/conformance/run_all.mjs`, `run_conformance.mjs`, and the stale
+  `results_ts.json`, `results_python.json`, `results_zig.json` outputs (Zig was pruned
+  earlier). Nothing referenced them.
+- `doc/edge-cases.md`. Every rule it stated is now in the specification with more precision
+  (§6.3, §10.2, §10.4, §10.5), and the duplicate had already drifted — it claimed `BINARY`
+  padding was mandatory, which is wrong for payloads whose length is already a multiple of 4.
+
 ### Fixed
 
+- **BREAKING — `schema.md` rewritten.** A schema is now expressed in plain STF, with constraints
+  as objects: ``{ type: `String`, min: 1, max: 100 }``. The previous draft used a DSL
+  (`String(min: 1, max: 100)`, `BINARY?`, `Array<String>`, bare `DATE`) that was **not valid
+  STF** — every line of its own example failed to parse — while §1 claimed a schema document was
+  itself a valid STF document. Plain STF honours that claim and means the core parser,
+  formatter, linter, and editor tooling work on schema files with no second grammar to
+  implement. Constraint bounds are real STF values, so `min: DECIMAL(0.00)` retains its scale.
+- `schema.md` type names are TitleCase and map one-to-one onto the eleven data-model kinds of
+  spec §3. The incoherent `Int` type ("floating-point or 64-bit integer") is replaced by
+  `Number` with an `integer: T` constraint.
+- `schema.md` corrected `scale ≤ 34` to the 0–6143 range of spec §10.2. Scale and significant
+  digits are different quantities; the 34-digit cap applies to the coefficient.
+- `comparison.md` no longer rates STF's parsing speed as "Extreme" against JSON's "Very Fast",
+  and drops the claim of SIMD-accelerated parsing, which no implementation performs. Performance
+  claims now match what the repository's benchmarks measure, including the cases where a native
+  JSON parser is faster, and carry a caveat that the figures are not comparable across languages.
+- `README.md` performance section rewritten on the same basis. It previously claimed compiled
+  STF implementations "outperform standard JSON parsers and serializers" and labelled Rust
+  "Overall Fastest" with no JSON baseline measured, while the same table showed Go's Sonic
+  parsing faster.
 - The EBNF grammar now threads `ws` through objects and arrays. The previous grammar rejected
   `{ a: 1 }` with spaces around the braces and commas, contradicting the prose and every example.
 - Carriage return is defined as whitespace on its own. The prose previously described it only

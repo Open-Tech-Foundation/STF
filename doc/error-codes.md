@@ -82,8 +82,13 @@ Raised by `stf-schema`, never by a core parser. See [schema.md](schema.md).
 
 | Code | Meaning |
 | :--- | :--- |
-| `ERR_SCHEMA_TYPE_MISMATCH` | Value kind does not match the required schema type. |
+| `ERR_SCHEMA_INVALID` | The schema document itself is malformed, or a keyword or bound is unusable. |
+| `ERR_SCHEMA_TYPE_MISMATCH` | Value kind does not match `type`, or `N` where `nullable: F`. |
+| `ERR_SCHEMA_REQUIRED` | A key with `optional: F` is absent. |
+| `ERR_SCHEMA_RANGE` | `min`, `max`, or `integer` violated. |
 | `ERR_SCHEMA_SCALE_MISMATCH` | Decimal scale does not match the required `scale`. Message MUST state expected vs actual. |
+| `ERR_SCHEMA_ENUM` | `const` or `enum` violated. |
+| `ERR_SCHEMA_UNKNOWN_FIELD` | A key is not named in `fields` and `additional: F`. |
 
 ---
 
