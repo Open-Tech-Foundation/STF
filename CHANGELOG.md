@@ -188,6 +188,21 @@ the reference implementations may change incompatibly at any time.
 
 ### Removed
 
+- **`eslint-plugin-stf` and `prettier-plugin-stf`**, along with the root `eslint.config.js`,
+  `.prettierrc`, and `package-lock.json` that wired them up. Both plugins were broken and
+  redundant. `prettier-plugin-stf` loaded `ref-impl/ts/dist/dtxt.cjs`, a path deleted with the
+  TypeScript implementation, so it could not be loaded at all. `eslint-plugin-stf` hand-rolled
+  a second STF parser whose keyword list was `Date`/`BigNumber`/`Binary` — pre-1.0 names that
+  are not STF constructors — and its three rules only restated conformance failures that the
+  real parser already rejects with exact error codes. Keeping a second, drifting parser to
+  duplicate `stf fmt` and `stf lint` is not worth the maintenance. The root config files
+  referenced `./prettier-plugin-dtxt/` and `./eslint-plugin-dtxt/`, directories that no longer
+  existed under those names, and the root lockfile was still named `DTXT` and pinned an
+  `@assemblyscript/loader` dependency that `package.json` had already dropped.
+  Formatting and linting are now the `stf` CLI's job (`stf fmt`, `stf lint`), backed by the
+  normative parser, with an LSP server serving editors. Migrating to Biome instead was considered
+  and rejected: its plugin system queries the CST of languages Biome already parses and cannot
+  register a new one, so STF cannot be supported there by a third party at all.
 - `tests/conformance/tests.json`, the superseded pre-1.0 corpus. All four implementations now
   run `corpus.json`, so the 93-case suite that reported everyone passing while they disagreed
   on 25 of 80 edge cases has no remaining reader.
