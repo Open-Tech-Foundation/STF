@@ -2,8 +2,14 @@
   "$schema": "https://raw.githubusercontent.com/Prior99/textmate-json-schema/main/schema.json",
   "name": "STF",
   "scopeName": "source.stf",
-  "fileTypes": ["stf"],
+  "fileTypes": [
+    "stf",
+    "stfs"
+  ],
   "patterns": [
+    {
+      "include": "#directives"
+    },
     {
       "include": "#comments"
     },
@@ -32,6 +38,31 @@
         {
           "name": "comment.line.number-sign.stf",
           "match": "#.*$"
+        }
+      ]
+    },
+    "directives": {
+      "patterns": [
+        {
+          "name": "meta.directive.stf",
+          "match": "(@)([A-Za-z0-9_-]+)(\\()([^)]*)(\\))",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.directive.stf"
+            },
+            "2": {
+              "name": "keyword.control.directive.stf"
+            },
+            "3": {
+              "name": "punctuation.definition.directive.begin.stf"
+            },
+            "4": {
+              "name": "string.other.directive.payload.stf"
+            },
+            "5": {
+              "name": "punctuation.definition.directive.end.stf"
+            }
+          }
         }
       ]
     },

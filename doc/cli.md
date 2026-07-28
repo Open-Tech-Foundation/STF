@@ -191,8 +191,8 @@ vim.lsp.config.stf = {
 vim.lsp.enable('stf')
 ```
 
-The VS Code extension under [`vscode-stf/`](../vscode-stf/) still does its own heuristic
-checking and does not yet launch this server.
+VS Code users install the extension under [`vscode-stf/`](../vscode-stf/), which launches this
+server; it needs `stf` on `PATH`, or `stf.server.path` pointed at it.
 
 ---
 

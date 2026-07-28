@@ -7,6 +7,7 @@
     "conformance": "./scripts/check_conformance.sh",
     "conformance:js": "node tests/conformance/run_js.mjs",
     "test:js": "node --test ref-impl/js/",
-    "corpus": "python3 tests/conformance/build_corpus.py"
+    "corpus": "python3 tests/conformance/build_corpus.py",
+    "test:vscode": "npm --prefix vscode-stf test"
   }
 }

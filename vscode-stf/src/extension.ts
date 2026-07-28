@@ -1,193 +1,97 @@
+// The extension is a launcher, nothing more.
+//
+// Every diagnostic, code, and formatting decision comes from `stf lsp`, which runs the
+// reference parser. An extension that checked STF itself would be a second, approximate
+// implementation of the specification — which is what this one used to be, and why its
+// warnings disagreed with `stf check`.
+
 import * as vscode from 'vscode';
+import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 
-let diagnosticCollection: vscode.DiagnosticCollection;
+let client: LanguageClient | undefined;
 
-export function activate(context: vscode.ExtensionContext) {
-    console.log('STF extension activated');
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    context.subscriptions.push(
+        vscode.commands.registerCommand('stf.restartServer', () => restart(context))
+    );
 
-    diagnosticCollection = vscode.languages.createDiagnosticCollection('stf');
-    context.subscriptions.push(diagnosticCollection);
+    // A changed server path is only meaningful after a restart, so offer one rather than
+    // leaving the old process running against the new setting.
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(async (event) => {
+            if (event.affectsConfiguration('stf.server')) {
+                await restart(context);
+            }
+        })
+    );
 
-    const validateDocument = async (document: vscode.TextDocument) => {
-        if (document.languageId === 'stf') {
-            await validateSTF(document);
-        }
+    await start(context);
+}
+
+async function start(context: vscode.ExtensionContext): Promise<void> {
+    const configuration = vscode.workspace.getConfiguration('stf');
+    const command = configuration.get<string>('server.path', 'stf').trim() || 'stf';
+    const args = [...configuration.get<string[]>('server.args', []), 'lsp'];
+
+    const serverOptions: ServerOptions = {
+        run: { command, args, transport: TransportKind.stdio },
+        debug: { command, args, transport: TransportKind.stdio }
     };
 
-    vscode.workspace.onDidOpenTextDocument(validateDocument, null, context.subscriptions);
+    const clientOptions: LanguageClientOptions = {
+        documentSelector: [{ scheme: 'file', language: 'stf' }],
+        // `.stf` and `.stfs` are one language; the server reads the URI's extension to decide
+        // whether to frame the document as a stream.
+        synchronize: { fileEvents: vscode.workspace.createFileSystemWatcher('**/*.stf{,s}') }
+    };
 
-    let timeout: NodeJS.Timeout | undefined;
-    vscode.workspace.onDidChangeTextDocument((event) => {
-        if (event.document.languageId === 'stf') {
-            if (timeout) {
-                clearTimeout(timeout);
-            }
-            timeout = setTimeout(() => {
-                validateDocument(event.document);
-            }, 500);
-        }
-    }, null, context.subscriptions);
+    // Not pushed onto `context.subscriptions`: a restart replaces the client, and the disposed
+    // ones would accumulate there for the life of the window. `deactivate` stops the live one.
+    client = new LanguageClient('stf', 'STF Language Server', serverOptions, clientOptions);
 
-    vscode.workspace.onDidSaveTextDocument(validateDocument, null, context.subscriptions);
-
-    vscode.workspace.textDocuments.forEach(doc => {
-        if (doc.languageId === 'stf') {
-            validateDocument(doc);
-        }
-    });
-
-    const validateCommand = vscode.commands.registerCommand('stf.validate', () => {
-        const editor = vscode.window.activeTextEditor;
-        if (editor && editor.document.languageId === 'stf') {
-            validateDocument(editor.document);
-            vscode.window.showInformationMessage('STF validation complete');
-        }
-    });
-    context.subscriptions.push(validateCommand);
-}
-
-async function validateSTF(document: vscode.TextDocument): Promise<void> {
-    const diagnostics: vscode.Diagnostic[] = [];
-    const text = document.getText();
-    
     try {
-        const errors = validateSTFSyntax(text);
-        
-        for (const error of errors) {
-            const diagnostic = createDiagnostic(document, error);
-            if (diagnostic) {
-                diagnostics.push(diagnostic);
-            }
-        }
-    } catch (e: any) {
-        const range = new vscode.Range(0, 0, 0, 1);
-        const diagnostic = new vscode.Diagnostic(
-            range,
-            `STF Validation Error: ${e.message || e}`,
-            vscode.DiagnosticSeverity.Error
-        );
-        diagnostics.push(diagnostic);
+        await client.start();
+    } catch (error) {
+        client = undefined;
+        await reportMissingServer(command, error);
     }
-
-    diagnosticCollection.set(document.uri, diagnostics);
 }
 
-interface STFError {
-    message: string;
-    line: number;
-    column?: number;
-    severity?: 'error' | 'warning';
+async function restart(context: vscode.ExtensionContext): Promise<void> {
+    await stop();
+    await start(context);
 }
 
-function validateSTFSyntax(text: string): STFError[] {
-    const errors: STFError[] = [];
-    const lines = text.split('\n');
-    
-    let depth = 0;
-    let inString = false;
-    let stringChar = '';
-    let inComment = false;
-    
-    for (let lineNum = 0; lineNum < lines.length; lineNum++) {
-        const line = lines[lineNum];
-        inComment = false;
-        
-        for (let i = 0; i < line.length; i++) {
-            const ch = line[i];
-            
-            if (inComment) continue;
-            if (ch === '#') {
-                inComment = true;
-                continue;
-            }
-            
-            if (inString) {
-                if (ch === stringChar && (i === 0 || line[i-1] !== '\\')) {
-                    inString = false;
-                }
-                continue;
-            }
-            
-            if (ch === '`' || ch === '"') {
-                inString = true;
-                stringChar = ch;
-                continue;
-            }
-            
-            if (ch === '{' || ch === '[') {
-                depth++;
-            } else if (ch === '}' || ch === ']') {
-                depth--;
-                if (depth < 0) {
-                    errors.push({
-                        message: 'ERR_SYNTAX: Unexpected closing bracket',
-                        line: lineNum,
-                        column: i,
-                        severity: 'error'
-                    });
-                    depth = 0;
-                }
-            }
-        }
+async function stop(): Promise<void> {
+    const running = client;
+    client = undefined;
+    if (running) {
+        await running.stop();
     }
-    
-    if (inString) {
-        errors.push({
-            message: 'ERR_UNTERMINATED: Unterminated string literal',
-            line: lines.length - 1,
-            severity: 'error'
-        });
-    }
-    
-    if (depth > 0) {
-        errors.push({
-            message: 'ERR_UNTERMINATED: Unbalanced brackets',
-            line: lines.length - 1,
-            severity: 'error'
-        });
-    }
-    
-    return errors;
 }
 
-function createDiagnostic(document: vscode.TextDocument, error: STFError): vscode.Diagnostic | null {
-    const line = error.line !== undefined ? error.line : 0;
-    const column = error.column !== undefined ? error.column : 0;
-    
-    if (line >= document.lineCount) {
-        return null;
-    }
-    
-    const lineText = document.lineAt(line);
-    const startCol = column < lineText.text.length ? column : 0;
-    const endCol = lineText.text.length;
-    
-    const range = new vscode.Range(line, startCol, line, endCol);
-    let severity = vscode.DiagnosticSeverity.Error;
-    if (error.severity === 'warning') {
-        severity = vscode.DiagnosticSeverity.Warning;
-    }
-    
-    const diagnostic = new vscode.Diagnostic(
-        range,
-        error.message,
-        severity
+/// The server is a separate binary, so "not installed" is the one failure a user will
+/// actually hit. Say which command failed and how to get it, rather than logging to a channel
+/// nobody has open.
+async function reportMissingServer(command: string, error: unknown): Promise<void> {
+    const detail = error instanceof Error ? error.message : String(error);
+    const install = 'Installation instructions';
+    const setPath = 'Set server path';
+    const choice = await vscode.window.showErrorMessage(
+        `STF: could not start \`${command} lsp\`. Install the \`stf\` command-line tool, or set ` +
+            `\`stf.server.path\` to its location. (${detail})`,
+        install,
+        setPath
     );
-    
-    diagnostic.source = 'stf';
-    
-    if (error.message.includes('ERR_SYNTAX')) {
-        diagnostic.code = 'ERR_SYNTAX';
-    } else if (error.message.includes('ERR_UNTERMINATED')) {
-        diagnostic.code = 'ERR_UNTERMINATED';
+    if (choice === install) {
+        await vscode.env.openExternal(
+            vscode.Uri.parse('https://github.com/Open-Tech-Foundation/STF#command-line-tool')
+        );
+    } else if (choice === setPath) {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'stf.server.path');
     }
-    
-    return diagnostic;
 }
 
-export function deactivate() {
-    if (diagnosticCollection) {
-        diagnosticCollection.clear();
-        diagnosticCollection.dispose();
-    }
+export async function deactivate(): Promise<void> {
+    await stop();
 }

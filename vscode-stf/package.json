@@ -1,15 +1,15 @@
 {
   "name": "stf",
   "displayName": "STF Support",
-  "description": "STF (Structured Text Format) syntax highlighting and validation",
-  "version": "1.0.0",
+  "description": "STF (Structured Text Format) syntax highlighting, diagnostics, and formatting, powered by the stf language server",
+  "version": "2.0.0",
   "publisher": "opentf",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Open-Tech-Foundation/DTXT.git"
+    "url": "git+https://github.com/Open-Tech-Foundation/STF.git"
   },
   "engines": {
-    "vscode": "^1.80.0"
+    "vscode": "^1.91.0"
   },
   "categories": [
     "Programming Languages",
@@ -35,7 +35,8 @@
           "Structured Text Format"
         ],
         "extensions": [
-          ".stf"
+          ".stf",
+          ".stfs"
         ],
         "configuration": "./language-configuration.json"
       }
@@ -46,17 +47,58 @@
         "scopeName": "source.stf",
         "path": "./syntaxes/stf.tmLanguage.json"
       }
-    ]
+    ],
+    "commands": [
+      {
+        "command": "stf.restartServer",
+        "title": "Restart Language Server",
+        "category": "STF"
+      }
+    ],
+    "configuration": {
+      "title": "STF",
+      "properties": {
+        "stf.server.path": {
+          "type": "string",
+          "default": "stf",
+          "markdownDescription": "Path to the `stf` command-line tool. The extension runs `stf lsp`; install it with `cargo install --path ref-impl/rust`."
+        },
+        "stf.server.args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra arguments passed before `lsp`."
+        },
+        "stf.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Log the traffic between VS Code and the STF language server."
+        }
+      }
+    }
   },
   "scripts": {
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "typecheck": "tsc -p ./ --noEmit",
+    "test": "npm run typecheck && node tests/manifest.test.js",
+    "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^10.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@types/vscode": "^1.80.0",
+    "@types/vscode": "^1.91.0",
     "typescript": "^5.0.0"
   },
-  "license": "ISC",
+  "license": "CC0-1.0",
   "type": "commonjs"
 }

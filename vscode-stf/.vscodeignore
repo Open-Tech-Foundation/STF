@@ -1,22 +1,16 @@
-# Ignore development files
-node_modules/
-src/
-out/test/
-.gitignore
+# Build inputs. `out/extension.js` is what ships; the TypeScript that produced it is not.
+src/**
 tsconfig.json
-*.ts
-*.map
+**/*.ts
+**/*.map
+tests/**
+.vscode-test/**
+.gitignore
 
-# Ignore test files
-test/
-.vscode-test/
-
-# Ignore docs
+# Docs, except the one the marketplace renders.
 *.md
 !README.md
 
-# Keep these
-!syntaxes/
-!language-configuration.json
-!out/extension.js
-!out/extension.js.map
+# `node_modules` is deliberately not ignored. `vscode-languageclient` is a runtime
+# dependency and vsce prunes devDependencies itself, so excluding the directory would
+# package an extension that cannot start.

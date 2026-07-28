@@ -120,7 +120,9 @@ diagnostics and formatting from the reference parser itself — the same normati
 `stf check` reports in CI, and the same warnings as `stf lint`, never a second approximate
 implementation. `.stf` documents and `.stfs` streams are both served.
 
-Configuration is per editor; see [doc/cli.md §8](doc/cli.md#8-lsp--editor-integration).
+Configuration is per editor; see [doc/cli.md §8](doc/cli.md#8-lsp--editor-integration). VS Code
+has no built-in client for a new language, so it uses the extension in
+[`vscode-stf/`](vscode-stf/), which launches the same server.
 
 ## Reference Implementations
 

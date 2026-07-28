@@ -64,3 +64,6 @@ zig-out/
 # Benchmark datasets. Regenerable from a fixed seed by each implementation's benchmark.
 benchmarks/*/bench_*.stf
 benchmarks/*/bench_*.json
+
+# VS Code extension build output
+/vscode-stf/out/

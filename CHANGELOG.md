@@ -28,6 +28,8 @@ the reference implementations may change incompatibly at any time.
   - Positions are converted to UTF-16 code units, the protocol's default encoding, which is
     neither what `Error` carries (byte offsets) nor what it reports (Unicode scalar columns).
     The server advertises `positionEncoding` explicitly.
+- **Directive highlighting** in the TextMate grammar (`syntax/stf.tmLanguage.json`), which had
+  no rule for `@name(payload)` at all, and `.stfs` added to its file types.
 - **`stf::lint`** — the lint rules as a library module returning structured warnings anchored to
   byte ranges. `stf lint` and the language server now share it, so the two cannot drift apart.
 - **Source spans in the parser**, opt-in via `parse_document_with_spans` and
@@ -183,6 +185,20 @@ the reference implementations may change incompatibly at any time.
 
 ### Changed
 
+- **BREAKING — the VS Code extension is now a launcher for `stf lsp`** and requires the `stf`
+  binary on `PATH`, or `stf.server.path` pointed at it. All 193 lines of `src/extension.ts`
+  were an approximation of the grammar — a bracket counter that could report only `ERR_SYNTAX`
+  and `ERR_UNTERMINATED`, missed every other rejection the specification defines, and flagged
+  valid documents. It is replaced by a client that starts the server and gets the real
+  diagnostics, so the editor and CI can no longer disagree. Formatting, which the extension
+  never implemented, comes with it, as does per-record diagnosis of `.stfs` files. Settings
+  `stf.server.path`, `stf.server.args`, and `stf.trace.server`, and the command
+  **STF: Restart Language Server**, are new.
+- The extension's manifest was still pointing at the `DTXT` repository, declared only `.stf`
+  (never `.stfs`), and claimed an ISC licence in a CC0 repository. Its `README` documented
+  `Date()`, `BigNumber()`, and `Binary()` — constructors that have not existed since the 1.0
+  rename — and a `.dtxt` file extension.
+- `tsconfig.json` moved to `node16` module resolution, which `vscode-languageclient` requires.
 - **`stf lint` warnings now carry a line and column** — `FILE:LINE:COLUMN: warning: …`, the form
   errors already used. Previously a document warning carried no position at all and a stream
   warning carried the record's index rather than its line number, so neither could be clicked
@@ -235,6 +251,10 @@ the reference implementations may change incompatibly at any time.
   normative parser, with an LSP server serving editors. Migrating to Biome instead was considered
   and rejected: its plugin system queries the CST of languages Biome already parses and cannot
   register a new one, so STF cannot be supported there by a third party at all.
+- The VS Code extension's committed build output (`vscode-stf/out/`), now gitignored and
+  produced by `npm run compile`, and a stray `package.json.tmp`. Its `.vscodeignore` no longer
+  excludes `node_modules`, which would have packaged an extension whose runtime dependency was
+  missing.
 - `tests/conformance/tests.json`, the superseded pre-1.0 corpus. All four implementations now
   run `corpus.json`, so the 93-case suite that reported everyone passing while they disagreed
   on 25 of 80 edge cases has no remaining reader.
