@@ -10,9 +10,17 @@ bun run dev      # dev server
 bun run build    # static site into dist/
 ```
 
-Use **bun 1.4.0** — the version in `.bun-version`. `bun.lock` is written in a version-specific
-format, so a different bun rewrites it, and a *newer* bun writes a lockfile older ones refuse to
-parse at all.
+The toolchain is pinned in [`mise.toml`](mise.toml), so with
+[mise](https://mise.jdx.dev) installed the right bun is used automatically:
+
+```sh
+mise install                 # once
+mise exec -- bun install
+```
+
+The pin matters. `bun.lock` is written in a version-specific format, and a *newer* bun writes a
+lockfile older ones refuse to parse — a 1.4 canary writes `lockfileVersion: 2`, which no
+released bun can read.
 
 ## Deploying (Cloudflare)
 
@@ -29,7 +37,7 @@ Builds settings — the version can only be pinned there, not from the repositor
 
 | Setting | Value | Where |
 | :--- | :--- | :--- |
-| `BUN_VERSION` | `1.4.0` | Environment variable — dashboard only |
+| `BUN_VERSION` | `1.3.14` | Environment variable — dashboard only |
 | Build command | `bun install --frozen-lockfile && bun run build` | Dashboard |
 | Root directory | `website` | Dashboard |
 | Assets directory | `./dist` | [`wrangler.jsonc`](wrangler.jsonc) |
@@ -40,7 +48,7 @@ above are the ones Cloudflare cannot read from the repository.
 The build command has to run `bun install` itself: Cloudflare installs dependencies
 automatically for package managers it detects, but **not** once `BUN_VERSION` is set.
 
-Keep `BUN_VERSION`, `.bun-version`, and the `bun-version` pinned in
+Keep `BUN_VERSION`, [`mise.toml`](mise.toml), `.bun-version`, and the `bun-version` pinned in
 `.github/workflows/ci.yml` on the same value. If they drift, CI and the deployment disagree
 about the lockfile and only one of them fails.
 
