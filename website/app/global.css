@@ -552,6 +552,11 @@ body {
 }
 
 .pg-pane {
+  /* A fixed pane height with a flexing body keeps both panes identical whatever their bars
+   * wrap to — the left one carries a filename and the sample chips, the right a select. */
+  display: flex;
+  flex-direction: column;
+  height: 34rem;
   overflow: hidden;
   background: #0b1020;
   border: 1px solid #1e2440;
@@ -603,13 +608,20 @@ body {
   cursor: default;
 }
 
-/* Monaco sizes itself to its container, so the container must have a height. */
 .pg-editor {
-  height: 26rem;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* CodeMirror fills the pane rather than growing with the document. */
+.pg-editor .cm-editor {
+  height: 100%;
 }
 
 .pg-output {
-  height: 26rem;
+  flex: 1;
+  min-height: 0;
   margin: 0;
   padding: 0.85rem 1rem;
   overflow: auto;
@@ -673,8 +685,7 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .pg-editor,
-  .pg-output {
-    height: 20rem;
+  .pg-pane {
+    height: 26rem;
   }
 }

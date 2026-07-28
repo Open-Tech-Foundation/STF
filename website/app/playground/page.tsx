@@ -40,6 +40,15 @@ export default function Playground() {
   const targetNote = $derived(TARGETS.find((t) => t.id === target)?.note ?? "");
   const outputIsStf = $derived(target === "canonical" || target === "formatted");
 
+  // Derived strings rather than conditional markup: a text binding inside a ternary is still
+  // evaluated by its effect, so `digest.slice(…)` threw while the digest was still null.
+  const statusClass = $derived(outcome.parseError ? "pg-bad" : "pg-good");
+  const statusText = $derived(
+    outcome.parseError
+      ? `${outcome.parseError.code} at ${outcome.parseError.line}:${outcome.parseError.column} — ${outcome.parseError.message}`
+      : `valid · ${outcome.valueCount} values${digest ? ` · sha256 ${digest.slice(0, 16)}…` : ""}`,
+  );
+
   onMount(() => {
     view = new EditorView({
       doc: source,
@@ -101,17 +110,7 @@ export default function Playground() {
               </div>
               <div class="pg-editor" ref={editorHost} />
               <div class="pg-status">
-                {outcome.parseError ? (
-                  <span class="pg-bad">
-                    <code>{outcome.parseError.code}</code> at {outcome.parseError.line}:
-                    {outcome.parseError.column} — {outcome.parseError.message}
-                  </span>
-                ) : (
-                  <span class="pg-good">
-                    valid · {outcome.valueCount} values
-                    {digest ? <span class="pg-digest"> · sha256 {digest.slice(0, 16)}…</span> : null}
-                  </span>
-                )}
+                <span class={statusClass}>{statusText}</span>
               </div>
             </div>
 
