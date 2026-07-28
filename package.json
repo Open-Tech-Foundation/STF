@@ -1,7 +1,12 @@
 {
+  "name": "stf-workspace",
+  "private": true,
   "type": "module",
-  "dependencies": {
-    "@assemblyscript/loader": "^0.28.17"
+  "description": "Workspace root for the STF specification and reference implementations",
+  "scripts": {
+    "conformance": "./scripts/check_conformance.sh",
+    "conformance:js": "node tests/conformance/run_js.mjs",
+    "test:js": "node --test ref-impl/js/",
+    "corpus": "python3 tests/conformance/build_corpus.py"
   }
-}
 }

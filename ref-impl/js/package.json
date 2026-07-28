@@ -1,18 +1,27 @@
 {
-  "name": "ts",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "@open-tech-foundation/stf",
+  "version": "0.1.0",
+  "description": "Reference implementation of STF 1.0 — the Structured Text Format",
+  "license": "CC0-1.0",
   "type": "module",
-  "scripts": {
-    "test": "ts-node-esm test_dtxt.ts"
+  "main": "stf.ts",
+  "exports": {
+    ".": "./stf.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "files": [
+    "*.ts"
+  ],
+  "scripts": {
+    "test": "node --test \"*.test.ts\"",
+    "conformance": "node ../../tests/conformance/run_js.mjs",
+    "benchmark": "node benchmark.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
   "devDependencies": {
     "@types/node": "^25.0.8",
-    "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }
 }

@@ -110,6 +110,20 @@ the reference implementations may change incompatibly at any time.
   - Exit codes: `0` success, `1` rejected input, `2` usage error.
 - 21 end-to-end CLI tests driving the real binary, covering exit codes, the stdout/stderr
   split, in-place rewriting, idempotence, and stream line numbering.
+- **JavaScript reference implementation rewritten for STF 1.0** — **258/258**, up from 158/258,
+  plus 39 unit tests. Split from one 778-line file into `errors`, `value`, `constructors`,
+  `parser`, `serialize`, `stream`, and `json` modules, mirroring the Rust layout.
+  - Typed values are distinct host types: `STFDecimal`, `STFDate`, and `STFTimestamp` classes,
+    the native `bigint` primitive, and `Uint8Array` for `BINARY`. No `$decimal:` strings.
+  - `STFError` carries the normative code as a `.code` property, plus line and column. Callers
+    no longer have to regex the message.
+  - Member order survives a round trip even for keys JavaScript hoists. A plain object reorders
+    array-index-like keys, so `{b: 1, 123: 2}` would otherwise serialize with `123` first; the
+    authored order is recorded on a symbol and honoured by the serializer.
+  - Adds Canonical Form, the STF Stream profile with both read policies, and JSON interchange.
+  - `fromJSONText` rejects an integer `JSON.parse` would silently round, by scanning the source
+    text before parsing.
+- Corpus and unit-test scripts in `package.json`: `npm run conformance`, `npm test`.
 
 ### Changed
 
@@ -146,6 +160,9 @@ the reference implementations may change incompatibly at any time.
 
 ### Removed
 
+- `ref-impl/js/run_conformance.ts` and `test_stf.ts`, which ran the superseded pre-1.0
+  `tests.json`, and `repro_format.ts`, a scratch file importing a `dtxt.ts` that no longer
+  exists.
 - `stf-convert.ts`, superseded by the `stf` binary. Nothing referenced it, and it did the
   silent repair the project now refuses: given JSON whose root is not an object it invented a
   wrapper key, and given ordinary JSON it could emit STF that no parser accepts.
@@ -190,6 +207,10 @@ the reference implementations may change incompatibly at any time.
 - Spec §6.2 now says how to distinguish whitespace inside a key (`{a b: 1}`,
   `ERR_INVALID_IDENTIFIER`) from a missing colon (`{a 1}`, `ERR_MISSING_COLON`). Both are a
   key followed by whitespace and an unexpected token; only the following context separates them.
+- The root `package.json` was not valid JSON — it carried a stray trailing `}`, so every tool
+  that read it failed. It also declared an `@assemblyscript/loader` dependency that nothing
+  imported. `ref-impl/js/package.json` pointed `main` at a non-existent `index.js` and ran a
+  `test` script for a `test_dtxt.ts` that no longer exists.
 - `scripts/check_conformance.sh` ran the superseded pre-1.0 per-implementation suites, stopped
   at the first failure because of `set -e`, and then printed "All reference implementations
   passed" regardless. It now runs the 1.0 corpus runners, reports every implementation, and

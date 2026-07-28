@@ -91,12 +91,12 @@ a string can never satisfy a `DECIMAL` expectation.
 | Implementation | Corpus | Notes |
 | :--- | :--- | :--- |
 | **Rust** | **258/258** | Conformant. The reference implementation. |
-| JavaScript | 158/258 | Typed values still returned as strings; error codes inexact |
-| Python | not yet run | Also returns exact integers past 2^53 (spec §7.2 requires binary64) |
-| Go | not yet run | Also drops non-BMP characters in interpreted strings |
+| **JavaScript** | **258/258** | Conformant. |
+| Python | not yet run | Returns exact integers past 2^53 (spec §7.2 requires binary64) |
+| Go | not yet run | Drops non-BMP characters in interpreted strings |
 
-The remaining gap in the other three is spec §3.1: typed values are represented as strings with
-a marker prefix (`"$decimal:1.5"`), which cannot be distinguished from a user string of the same
+The remaining gap in Python and Go is spec §3.1: typed values are represented as strings with a
+marker prefix (`"$decimal:1.5"`), which cannot be distinguished from a user string of the same
 text and causes serialization to emit unparseable documents.
 
 ## Command-Line Tool
@@ -116,7 +116,7 @@ Full reference: [doc/cli.md](doc/cli.md).
 ## Reference Implementations
 
 - [Rust](ref-impl/rust/) — conformant; the reference
-- [JavaScript / TypeScript](ref-impl/js/)
+- [JavaScript / TypeScript](ref-impl/js/) — conformant
 - [Python](ref-impl/python/)
 - [Go](ref-impl/go/)
 
