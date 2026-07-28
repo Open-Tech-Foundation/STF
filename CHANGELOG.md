@@ -28,13 +28,20 @@ the reference implementations may change incompatibly at any time.
   - Positions are converted to UTF-16 code units, the protocol's default encoding, which is
     neither what `Error` carries (byte offsets) nor what it reports (Unicode scalar columns).
     The server advertises `positionEncoding` explicitly.
+- **`website/` — the new site**, scaffolded with [OTF Web](https://github.com/Open-Tech-Foundation/Web-App-Framework),
+  the Open Tech Foundation's own framework, using its documentation template (MDX pages,
+  generated sidebar and table of contents, static output). It carries an STF landing page, a
+  documentation section with an introduction page, and a placeholder playground route. The
+  normative documents under `doc/` are unchanged and remain the source of truth; migrating
+  them onto the site, and building the playground on the JavaScript reference implementation,
+  are still to do. `site.url` is provisional.
 - **Continuous integration** (`.github/workflows/ci.yml`), on every push to `main` and every
   pull request. Until now the repository's only workflow deployed the playground, so nothing
   checked that the four implementations still agreed — the conformance corpus was the
-  executable contract and no machine ran it. Seven jobs: the full conformance script across
+  executable contract and no machine ran it. Eight jobs: the full conformance script across
   all four implementations, a check that `corpus.json` is exactly what `build_corpus.py`
   emits, the Rust library/CLI/language-server tests plus a release-build smoke test, the
-  JavaScript, Python, and Go unit tests, and the VS Code extension's tests.
+  JavaScript, Python, and Go unit tests, the website build, and the VS Code extension's tests.
 - Root `package.json` scripts for each implementation's tests (`test:rust`, `test:python`,
   `test:go`, `test:vscode`), so the CI jobs can be reproduced locally one at a time.
 - **Directive highlighting** in the TextMate grammar (`syntax/stf.tmLanguage.json`), which had

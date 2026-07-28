@@ -1,0 +1,54 @@
+---
+title: Introduction
+description: What STF is, why it exists, and where the normative documents live.
+---
+
+# STF
+
+**STF (Structured Text Format)** is a human-readable, structured data format for configuration
+and data interchange. It is designed to **replace** JSON, JSONC, JSON5, NDJSON, and JSONL for
+new work — not to be a superset of them.
+
+```stf
+# A configuration file
+{
+  service: `checkout-api`,
+  port: 8080,
+  enabled: T,
+  deploy_after: TIMESTAMP(2026-01-15T10:30:00Z),
+  price_cap: DECIMAL(199.00),        # exact — scale is preserved
+  account_id: BIGINT(9007199254740993),
+  regions: [`eu-west-1`, `us-east-1`],
+}
+```
+
+## The problem it solves
+
+JSON forces every non-primitive type through a string, so a reader cannot tell a date from a
+string that looks like one, and `19.99` is never exactly 19.99.
+
+| JSON | STF |
+| :--- | :--- |
+| `"created": "2026-01-15"` — date, or string? | `created: DATE(2026-01-15)` |
+| `"id": "9007199254740993"` — string to survive `JSON.parse` | `id: BIGINT(9007199254740993)` |
+| `"price": 19.99` — binary64, not exact | `price: DECIMAL(19.99)` |
+
+Because STF replaces JSON rather than extending it, some valid JSON has no STF representation.
+Conversion fails loudly rather than guessing.
+
+## Status
+
+The 1.0 draft specification is complete, and four reference implementations — Rust,
+JavaScript, Python, and Go — each pass all 258 cases of the conformance corpus. The format is
+still pre-release and may change incompatibly.
+
+## Where the documents live
+
+The normative documents are in the repository and remain the source of truth. These pages are
+being migrated from them.
+
+- [Specification](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/spec.md)
+- [Error codes](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/error-codes.md)
+- [Stream profile](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/stream.md)
+- [Schema](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/schema.md)
+- [Command-line tool](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/cli.md)

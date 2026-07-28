@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>STF — Structured Text Format</title>
+    <meta
+      name="description"
+      content="STF is a human-readable data format with explicit types: dates, decimals, big integers, and binary are part of the syntax, not string conventions."
+    />
+    <!-- Apply the saved/system theme before first paint to avoid a flash. -->
+    <script>
+      (function () {
+        try {
+          var t =
+            localStorage.getItem("theme") ||
+            (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="/app/global.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>

@@ -122,6 +122,11 @@ Configuration is per editor; see [doc/cli.md §8](doc/cli.md#8-lsp--editor-integ
 has no built-in client for a new language, so it uses the extension in
 [`vscode-stf/`](vscode-stf/), which launches the same server.
 
+## Website
+
+The marketing site, documentation, and playground live in [`website/`](website/), built with
+[OTF Web](https://github.com/Open-Tech-Foundation/Web-App-Framework). `bun install && bun run dev`.
+
 ## Reference Implementations
 
 All four are conformant with STF 1.0.

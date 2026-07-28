@@ -121,6 +121,20 @@ jobs:
       - run: go vet ./...
         working-directory: ref-impl/go
 
+  website:
+    name: Website builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The site is a bun project — bun.lock is its lockfile, and npm would ignore it.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+        working-directory: website
+      - run: bun run build
+        working-directory: website
+
   vscode:
     name: VS Code extension
     runs-on: ubuntu-latest
