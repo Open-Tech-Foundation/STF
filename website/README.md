@@ -27,12 +27,15 @@ error: lockfile had changes, but lockfile is frozen
 The lockfile is fine; the build image's bun is too old to read it. Set these in the Workers
 Builds settings — the version can only be pinned there, not from the repository:
 
-| Setting | Value |
-| :--- | :--- |
-| Environment variable | `BUN_VERSION` = `1.4.0` |
-| Build command | `bun install --frozen-lockfile && bun run build` |
-| Build output directory | `website/dist` |
-| Root directory | `website` |
+| Setting | Value | Where |
+| :--- | :--- | :--- |
+| `BUN_VERSION` | `1.4.0` | Environment variable — dashboard only |
+| Build command | `bun install --frozen-lockfile && bun run build` | Dashboard |
+| Root directory | `website` | Dashboard |
+| Assets directory | `./dist` | [`wrangler.jsonc`](wrangler.jsonc) |
+
+`wrangler.jsonc` already points at `./dist`, so the served files come from there; the settings
+above are the ones Cloudflare cannot read from the repository.
 
 The build command has to run `bun install` itself: Cloudflare installs dependencies
 automatically for package managers it detects, but **not** once `BUN_VERSION` is set.
