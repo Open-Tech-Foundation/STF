@@ -1,0 +1,7 @@
+{
+  "name": "stf",
+  "compatibility_date": "2026-06-15",
+  "assets": {
+    "directory": "./dist",
+  },
+}
