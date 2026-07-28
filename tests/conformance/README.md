@@ -8,7 +8,12 @@ derived from a normative rule in the specification or from the condition → cod
 | :--- | :--- |
 | `build_corpus.py` | Source of truth. Authors the cases. |
 | `corpus.json` | Generated. What runners read. Do not edit by hand. |
-| `tests.json` | **Superseded.** Pre-1.0 corpus, retained only until every implementation migrates. |
+| `run_js.mjs` | JavaScript runner. |
+| `run_python.py` | Python runner. |
+
+The Rust and Go runners live with their implementations, at
+`ref-impl/rust/src/bin/stf_conformance.rs` and `ref-impl/go/cmd/conformance/`. Run all four
+with `./scripts/check_conformance.sh`.
 
 Regenerate after editing the builder:
 

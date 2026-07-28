@@ -188,6 +188,9 @@ the reference implementations may change incompatibly at any time.
 
 ### Removed
 
+- `tests/conformance/tests.json`, the superseded pre-1.0 corpus. All four implementations now
+  run `corpus.json`, so the 93-case suite that reported everyone passing while they disagreed
+  on 25 of 80 edge cases has no remaining reader.
 - The generated benchmark datasets (`benchmarks/*/bench_*.{stf,json}`) from version control —
   **81 MB** of regenerable output, including three orphaned copies under `benchmarks/rust/`
   from earlier naming. Every benchmark now generates its dataset from a fixed seed, so the
