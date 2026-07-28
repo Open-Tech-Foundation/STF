@@ -124,6 +124,20 @@ the reference implementations may change incompatibly at any time.
   - `fromJSONText` rejects an integer `JSON.parse` would silently round, by scanning the source
     text before parsing.
 - Corpus and unit-test scripts in `package.json`: `npm run conformance`, `npm test`.
+- **Python reference implementation rewritten for STF 1.0** — **258/258**, plus 35 unit tests.
+  `stf.py` becomes a `stf/` package with the same module layout as Rust and JavaScript.
+  - The type mapping now keeps every kind distinguishable: Number is **always** `float`,
+    BigInt is `int`, Binary is `bytes`, and Decimal, Date, and Timestamp are frozen
+    dataclasses. `bool` is tested before `int` throughout, since it subclasses `int`.
+  - `decimal.Decimal` is deliberately not used: its `==` compares numerically, so
+    `Decimal("1.5") == Decimal("1.50")`, which spec §3.2 forbids.
+  - `STFError` carries `.code`, `.line`, and `.column`.
+  - Adds Canonical Form, the STF Stream profile with both read policies, and JSON interchange.
+- `tests/conformance/run_python.py`, implementing the runner contract of
+  `tests/conformance/README.md` §3.
+- Python benchmark rewritten with a seeded generator. Its JSON baseline now uses
+  `separators=(",", ":")`; Python's `json.dumps` default inserts a space after every
+  separator, which had been inflating the JSON side by roughly the margin being measured.
 
 ### Changed
 
@@ -160,6 +174,9 @@ the reference implementations may change incompatibly at any time.
 
 ### Removed
 
+- `ref-impl/python/run_conformance.py`, superseded by `tests/conformance/run_python.py`, and
+  the checked-in `dtxt_rs.so` / `libdtxt_rs.so` build artifacts, which were outputs of the
+  removed PyO3 bindings.
 - `ref-impl/js/run_conformance.ts` and `test_stf.ts`, which ran the superseded pre-1.0
   `tests.json`, and `repro_format.ts`, a scratch file importing a `dtxt.ts` that no longer
   exists.

@@ -57,3 +57,6 @@ Cargo.lock
 .zig-cache/
 zig-cache/
 zig-out/
+
+# Python build artifacts from the removed PyO3 bindings
+*.so

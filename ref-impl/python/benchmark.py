@@ -1,114 +1,104 @@
-import dtxt
-try:
-    import dtxt_rs
-except ImportError:
-    dtxt_rs = None
-import json
-import time
-import random
-import os
+"""Payload-size and throughput benchmark for the Python implementation.
 
-def generate_large_data(count):
-    data = {
-        "title": "DTXT vs JSON (JSON-native types only)",
-        "description": "Benchmark for base format overhead (unquoted keys, short literals)",
-        "entries": []
+The dataset uses only JSON-native kinds, so the figures measure base format overhead rather
+than the constructor types, and it is generated from a **fixed seed** so runs are comparable
+to each other. Figures from different languages are not comparable — each implementation
+benchmarks its own dataset, against its own host's JSON parser.
+
+The JSON baseline uses ``separators=(",", ":")``. Python's ``json.dumps`` default inserts a
+space after every separator, which would have inflated the JSON side by roughly the margin
+being measured.
+
+Run with: python3 ref-impl/python/benchmark.py
+"""
+
+from __future__ import annotations
+
+import json
+import random
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import stf  # noqa: E402
+
+HERE = Path(__file__).resolve().parent
+OUT_DIR = HERE.parent.parent / "benchmarks" / "python"
+DATASET_SIZE = 30_000
+ITERATIONS = 5
+SEED = 0x57455354
+
+
+def generate(count: int) -> dict:
+    rng = random.Random(SEED)
+    entries = []
+    for i in range(count):
+        entries.append(
+            {
+                "id": i,
+                "uid": f"user-{i}",
+                "isActive": i % 2 == 0,
+                "score": rng.random() * 1000,
+                "tags": ["data", "benchmark", "storage", "json", "stf"],
+                "meta": {
+                    "level": i % 10,
+                    "verified": i % 3 == 0,
+                    "note": None,
+                    "nested": {"a": 1, "b": False, "c": "nested string"},
+                },
+            }
+        )
+    return {
+        "title": "STF vs JSON (Python)",
+        "description": "Benchmark for base format overhead",
+        "entries": entries,
     }
 
-    for i in range(count):
-        data["entries"].append({
-            "id": i,
-            "uid": f"user-{i}",
-            "isActive": i % 2 == 0,
-            "score": random.random() * 1000,
-            "tags": ["data", "benchmark", "storage", "json", "dtxt"],
-            "meta": {
-                "level": i % 10,
-                "verified": i % 3 == 0,
-                "note": None,
-                "nested": {
-                    "a": 1,
-                    "b": False,
-                    "c": "nested string"
-                }
-            }
-        })
-    return data
 
-DATASET_SIZE = 30000
+def average_ms(iterations: int, body) -> float:
+    total = 0.0
+    for _ in range(iterations):
+        start = time.perf_counter()
+        body()
+        total += (time.perf_counter() - start) * 1000
+    return total / iterations
 
-def run_benchmark():
-    print(f"Generating dataset with {DATASET_SIZE} entries (JSON-native types only)...")
-    raw_data = generate_large_data(DATASET_SIZE)
 
-    # 1. Payload Size Comparison
-    json_str = json.dumps(raw_data)
-    dtxt_str = dtxt.dumps(raw_data)
+def main() -> None:
+    print(f"Generating dataset with {DATASET_SIZE} entries (seed {SEED:#x})...")
+    raw = generate(DATASET_SIZE)
+    value = stf.from_json(raw)
 
-    base_path = "../../benchmarks/python"
-    json_path = os.path.join(base_path, "bench_v2.json")
-    dtxt_path = os.path.join(base_path, "bench_v2.dtxt")
+    json_value = stf.to_json(value)
+    json_text = json.dumps(json_value, separators=(",", ":"))
+    stf_text = stf.serialize(value, stf.COMPACT)
 
-    with open(json_path, "w") as f:
-        f.write(json_str)
-    with open(dtxt_path, "w") as f:
-        f.write(dtxt_str)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    (OUT_DIR / "bench_v2.json").write_text(json_text, encoding="utf-8")
+    (OUT_DIR / "bench_v2.stf").write_text(stf_text, encoding="utf-8")
 
-    json_size = os.path.getsize(json_path)
-    dtxt_size = os.path.getsize(dtxt_path)
-
+    mb = lambda n: n / 1024 / 1024  # noqa: E731
     print("\n--- Payload Size ---")
-    print(f"JSON: {json_size / 1024 / 1024:.2f} MB")
-    print(f"DTXT:  {dtxt_size / 1024 / 1024:.2f} MB")
-    print(f"Reduction: {(1 - dtxt_size / json_size) * 100:.1f}%")
+    print(f"JSON: {mb(len(json_text.encode())):.2f} MB")
+    print(f"STF:  {mb(len(stf_text.encode())):.2f} MB")
+    print(f"STF is {(1 - len(stf_text) / len(json_text)) * 100:.1f}% smaller")
 
-    # 2. Performance Comparison (Time)
-    iterations = 5
+    print(f"\n--- Parsing (average of {ITERATIONS} runs) ---")
+    print(f"json.loads: {average_ms(ITERATIONS, lambda: json.loads(json_text)):.2f} ms")
+    print(f"stf.parse:  {average_ms(ITERATIONS, lambda: stf.parse(stf_text)):.2f} ms")
 
-    print("\n--- Parsing Performance (Average of 5 runs) ---")
+    print(f"\n--- Serialization (average of {ITERATIONS} runs) ---")
+    print(
+        "json.dumps:    "
+        f"{average_ms(ITERATIONS, lambda: json.dumps(json_value, separators=(',', ':'))):.2f} ms"
+    )
+    print(
+        "stf.serialize: "
+        f"{average_ms(ITERATIONS, lambda: stf.serialize(value, stf.COMPACT)):.2f} ms"
+    )
 
-    json_parse_total = 0
-    for _ in range(iterations):
-        start = time.perf_counter()
-        json.loads(json_str)
-        json_parse_total += (time.perf_counter() - start) * 1000
-    print(f"json.loads:     {json_parse_total / iterations:.2f} ms")
-
-    # Force pure Python for comparison
-    original_rs = dtxt.dtxt_rs
-    dtxt.dtxt_rs = None
-    pure_python_parse_total = 0
-    for _ in range(iterations):
-        start = time.perf_counter()
-        dtxt.loads(dtxt_str)
-        pure_python_parse_total += (time.perf_counter() - start) * 1000
-    print(f"dtxt.loads (Pure Python): {pure_python_parse_total / iterations:.2f} ms")
-    dtxt.dtxt_rs = original_rs
-
-    if dtxt.dtxt_rs:
-        rust_ext_parse_total = 0
-        for _ in range(iterations):
-            start = time.perf_counter()
-            dtxt.loads(dtxt_str)
-            rust_ext_parse_total += (time.perf_counter() - start) * 1000
-        print(f"dtxt.loads (Rust Ext):    {rust_ext_parse_total / iterations:.2f} ms")
-        print(f"Speedup: {pure_python_parse_total / rust_ext_parse_total:.1f}x")
-
-    print("\n--- Serialization Performance (Average of 5 runs) ---")
-
-    json_stringify_total = 0
-    for _ in range(iterations):
-        start = time.perf_counter()
-        json.dumps(raw_data)
-        json_stringify_total += (time.perf_counter() - start) * 1000
-    print(f"json.dumps:  {json_stringify_total / iterations:.2f} ms")
-
-    dtxt_stringify_total = 0
-    for _ in range(iterations):
-        start = time.perf_counter()
-        dtxt.dumps(raw_data)
-        dtxt_stringify_total += (time.perf_counter() - start) * 1000
-    print(f"dtxt.dumps:   {dtxt_stringify_total / iterations:.2f} ms")
 
 if __name__ == "__main__":
-    run_benchmark()
+    main()

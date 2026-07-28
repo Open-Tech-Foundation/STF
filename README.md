@@ -10,8 +10,8 @@ A project of the [Open Tech Foundation](https://github.com/Open-Tech-Foundation)
 > STF is in an experimental, pre-release state, for research and feedback only.
 > The specification and the reference implementations may change incompatibly at any time.
 >
-> The 1.0 draft specification is complete, but **the reference implementations have not yet
-> caught up to it** — see [Conformance Status](#conformance-status).
+> The 1.0 draft specification is complete. Rust, JavaScript, and Python are conformant; Go is
+> not yet — see [Conformance Status](#conformance-status).
 
 ## Overview
 
@@ -92,12 +92,12 @@ a string can never satisfy a `DECIMAL` expectation.
 | :--- | :--- | :--- |
 | **Rust** | **258/258** | Conformant. The reference implementation. |
 | **JavaScript** | **258/258** | Conformant. |
-| Python | not yet run | Returns exact integers past 2^53 (spec §7.2 requires binary64) |
-| Go | not yet run | Drops non-BMP characters in interpreted strings |
+| **Python** | **258/258** | Conformant. |
+| Go | not yet run | Also drops non-BMP characters in interpreted strings |
 
-The remaining gap in Python and Go is spec §3.1: typed values are represented as strings with a
-marker prefix (`"$decimal:1.5"`), which cannot be distinguished from a user string of the same
-text and causes serialization to emit unparseable documents.
+The remaining gap in Go is spec §3.1: typed values are represented as strings with a marker
+prefix (`"$decimal:1.5"`), which cannot be distinguished from a user string of the same text
+and causes serialization to emit unparseable documents.
 
 ## Command-Line Tool
 
@@ -117,22 +117,30 @@ Full reference: [doc/cli.md](doc/cli.md).
 
 - [Rust](ref-impl/rust/) — conformant; the reference
 - [JavaScript / TypeScript](ref-impl/js/) — conformant
-- [Python](ref-impl/python/)
+- [Python](ref-impl/python/) — conformant
 - [Go](ref-impl/go/)
 
 ## Performance
 
-**Payload size: STF is 15–18% smaller than JSON** on equivalent data, from unquoted keys and
-one-character literals.
+**Payload size: STF is 18.3% smaller than JSON** on the same data, from unquoted keys and
+one-character literals. Every implementation now generates the same fixed-seed dataset and
+measures against a minified JSON baseline, so this figure is reproducible.
 
-Parse speed depends far more on the implementation than on the format. Go's STF parser is
-~21% faster than `encoding/json`; the JavaScript and Python implementations are slower than
-their native JSON parsers, which are written in C++ and C respectively.
+Parse speed depends far more on the implementation than on the format:
 
-> These figures are not comparable across languages — each implementation benchmarks its own
-> randomly-seeded dataset, and the Python baseline includes default `json.dumps` separator
-> spacing. Treat them as within-language comparisons pending a benchmark rework. Full numbers:
-> [benchmarks/RESULTS.md](benchmarks/RESULTS.md).
+| | STF | Native JSON | |
+| :--- | ---: | ---: | :--- |
+| Rust | 70 ms | 113 ms (`serde_json`) | STF ~38% faster |
+| JS (Node) | 164 ms | 33 ms (`JSON.parse`) | native parser is C++ |
+| Python | 1837 ms | 79 ms (`json.loads`) | pure-Python scanner vs C |
+
+The honest summary: **STF's grammar is cheap to parse, but a reference implementation written
+in the host language does not beat a native JSON parser written in C.** The Rust row compares
+two native parsers and is the meaningful one; the JS and Python rows compare an STF parser in
+the language against a JSON parser in C, and are not a property of the format.
+
+> Figures are within-language only — each implementation benchmarks its own dataset on its own
+> machine. Full numbers: [benchmarks/RESULTS.md](benchmarks/RESULTS.md).
 
 ## License
 

@@ -36,6 +36,12 @@ else
   SKIPPED+=("JavaScript (node not found)")
 fi
 
+if command -v python3 >/dev/null 2>&1; then
+  run_impl "Python" python3 tests/conformance/run_python.py
+else
+  SKIPPED+=("Python (python3 not found)")
+fi
+
 if command -v cargo >/dev/null 2>&1; then
   run_impl "Rust" env CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/cargo-stf}" \
     cargo run --quiet --release --manifest-path ref-impl/rust/Cargo.toml --bin stf-conformance
@@ -43,8 +49,7 @@ else
   SKIPPED+=("Rust (cargo not found)")
 fi
 
-# Python and Go still run the superseded pre-1.0 suite; they are migrated in a later change.
-SKIPPED+=("Python (no 1.0 corpus runner yet)")
+# Go still runs the superseded pre-1.0 suite; it is migrated in a later change.
 SKIPPED+=("Go (no 1.0 corpus runner yet)")
 
 echo
