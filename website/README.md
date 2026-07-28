@@ -10,47 +10,20 @@ bun run dev      # dev server
 bun run build    # static site into dist/
 ```
 
-The toolchain is pinned in [`mise.toml`](mise.toml), so with
-[mise](https://mise.jdx.dev) installed the right bun is used automatically:
-
-```sh
-mise install                 # once
-mise exec -- bun install
-```
-
-The pin matters. `bun.lock` is written in a version-specific format, and a *newer* bun writes a
-lockfile older ones refuse to parse — a 1.4 canary writes `lockfileVersion: 2`, which no
-released bun can read.
+Commit `bun.lock` only from a **released** bun. The format is version-specific, and a 1.4
+canary writes `lockfileVersion: 2`, which no released bun — including the one that builds the
+deployment — can parse.
 
 ## Deploying (Cloudflare)
 
-Cloudflare's build image ships an older bun than this project uses, and its default fails with:
-
-```
-error: Unknown lockfile version at bun.lock:2:22
-warn: Ignoring lockfile
-error: lockfile had changes, but lockfile is frozen
-```
-
-The lockfile is fine; the build image's bun is too old to read it. Set these in the Workers
-Builds settings — the version can only be pinned there, not from the repository:
-
 | Setting | Value | Where |
 | :--- | :--- | :--- |
-| `BUN_VERSION` | `1.3.14` | Environment variable — dashboard only |
 | Build command | `bun install --frozen-lockfile && bun run build` | Dashboard |
 | Root directory | `website` | Dashboard |
 | Assets directory | `./dist` | [`wrangler.jsonc`](wrangler.jsonc) |
 
-`wrangler.jsonc` already points at `./dist`, so the served files come from there; the settings
-above are the ones Cloudflare cannot read from the repository.
-
-The build command has to run `bun install` itself: Cloudflare installs dependencies
-automatically for package managers it detects, but **not** once `BUN_VERSION` is set.
-
-Keep `BUN_VERSION`, [`mise.toml`](mise.toml), `.bun-version`, and the `bun-version` pinned in
-`.github/workflows/ci.yml` on the same value. If they drift, CI and the deployment disagree
-about the lockfile and only one of them fails.
+If the build fails with `Unknown lockfile version`, the committed `bun.lock` was written by a
+bun newer than the build image's — regenerate it with a released bun.
 
 ## Layout
 
