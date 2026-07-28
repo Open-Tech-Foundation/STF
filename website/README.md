@@ -10,6 +10,37 @@ bun run dev      # dev server
 bun run build    # static site into dist/
 ```
 
+Use **bun 1.4.0** — the version in `.bun-version`. `bun.lock` is written in a version-specific
+format, so a different bun rewrites it, and a *newer* bun writes a lockfile older ones refuse to
+parse at all.
+
+## Deploying (Cloudflare)
+
+Cloudflare's build image ships an older bun than this project uses, and its default fails with:
+
+```
+error: Unknown lockfile version at bun.lock:2:22
+warn: Ignoring lockfile
+error: lockfile had changes, but lockfile is frozen
+```
+
+The lockfile is fine; the build image's bun is too old to read it. Set these in the Workers
+Builds settings — the version can only be pinned there, not from the repository:
+
+| Setting | Value |
+| :--- | :--- |
+| Environment variable | `BUN_VERSION` = `1.4.0` |
+| Build command | `bun install --frozen-lockfile && bun run build` |
+| Build output directory | `website/dist` |
+| Root directory | `website` |
+
+The build command has to run `bun install` itself: Cloudflare installs dependencies
+automatically for package managers it detects, but **not** once `BUN_VERSION` is set.
+
+Keep `BUN_VERSION`, `.bun-version`, and the `bun-version` pinned in
+`.github/workflows/ci.yml` on the same value. If they drift, CI and the deployment disagree
+about the lockfile and only one of them fails.
+
 ## Layout
 
 | Path | What it is |

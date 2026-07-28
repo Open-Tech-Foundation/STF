@@ -127,9 +127,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # The site is a bun project — bun.lock is its lockfile, and npm would ignore it.
+      # Pinned, not `latest`: bun.lock is written in a version-specific format, and a newer
+      # bun here would commit a lockfile the deployment's bun cannot parse. Keep this, the
+      # `BUN_VERSION` set on the deployment, and website/.bun-version in step.
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.0
       - run: bun install --frozen-lockfile
         working-directory: website
       - run: bun run build
