@@ -42,6 +42,7 @@ export default function Playground() {
 
   // Derived strings rather than conditional markup: a text binding inside a ternary is still
   // evaluated by its effect, so `digest.slice(…)` threw while the digest was still null.
+  const targetLabel = $derived(TARGETS.find((t) => t.id === target)?.label ?? "the target");
   const statusClass = $derived(outcome.parseError ? "pg-bad" : "pg-good");
   const statusText = $derived(
     outcome.parseError
@@ -136,7 +137,11 @@ export default function Playground() {
                 </div>
               ) : outcome.convertError ? (
                 <div class="pg-output pg-refused">
-                  <strong>Refused.</strong> {outcome.convertError}
+                  <p class="pg-refused-title">Not representable in {targetLabel}</p>
+                  <p class="pg-refused-body">{outcome.convertError}</p>
+                  <button type="button" class="pg-chip" onclick={() => (target = "json-lossy")}>
+                    Convert with the lossy policy
+                  </button>
                 </div>
               ) : outputIsStf ? (
                 <pre class="pg-output">

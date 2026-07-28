@@ -640,8 +640,25 @@ body {
   white-space: normal;
 }
 
-.pg-refused strong {
-  color: #fca5a5;
+/* A refusal is a result, not a failure: the target cannot hold the value, and the tool says so
+ * rather than approximating. Amber, with the alternative one click away. */
+.pg-refused {
+  border-left: 3px solid #fbbf24;
+}
+
+.pg-refused-title {
+  margin: 0 0 0.4rem;
+  color: #fbbf24;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.pg-refused-body {
+  margin: 0 0 0.9rem;
+  color: #cbd5e1;
+  font-family: var(--otfw-mono);
+  font-size: 0.76rem;
+  line-height: 1.65;
 }
 
 .pg-status {
