@@ -8,23 +8,33 @@ export default function Playground() {
   return (
     <main class="landing">
       <section class="hero">
-        <p class="eyebrow">Playground</p>
-        <h1>Not built yet.</h1>
+        <p class="status">
+          <span class="status-dot" aria-hidden="true" />
+          Not implemented yet
+        </p>
+        <h1>Playground</h1>
         <p class="lead">
-          This is where you will be able to write STF, see errors as you type, and convert
-          between STF and other formats without installing anything.
+          An STF editor with diagnostics as you type, and conversion between STF and JSON,
+          JSON5, NDJSON, YAML, TOML, MessagePack, and CBOR — running the JavaScript reference
+          implementation in the browser, so the errors reported here are the ones every other
+          implementation reports.
         </p>
       </section>
 
       <section class="placeholder">
         <p>
-          Until then, the <code>stf</code> command-line tool does the same conversions
-          offline:
+          Until it ships, the <code>stf</code> command-line tool performs the same conversions
+          offline, and refuses what the target format cannot represent rather than losing the
+          type:
         </p>
         <pre>
-          <code>{"stf convert data.json --to stf\nstf check config.stf\nstf fmt --write config.stf"}</code>
+          <code>{COMMANDS}</code>
         </pre>
       </section>
     </main>
   );
 }
+
+const COMMANDS = `stf convert data.json --to stf
+stf convert events.ndjson --to stf --stream
+stf check config.stf`;

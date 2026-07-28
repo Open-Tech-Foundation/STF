@@ -35,6 +35,16 @@ the reference implementations may change incompatibly at any time.
   normative documents under `doc/` are unchanged and remain the source of truth; migrating
   them onto the site, and building the playground on the JavaScript reference implementation,
   are still to do. `site.url` is provisional.
+  - The landing page is written as a specification's front page rather than a product page:
+    what the normative sections define, with their section numbers; a capability comparison
+    against JSON, JSON5, YAML, and TOML that says *Varies* wherever implementations genuinely
+    disagree rather than claiming a win; the conformance table; and an explicit statement that
+    the format is pre-release and offers no compatibility guarantee yet.
+  - STF's accent is indigo (`#4f46e5` light, `#8b93ff` dark), set by overriding the docs
+    theme's own `--otfw-*` tokens so the documentation shell and the landing page share one
+    palette. The theme ships the Open Tech Foundation orange already used by
+    `web.opentechf.org` and `esrun.opentechf.org`, and `tsr.opentechf.org` is green, so STF
+    needed a hue of its own. Both values clear WCAG AA against the theme's backgrounds.
 - **Continuous integration** (`.github/workflows/ci.yml`), on every push to `main` and every
   pull request. Until now the repository's only workflow deployed the playground, so nothing
   checked that the four implementations still agreed — the conformance corpus was the
