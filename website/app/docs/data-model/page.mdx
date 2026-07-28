@@ -1,0 +1,86 @@
+---
+title: Data model
+description: The eleven value kinds, why they must stay distinct, and how equality is defined.
+---
+
+# Data model
+
+The data model is normative and defined independently of any host language. It is what makes
+"the same document" mean the same thing in Rust, JavaScript, Python, and Go.
+
+An STF value is exactly one of **eleven** kinds.
+
+| Kind | Description |
+| :--- | :--- |
+| Null | The absence of a value. |
+| Boolean | `true` or `false`. |
+| Number | An IEEE 754 `binary64` value. |
+| String | A finite sequence of Unicode scalar values. |
+| Array | An ordered sequence of values. |
+| Object | An ordered sequence of unique key/value members. |
+| BigInt | An arbitrary-precision integer. |
+| Decimal | An exact signed decimal: a coefficient and a scale. |
+| Date | A wall date, with no time and no offset. |
+| Timestamp | An absolute instant, with a mandatory UTC offset. |
+| Binary | A finite sequence of octets, possibly empty. |
+
+## The kinds are mutually distinct
+
+This is the rule the whole format exists to enforce. A String must not be represented as, or be
+indistinguishable from, any other kind — and no other kind may be represented as a String.
+
+In particular, an implementation **must not** encode `BigInt`, `Decimal`, `Date`, `Timestamp`,
+or `Binary` as a string carrying a marker prefix or any other in-band sentinel.
+
+```stf
+{ price: DECIMAL(1.5) }        # a Decimal
+{ price: `$decimal:1.5` }      # a String that merely looks like one — non-conformant as a
+                               # representation of the value above
+```
+
+An in-band sentinel makes a user-authored string indistinguishable from a typed value, silently
+promotes a plain string to a constructor on the way out, and can produce output that will not
+parse. Constructors exist precisely to remove that ambiguity. Implementations must provide
+distinct host types — a wrapper struct, a class, a tagged union, or the language's native
+equivalent.
+
+There is no cross-kind numeric coercion either. `Number(1)`, `BigInt(1)`, and `Decimal(1)` are
+three different values, and comparing across kinds is always unequal.
+
+## Equality
+
+| Kind | Rule |
+| :--- | :--- |
+| Null, Boolean | Identity. |
+| Number | IEEE 754 equality. `NaN` cannot occur, and `+0.0` and `-0.0` are distinguished for round-tripping. |
+| String | Equality of the Unicode scalar sequence. |
+| BigInt | Mathematical integer equality. |
+| Decimal | **Scale-sensitive**: equal only if coefficient *and* scale match. |
+| Date, Timestamp | Equality of the written fields — the offset is preserved data. |
+| Binary | Equality of the octet sequence; the base64 spelling is not data. |
+| Array | Equal length, pairwise-equal elements, in order. |
+| Object | Equal key sets with pairwise-equal values. **Member order does not affect equality.** |
+
+Two consequences are worth stating outright, because they are where host languages disagree
+with STF:
+
+**`DECIMAL(1.5) ≠ DECIMAL(1.50)`.** Scale is data. Python's `Decimal`, Go's `shopspring/decimal`,
+and Rust's `rust_decimal` all compare *numerically* with `==`, so a conformant implementation
+must compare coefficient and scale explicitly rather than lean on the library.
+
+**`TIMESTAMP(2026-01-15T10:00:00Z) ≠ TIMESTAMP(2026-01-15T15:30:00+05:30)`.** Both denote the
+same instant, but the offset an author wrote is information about where the event was recorded,
+so it survives a round trip and participates in equality.
+
+## Order is preserved but not significant
+
+Objects keep the order their members were written in, so formatting a document does not
+reshuffle it and a diff stays readable. Equality ignores that order. An implementation
+therefore needs a structure that preserves insertion order while comparing order-independently
+— a plain hash map is not sufficient on its own.
+
+## Round-tripping
+
+`parse(serialize(v)) ≡ v` is a **must**. A serializer may not inspect the contents of a string
+to decide to emit a constructor — that is the sentinel problem from the other direction — and
+must fail rather than emit output it could not parse back.

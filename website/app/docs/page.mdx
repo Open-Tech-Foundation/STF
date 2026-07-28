@@ -1,54 +1,81 @@
 ---
 title: Introduction
-description: What STF is, why it exists, and where the normative documents live.
+description: What STF is, the problem it solves, and where to go next.
 ---
 
-# STF
+# Introduction
 
-**STF (Structured Text Format)** is a human-readable, structured data format for configuration
-and data interchange. It is designed to **replace** JSON, JSONC, JSON5, NDJSON, and JSONL for
-new work — not to be a superset of them.
+**STF (Structured Text Format)** is a human-readable format for configuration and data
+interchange, defined by a normative specification, an exact condition-to-error-code mapping, and
+a conformance corpus that every implementation runs.
 
 ```stf
-# A configuration file
+# comments are part of the format
 {
   service: `checkout-api`,
   port: 8080,
   enabled: T,
   deploy_after: TIMESTAMP(2026-01-15T10:30:00Z),
-  price_cap: DECIMAL(199.00),        # exact — scale is preserved
+  price_cap: DECIMAL(199.00),   # scale is data
   account_id: BIGINT(9007199254740993),
+  signing_key: BINARY(SGVsbG8=),
   regions: [`eu-west-1`, `us-east-1`],
 }
 ```
 
-## The problem it solves
+## The problem
 
-JSON forces every non-primitive type through a string, so a reader cannot tell a date from a
-string that looks like one, and `19.99` is never exactly 19.99.
+JSON has six types, so everything else travels as a string or a `binary64` number, and the
+reader is left to guess from context:
 
-| JSON | STF |
+| JSON | The question it leaves open |
 | :--- | :--- |
-| `"created": "2026-01-15"` — date, or string? | `created: DATE(2026-01-15)` |
-| `"id": "9007199254740993"` — string to survive `JSON.parse` | `id: BIGINT(9007199254740993)` |
-| `"price": 19.99` — binary64, not exact | `price: DECIMAL(19.99)` |
+| `"created": "2026-01-15"` | A date, or a string that looks like one? |
+| `"id": "9007199254740993"` | A string, or an integer stringified to survive `JSON.parse`? |
+| `"price": 19.99` | Not exactly 19.99 — it is the nearest `binary64`. |
+| `"blob": "SGVsbG8="` | Base64 by convention, decoded by whoever remembers. |
 
-Because STF replaces JSON rather than extending it, some valid JSON has no STF representation.
-Conversion fails loudly rather than guessing.
+Every one of those is answered by a convention held outside the document — a schema, a field
+naming rule, or a comment in a wiki. STF puts the answer in the document.
+
+```stf
+{
+  created: DATE(2026-01-15),
+  id: BIGINT(9007199254740993),
+  price: DECIMAL(19.99),
+  blob: BINARY(SGVsbG8=),
+}
+```
+
+## Replacement, not superset
+
+STF deliberately does not inherit JSON's looseness, so some valid JSON has **no** STF
+representation: non-identifier keys, a non-object root, `NaN` and `Infinity`, and duplicate
+keys. A conversion that meets one of those fails loudly rather than guessing.
+
+That is the trade. What it buys is that two implementations cannot quietly disagree: keys have
+one spelling, duplicates are an error rather than a last-one-wins race, every rejection has one
+documented code, and there is a canonical byte encoding for hashing and signing.
+
+## Where to go next
+
+* **[Syntax](/docs/syntax)** — documents, keys, strings, numbers, comments, directives.
+* **[Data model](/docs/data-model)** — the eleven value kinds and how equality is defined.
+* **[Typed constructors](/docs/constructors)** — `DECIMAL`, `BIGINT`, `DATE`, `TIMESTAMP`, `BINARY`.
+* **[Canonical form](/docs/canonical-form)** — one byte encoding per value, plus resource limits.
+* **[Error codes](/docs/errors)** — the full index.
+* **[Record streams](/docs/streams)** — `.stfs`, for append-only logs.
+* **[Command-line tool](/docs/cli)** — check, format, lint, convert, and the language server.
+* **[Migrating from JSON](/docs/migrating)** — what converts, and what needs a decision first.
 
 ## Status
 
-The 1.0 draft specification is complete, and four reference implementations — Rust,
-JavaScript, Python, and Go — each pass all 258 cases of the conformance corpus. The format is
-still pre-release and may change incompatibly.
+The 1.0 draft is complete and every reference implementation passes the corpus. STF is
+pre-release: the specification may still change incompatibly until 1.0 is tagged.
 
-## Where the documents live
-
-The normative documents are in the repository and remain the source of truth. These pages are
-being migrated from them.
-
-- [Specification](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/spec.md)
-- [Error codes](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/error-codes.md)
-- [Stream profile](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/stream.md)
-- [Schema](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/schema.md)
-- [Command-line tool](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/cli.md)
+The normative documents live in the
+[repository](https://github.com/Open-Tech-Foundation/STF/tree/main/doc) and remain the source of
+truth — [specification](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/spec.md),
+[error codes](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/error-codes.md),
+[stream profile](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/stream.md), and
+[schema](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/schema.md).

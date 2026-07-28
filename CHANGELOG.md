@@ -31,10 +31,13 @@ the reference implementations may change incompatibly at any time.
 - **`website/` — the new site**, scaffolded with [OTF Web](https://github.com/Open-Tech-Foundation/Web-App-Framework),
   the Open Tech Foundation's own framework, using its documentation template (MDX pages,
   generated sidebar and table of contents, static output). It carries an STF landing page, a
-  documentation section with an introduction page, and a placeholder playground route. The
+  documentation section of nine pages, and a placeholder playground route. The
   normative documents under `doc/` are unchanged and remain the source of truth; migrating
   them onto the site, and building the playground on the JavaScript reference implementation,
   are still to do. `site.url` is provisional.
+  - **Documentation**: introduction, syntax, data model, typed constructors, canonical form,
+    error codes, record streams, command-line tool, and migrating from JSON — written from the
+    normative documents in `doc/`, which remain the source of truth.
   - The landing page is written as a specification's front page rather than a product page:
     what the normative sections define, with their section numbers; a capability comparison
     against JSON, JSON5, YAML, and TOML that says *Varies* wherever implementations genuinely

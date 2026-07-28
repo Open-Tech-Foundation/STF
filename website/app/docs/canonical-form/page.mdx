@@ -1,0 +1,65 @@
+---
+title: Canonical form
+description: One byte encoding per value, for hashing and signing — plus resource limits.
+---
+
+# Canonical form
+
+Canonical Form is an **optional** profile that produces exactly one byte sequence for a given
+value. It exists so a document can be hashed, signed, and diffed byte-for-byte. Default
+serialization does not use it: normal output preserves the order and spacing an author wrote.
+
+```sh
+stf canon config.stf | sha256sum
+```
+
+Two documents that are equal under the [data model](/docs/data-model) have identical canonical
+forms. Every canonical document is itself a valid STF document.
+
+## The rules
+
+A canonical serializer must:
+
+1. Emit UTF-8 with **no** BOM, and use `U+000A` as the only line terminator — canonical output
+   contains no line terminators at all, by rule 3.
+2. Omit all comments. Directives are preserved, in their original order, before the root.
+3. Emit no whitespace except where required to separate tokens. None ever is, so output looks
+   like `{a:1,b:[1,2]}`.
+4. Emit no trailing commas.
+5. Order object members by **ascending lexicographic order of their UTF-8 key bytes**.
+6. Emit every string in the **interpreted** form, escaping only `"`, `\`, and C0 controls, and
+   emitting all other scalars literally.
+7. Emit numbers in the shortest round-tripping form.
+8. Emit constructors in their canonical payload spelling, preserving decimal scale.
+
+```stf
+# input
+{
+  b: [1, 2],   # a comment
+  a: `hi`,
+}
+```
+
+```stf
+# canonical form
+{a:"hi",b:[1,2]}
+```
+
+Note what rule 5 costs: canonicalization operates on the data model, so it does **not** preserve
+the input's key order, string form, or spacing. That is the point — but it means canonical form
+is for machines, and `stf fmt` is what you run on a file you intend to keep reading.
+
+## Resource limits
+
+A parser processes untrusted input, so it must be able to reject an oversized document rather
+than exhaust memory.
+
+| Limit | Requirement | Error |
+| :--- | :--- | :--- |
+| Nesting depth | **Must** enforce; default **64** | `ERR_NESTING_DEPTH` |
+| Document size | May enforce; no default | `ERR_DOCUMENT_SIZE` |
+| Constructor payload size | May enforce; no default | `ERR_PAYLOAD_SIZE` |
+
+The depth limit is mandatory *and* has a specified default so that a document accepted by one
+conformant parser is accepted by all. An implementation that enforces an optional limit must
+document its default and should make it configurable.

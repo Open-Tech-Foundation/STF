@@ -1,0 +1,86 @@
+---
+title: Record streams
+description: .stfs — one document per line, for append-only logs, audit trails, and telemetry.
+---
+
+# Record streams
+
+The core format is for discrete documents: a configuration file, a payload, a message. Event
+logs are a different shape — appended to forever, read a record at a time, and never loaded
+whole. That is what NDJSON and JSONL exist for, and it is what the **STF Stream** profile
+covers.
+
+A stream is a `.stfs` file holding **one STF document per line**.
+
+```stf
+@version(1.0)
+{at: TIMESTAMP(2026-01-15T10:30:00Z), level: `warn`, code: `ERR_LIMIT`}
+{at: TIMESTAMP(2026-01-15T10:30:04Z), level: `info`, retries: 3}
+```
+
+The profile is optional and additive: the discrete format is unchanged, and a core parser never
+raises a stream error code.
+
+## Structure
+
+A stream is a sequence of lines terminated by LF. A single CR immediately before the LF is
+accepted and discarded so CRLF files read correctly, but writers must not emit CR.
+
+* A line holding only whitespace and/or a comment is **ignorable** and skipped, which makes a
+  trailing newline harmless.
+* The final line may omit its terminator, though a stream should end with one so that appending
+  stays a pure write.
+* An empty stream — zero bytes, or only ignorable lines — is valid and contains zero records.
+* Errors are reported with a **1-based line number counting every line**, including ignorable
+  ones, so a reported position matches what an editor shows.
+
+## A record may not contain a raw line terminator
+
+This is the property everything else rests on: a reader can split the input on LF **before**
+parsing anything, because no record can contain one. A raw LF or CR inside a record is
+`ERR_STREAM_RAW_NEWLINE`.
+
+A string that needs a newline uses the interpreted form and escapes it:
+
+```stf
+{message: "line one\nline two"}
+```
+
+Records are independent, and they are not homogeneous — two records need not share a shape.
+
+## The header line
+
+An optional first non-ignorable line may carry directives that apply to every record.
+
+```stf
+@version(1.0)
+@schema(events.schema.stf)
+{at: TIMESTAMP(2026-01-15T10:30:00Z), level: `info`}
+```
+
+A directive anywhere else is `ERR_STREAM_DIRECTIVE_IN_RECORD`. Restricting them to the head of
+the file means a reader can start consuming records without carrying state, and a tail-follower
+that joins mid-file is not missing any.
+
+## Error handling
+
+Because records are parsed independently, one malformed record does not invalidate the stream.
+An implementation must offer both policies and **default to aborting**:
+
+* **Abort** at the first bad record — the default, for pipelines where a gap is a defect.
+* **Continue**, reporting each bad record with its line number — for recovering what is
+  readable from a damaged log.
+
+```sh
+$ stf check events.stfs
+events.stfs: ok (2 records)
+```
+
+## Converting from NDJSON
+
+```sh
+stf convert events.ndjson --to stf --stream
+```
+
+The conversion refuses what STF cannot represent rather than guessing — a JSON object with a
+non-identifier key, or a duplicate key, stops the conversion and names the line.

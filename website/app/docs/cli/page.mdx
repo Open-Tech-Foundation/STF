@@ -1,0 +1,115 @@
+---
+title: Command-line tool
+description: check, fmt, lint, parse, canon, convert, and the language server.
+---
+
+# Command-line tool
+
+`stf` is the reference implementation's command line. Every subcommand reports the normative
+[error code](/docs/errors), so a script can branch on `ERR_INVALID_NUMBER` rather than on
+message text.
+
+```sh
+cargo install --path ref-impl/rust
+```
+
+| Command | Purpose |
+| :--- | :--- |
+| `stf check` | Parse each input and report any error. |
+| `stf fmt` | Reformat. Prints to stdout, or rewrites with `--write`. |
+| `stf lint` | Warn about problems that are not errors. |
+| `stf parse` | Print the parsed data model as tagged JSON. |
+| `stf canon` | Print [canonical form](/docs/canonical-form). |
+| `stf convert` | Convert between STF and JSON. |
+| `stf lsp` | Serve the Language Server Protocol over stdio. |
+
+`FILE` may be `-`, or omitted, to read standard input. Exit codes are `0` for success, `1` when
+an input was rejected or a lint warning fired, and `2` for a usage error.
+
+## check
+
+```sh
+$ stf check config.stf
+config.stf: ok
+
+$ stf check broken.stf
+broken.stf:2:8: ERR_INVALID_NUMBER: hexadecimal is not a number
+```
+
+## fmt
+
+```sh
+stf fmt config.stf              # to stdout
+stf fmt --write config.stf      # in place
+stf fmt --check config.stf      # exit 1 if not already formatted
+stf fmt --indent 4 config.stf
+```
+
+`--check` is the one for continuous integration: it prints nothing and exits non-zero if a file
+would change. Formatting never rewrites a string into a constructor — the specification forbids
+inferring a type from string content.
+
+## lint
+
+Beyond conformance: things a valid document may still get wrong.
+
+```sh
+$ stf lint config.stf
+config.stf:1:1: warning: unknown directive `@nope`
+config.stf:4:12: warning: created is a string that looks like a typed value; consider DATE(2026-01-15)
+```
+
+It flags the JSON habits STF exists to remove — a date, an instant, or a long run of digits
+smuggled through a string — and directives no implementation recognises.
+
+## parse
+
+Prints the data model as tagged JSON, the encoding the conformance corpus uses, so each value's
+*kind* is visible rather than inferred.
+
+```sh
+$ echo '{a: DECIMAL(1.50)}' | stf parse
+{
+  "a": { "$": "dec", "v": "1.50" }
+}
+```
+
+## canon
+
+```sh
+stf canon config.stf | sha256sum
+```
+
+## convert
+
+```sh
+stf convert data.json --to stf
+stf convert config.stf --to json
+stf convert events.ndjson --to stf --stream
+```
+
+Conversion is deliberately strict. JSON that STF cannot represent — a non-identifier key, a
+non-object root, `NaN`, a duplicate key — is reported and refused, never silently repaired.
+Going the other way, a typed value has no JSON equivalent, so the conversion is refused unless
+`--lossy` is passed, which encodes payloads as JSON strings and loses the type.
+
+## Editor support
+
+`stf lsp` serves the Language Server Protocol from the same parser, so an editor reports what
+continuous integration will report: diagnostics carrying their `ERR_*` code, the `lint`
+warnings, and formatting. `.stf` documents and `.stfs` streams are both served, framed by the
+file's extension.
+
+For Neovim's built-in client:
+
+```lua
+vim.lsp.config.stf = {
+  cmd = { 'stf', 'lsp' },
+  filetypes = { 'stf' },
+  root_markers = { '.git' },
+}
+vim.lsp.enable('stf')
+```
+
+VS Code has no built-in client for a new language, so it uses the extension in `vscode-stf/`,
+which launches the same server.

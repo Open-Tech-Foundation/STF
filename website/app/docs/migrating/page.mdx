@@ -1,0 +1,81 @@
+---
+title: Migrating from JSON
+description: What converts mechanically, what has no STF representation, and what to do about it.
+---
+
+# Migrating from JSON
+
+STF replaces JSON rather than extending it, so a migration is not a reformat. Most documents
+convert mechanically; a few constructs have **no** STF representation and must be decided on
+before a bulk conversion, not during it.
+
+```sh
+stf convert config.json --to stf
+```
+
+The converter refuses what it cannot represent instead of guessing, so what fails is exactly the
+list below.
+
+## What converts mechanically
+
+| JSON | STF |
+| :--- | :--- |
+| `{"a": 1}` | `{a: 1}` — quotes dropped from keys |
+| `true` / `false` / `null` | `T` / `F` / `N` |
+| `"text"` | `` `text` `` or `"text"` |
+| Arrays, nested objects | Unchanged |
+
+## What has no STF representation
+
+**Non-identifier keys.** A key must match `[A-Za-z0-9_-]+`. `{"user.name": 1}` and
+`{"": 1}` have no STF form. Rename the key, or restructure it into nesting:
+`{user: {name: 1}}`.
+
+**A non-object root.** JSON permits `[1, 2]` or `42` as a whole document; STF requires an
+object. Wrap it: `{items: [1, 2]}`.
+
+**`NaN` and `Infinity`.** Not valid JSON either, but widely emitted. There is no STF spelling;
+decide what they mean — `N`, a sentinel string, or an error — before converting.
+
+**Duplicate keys.** JSON leaves the outcome undefined and most parsers take the last one. STF
+rejects the document with `ERR_DUPLICATE_KEY`, so a file that relied on shadowing must be
+fixed by hand. This is usually a latent bug worth finding.
+
+## What to do with stringly-typed values
+
+The mechanical conversion leaves strings as strings — correctly, because a converter must never
+infer a type from string content. Promoting them is a separate, deliberate pass, and `stf lint`
+finds the candidates:
+
+```sh
+$ stf lint config.stf
+config.stf:3:12: warning: created is a string that looks like a typed value; consider DATE(2026-01-15)
+```
+
+| Before | After |
+| :--- | :--- |
+| `"created": "2026-01-15"` | `created: DATE(2026-01-15)` |
+| `"at": "2026-01-15T10:30:00Z"` | `at: TIMESTAMP(2026-01-15T10:30:00Z)` |
+| `"id": "9007199254740993"` | `id: BIGINT(9007199254740993)` |
+| `"price": 19.99` | `price: DECIMAL(19.99)` |
+| `"blob": "SGVsbG8="` | `blob: BINARY(SGVsbG8=)` |
+
+The `price` row is the one that changes behaviour rather than only notation: `19.99` as a JSON
+number is a `binary64` approximation, while `DECIMAL(19.99)` is exact and keeps its scale.
+
+## NDJSON and JSONL
+
+```sh
+stf convert events.ndjson --to stf --stream
+```
+
+Line-delimited JSON maps onto [record streams](/docs/streams) one line at a time. A record that
+cannot be converted is reported with its line number, and the same restrictions apply per
+record.
+
+## From JSON5, JSONC, and YAML
+
+JSON5's unquoted keys and comments have direct STF equivalents, but its other extensions do not:
+single-quoted strings, hexadecimal, leading and trailing decimal points, `+Infinity`, and escaped
+newlines inside strings are all rejected. Convert to JSON first, then to STF, and let the
+failures tell you what needs a decision.

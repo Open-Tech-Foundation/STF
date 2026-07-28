@@ -1,0 +1,137 @@
+---
+title: Syntax
+description: Documents, keys, strings, numbers, literals, comments, and directives.
+---
+
+# Syntax
+
+An STF document is UTF-8 text. A byte order mark is not whitespace and is rejected, and input
+that is not well-formed UTF-8 is rejected outright rather than repaired with `U+FFFD`.
+
+## Document structure
+
+A document is an optional run of directives followed by **exactly one root object**, and
+nothing after it.
+
+```stf
+# A configuration file
+{
+  service: `checkout-api`,
+  port: 8080,
+  enabled: T,
+}
+```
+
+An array, a number, or a bare string at the root is `ERR_ROOT_NOT_OBJECT`. Content after the
+closing brace is `ERR_TRAILING_CONTENT`. Requiring an object means every document has a place
+to add a member later without changing its shape.
+
+## Keys
+
+Keys are unquoted identifiers matching `[A-Za-z0-9_-]+`.
+
+```stf
+{ service_name: 1, retry-count: 2, x9: 3 }
+```
+
+A quoted key is `ERR_SYNTAX`; a key containing anything outside that set — a dot, a space, an
+empty key — is `ERR_INVALID_IDENTIFIER`. Because keys cannot be quoted, there is exactly one
+way to write any key, and no question of whether `"a"` and `a` are the same member.
+
+Duplicate keys are **rejected** with `ERR_DUPLICATE_KEY` rather than resolved by a
+last-one-wins rule, so two implementations cannot disagree about what a document means.
+
+## Strings
+
+There are two forms, and both are ordinary strings once parsed.
+
+**Raw strings** use backticks and preserve their contents literally. There are no escape
+sequences, which makes them the right choice for paths, patterns, and anything containing
+backslashes.
+
+```stf
+{ pattern: `^\d{3}-\d{4}$`, path: `C:\Users\data` }
+```
+
+**Interpreted strings** use double quotes and support exactly the JSON escape set —
+`\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, and `\uXXXX`.
+
+```stf
+{ message: "line one\nline two", tab: "a\tb" }
+```
+
+`\uXXXX` escapes designate UTF-16 code units, so a high surrogate must be immediately followed
+by its low surrogate; an unpaired surrogate is `ERR_INVALID_STRING`. A literal newline inside
+either form is rejected, as is any unknown escape.
+
+## Numbers
+
+A bare number is an IEEE 754 `binary64` value — the same domain as JSON, deliberately.
+
+```stf
+{ port: 8080, ratio: 0.5, scaled: 1.2e6, below: -0.001 }
+```
+
+Rejected with `ERR_INVALID_NUMBER`: hexadecimal (`0x10`), underscores (`1_000`), a leading `+`,
+leading zeros (`007`), a trailing point (`1.`), `NaN`, and `Infinity`. A literal outside finite
+`binary64` range, such as `1e400`, is `ERR_NUMBER_OVERFLOW` rather than an infinity.
+
+A number may not be immediately followed by an identifier character, which is what makes
+`0x10` fail deterministically at the `x` rather than parsing as `0` followed by junk.
+
+When `binary64` is not the right domain — money, identifiers past 2⁵³ — use
+[`DECIMAL` or `BIGINT`](/docs/constructors).
+
+## Boolean and null literals
+
+One character each: `T`, `F`, and `N`.
+
+```stf
+{ enabled: T, deprecated: F, owner: N }
+```
+
+The same token boundary rule applies, so `NaN` is not `N` followed by `aN` — it is scanned as
+one word and rejected.
+
+## Comments and trailing commas
+
+`#` begins a comment that runs to the end of the line. A trailing comma is permitted in both
+objects and arrays, so a diff that adds a member touches one line.
+
+```stf
+{
+  # the port the service binds to
+  port: 8080,   # trailing comma below is legal
+  hosts: [
+    `a.example`,
+    `b.example`,
+  ],
+}
+```
+
+Comments are not part of the data model. A parser that round-trips a document preserves member
+order and spacing, but comments are not values and are not recoverable from a parsed tree.
+
+## Directives
+
+A directive is metadata about the document, written before the root object as `@name(payload)`
+with no space around the `@` or before the `(`.
+
+```stf
+@version(1.0)
+@schema(service.schema.stf)
+{ service: `checkout-api` }
+```
+
+Each name may appear at most once. A parser must **accept** a directive it does not recognise —
+so a document using a future directive still parses — and should warn about it; `stf lint`
+does. Directives are not values and never appear in the parsed tree.
+
+## Arrays and objects
+
+Arrays are ordered and may mix kinds. Objects preserve the order their members were written in,
+but that order does not affect equality — `{a: 1, b: 2}` and `{b: 2, a: 1}` are equal values
+that serialize differently.
+
+Nesting depth is limited, and a conformant parser **must** enforce a limit defaulting to 64, so
+a document one parser accepts is not rejected by another. Exceeding it is `ERR_NESTING_DEPTH`.

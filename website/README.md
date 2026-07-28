@@ -22,10 +22,13 @@ bun run build    # static site into dist/
 
 ## Still to do
 
-- **Documentation** is a single introduction page. The normative documents under `doc/` remain
-  the source of truth; migrating them onto the site is a separate piece of work, and the
-  decision that comes with it is whether the MDX becomes the source or stays generated from
-  `doc/*.md`.
+- **Syntax highlighting in docs fences.** The theme highlights fenced Markdown at build time
+  with syntect, which has no STF grammar, so ```` ```stf ```` blocks render unhighlighted. The
+  landing page's panels use the tokenizer in `lib/highlight.ts` instead; wiring that into MDX
+  fences, or contributing an STF grammar upstream, is open.
+- **Docs are written from `doc/*.md`, not generated from them.** The normative documents remain
+  the source of truth, so a change to the specification needs a matching edit here. Whether to
+  generate instead is still open.
 - **The playground** is a placeholder. It will run the JavaScript reference implementation
   (`ref-impl/js`) in the browser: an editor with live diagnostics carrying their normative
   error codes, and conversion to and from JSON, JSON5, NDJSON, YAML, TOML, MessagePack, and

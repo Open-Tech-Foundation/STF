@@ -1,0 +1,108 @@
+---
+title: Error codes
+description: Every rejection maps to exactly one documented code, compared exactly.
+---
+
+# Error codes
+
+Every input STF requires to be rejected maps to **exactly one** code. A conformant parser must
+report that code; reporting a related-but-different one — `ERR_SYNTAX` where
+`ERR_INVALID_NUMBER` is specified — is non-conformant.
+
+The reason is practical. A caller cannot branch on an error code that varies by implementation,
+and a conformance suite that accepts substitutions cannot detect two parsers drifting apart.
+
+```sh
+$ stf check config.stf
+config.stf:2:8: ERR_INVALID_NUMBER: hexadecimal is not a number
+```
+
+Implementations should also report a byte offset and a human-readable message. **Message text
+is not normative** and must not be relied on by callers — only the code is.
+
+## Encoding
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_INVALID_UTF8` | Input is not well-formed UTF-8. |
+
+## General syntax
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_SYNTAX` | A token is not valid in this position, and no more specific code applies. |
+| `ERR_UNTERMINATED` | Input ended before a string, object, array, or constructor was closed. |
+| `ERR_TRAILING_CONTENT` | Content follows the root object. |
+
+## Structure
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_ROOT_NOT_OBJECT` | The document root is not a `{}` object. |
+| `ERR_DUPLICATE_KEY` | An object contains the same key more than once. |
+| `ERR_MISSING_COLON` | Expected `:` after a key. |
+| `ERR_MISSING_COMMA` | Expected `,` between members or elements. |
+
+## Identifiers
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_INVALID_IDENTIFIER` | A key is empty or contains a character outside `[A-Za-z0-9_-]`. |
+
+`{a b: 1}` is `ERR_INVALID_IDENTIFIER` — whitespace inside a key — while `{a 1}` is
+`ERR_MISSING_COLON`. Both are a key followed by whitespace and an unexpected token; only what
+follows separates them.
+
+## Primitive values
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_INVALID_NUMBER` | A number literal violates the grammar. |
+| `ERR_NUMBER_OVERFLOW` | A number literal exceeds finite `binary64` range. |
+| `ERR_INVALID_STRING` | Invalid escape, illegal literal newline, or unpaired surrogate. |
+
+## Constructors
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_UNKNOWN_CONSTRUCTOR` | A reserved-namespace name is not an STF 1.0 constructor. |
+| `ERR_INVALID_CONSTRUCTOR_PAYLOAD` | The payload does not satisfy the constructor's grammar or semantics. |
+| `ERR_NESTED_CONSTRUCTOR` | `(` encountered while scanning a payload. |
+| `ERR_DECIMAL_OVERFLOW` | A `DECIMAL` exceeds 34 significant digits or scale 6143. |
+
+## Resource limits
+
+| Code | Meaning | Enforcement |
+| :--- | :--- | :--- |
+| `ERR_NESTING_DEPTH` | Nesting exceeds the maximum depth. | Must, default 64 |
+| `ERR_DOCUMENT_SIZE` | Document exceeds the configured size limit. | May, no default |
+| `ERR_PAYLOAD_SIZE` | Constructor payload exceeds the configured size limit. | May, no default |
+
+## Serialization
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_UNREPRESENTABLE` | A host value has no valid STF representation. |
+
+## Record streams
+
+Raised only when reading [`.stfs`](/docs/streams), never by a core parser.
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_STREAM_RAW_NEWLINE` | A record contains a raw LF or CR. |
+| `ERR_STREAM_DIRECTIVE_IN_RECORD` | A directive appears outside the header line. |
+
+## Schema validation
+
+Raised by schema validation, never by a core parser.
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_SCHEMA_INVALID` | The schema document itself is malformed, or a keyword or bound is unusable. |
+| `ERR_SCHEMA_TYPE_MISMATCH` | Value kind does not match `type`, or `N` where `nullable: F`. |
+| `ERR_SCHEMA_REQUIRED` | A key with `optional: F` is absent. |
+| `ERR_SCHEMA_RANGE` | `min`, `max`, or `integer` violated. |
+| `ERR_SCHEMA_SCALE_MISMATCH` | Decimal scale does not match the required `scale`. |
+| `ERR_SCHEMA_ENUM` | `const` or `enum` violated. |
+| `ERR_SCHEMA_UNKNOWN_FIELD` | A key is not named in `fields` and `additional: F`. |

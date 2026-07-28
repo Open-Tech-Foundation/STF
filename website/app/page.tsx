@@ -160,12 +160,13 @@ function StfCode(props: { name: string; source: string }) {
   );
 }
 
-const SAMPLE = `{
+const SAMPLE = `# comments are part of the format
+{
   service: \`checkout-api\`,
   port: 8080,
   enabled: T,
   deploy_after: TIMESTAMP(2026-01-15T10:30:00Z),
-  price_cap: DECIMAL(199.00),
+  price_cap: DECIMAL(199.00),   # scale is data
   account_id: BIGINT(9007199254740993),
   signing_key: BINARY(SGVsbG8=),
   regions: [\`eu-west-1\`, \`us-east-1\`],

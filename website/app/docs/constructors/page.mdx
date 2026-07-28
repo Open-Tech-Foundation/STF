@@ -1,0 +1,109 @@
+---
+title: Typed constructors
+description: DECIMAL, BIGINT, DATE, TIMESTAMP, and BINARY — payload grammar and validation.
+---
+
+# Typed constructors
+
+A constructor is a name followed immediately by a parenthesised payload. The payload is opaque
+text, not a nested value, so a constructor never contains another constructor — a `(` while
+scanning a payload is `ERR_NESTED_CONSTRUCTOR`.
+
+```stf
+{
+  price:   DECIMAL(19.99),
+  id:      BIGINT(9007199254740993),
+  created: DATE(2026-01-15),
+  at:      TIMESTAMP(2026-01-15T10:30:00Z),
+  blob:    BINARY(SGVsbG8=),
+}
+```
+
+STF 1.0 defines exactly these five. Uppercase-initial names are a reserved namespace: an
+unrecognised one, such as `DATETIME(...)`, is `ERR_UNKNOWN_CONSTRUCTOR` rather than a generic
+syntax error, so a document written against a future version fails with a code that says why.
+
+## `DECIMAL` — exact decimal
+
+Plain notation, with an optional sign and an optional fractional part.
+
+```stf
+DECIMAL(1.5)     DECIMAL(1.50)     DECIMAL(15)     DECIMAL(-0.001)
+```
+
+**Scale is data.** The scale is the number of digits after the point — `DECIMAL(1.5)` has scale
+1, `DECIMAL(1.50)` has scale 2 — and they are distinct values that must not compare equal and
+must not be normalised. This is what makes a price representable: `199.00` stays two decimal
+places through a round trip.
+
+Significant digits are the payload with the sign, point, and leading zeros removed; trailing
+zeros count. They may not exceed **34**, and scale may not exceed **6143**, both being
+decimal128 limits; exceeding either is `ERR_DECIMAL_OVERFLOW`.
+
+Rejected with `ERR_INVALID_CONSTRUCTOR_PAYLOAD`: exponent notation (`1.5e3`), a leading `+`,
+leading zeros (`01.5`), a trailing point (`1.`), `NaN`, `Infinity`, hexadecimal, underscores,
+whitespace, and an empty payload.
+
+## `BIGINT` — arbitrary-precision integer
+
+```stf
+BIGINT(9007199254740993)     BIGINT(-123456789012345678901234567890)     BIGINT(0)
+```
+
+There is no magnitude limit. Every integer has exactly one spelling: leading zeros (`007`) and
+negative zero (`-0`) are rejected, and a parser must not silently rewrite them. Fractional
+parts, exponents, a leading `+`, and an empty payload are rejected.
+
+This is the answer to the identifier that JSON forces through a string because `JSON.parse`
+would round it: it stays an integer, and it stays exact.
+
+## `DATE` — wall date
+
+```stf
+DATE(2026-01-15)     DATE(2024-02-29)   # 2024 is a leap year
+```
+
+Exactly `YYYY-MM-DD`, zero-padded, in the proleptic Gregorian calendar, with **full calendar
+validation**: `DATE(2026-02-31)`, `DATE(2026-13-01)`, and `DATE(2025-02-29)` are all rejected,
+not merely parsed. `DATE(2026-1-5)` is rejected for the missing padding. Any time, offset, or
+`T` component is rejected — a date is a date.
+
+## `TIMESTAMP` — instant
+
+```stf
+TIMESTAMP(2026-01-15T10:30:00Z)
+TIMESTAMP(2026-01-15T10:30:00.123456789+05:30)
+```
+
+* The separator is an uppercase `T`; a space is rejected.
+* **The UTC offset is mandatory** — `Z`, or `±HH:MM`. An offset-less timestamp is ambiguous and
+  is rejected.
+* An optional fractional part carries 1–9 digits. Its trailing zeros are preserved, as is the
+  offset spelling: `.100` ≠ `.1`, and `+00:00` ≠ `Z`.
+* **Leap seconds are not supported.** A seconds field of `60` is rejected, because most host
+  time libraries cannot represent it and admitting it would make round-tripping
+  implementation-dependent.
+
+`TIME`, `DURATION`, and offset-less date-times have no constructor in 1.0. Use a string with an
+ISO 8601 convention; note that `TIME(...)` is in the reserved namespace and currently raises
+`ERR_UNKNOWN_CONSTRUCTOR`.
+
+## `BINARY` — octet sequence
+
+Base64 with the standard RFC 4648 §4 alphabet.
+
+```stf
+BINARY(SGVsbG8=)     BINARY(SGVsbG9X)     BINARY()   # the empty octet sequence
+```
+
+The encoding must be **canonical**, so each octet sequence has exactly one legal spelling:
+
+* Length is a multiple of 4, padded with `=`. Padding appears only when the octet count is not
+  a multiple of 3 — so `BINARY(SGVsbG9X)` correctly carries none.
+* `=` appears only as the final one or two characters.
+* Unused trailing bits must be zero: `BINARY(Zh==)` is rejected.
+* Internal whitespace and line breaks are rejected. The URL-safe alphabet (`-`, `_`) is
+  rejected.
+
+The empty payload is valid. Encoding is not data: the value is the decoded octets, and base64
+is only how they are written down.
