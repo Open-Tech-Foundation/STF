@@ -7,21 +7,21 @@
 export default function Playground() {
   return (
     <main class="landing">
-      <section class="hero">
-        <p class="status">
-          <span class="status-dot" aria-hidden="true" />
+      <section class="hero"><div class="container">
+        <span class="eyebrow">
+          <span class="dot" aria-hidden="true" />
           Not implemented yet
-        </p>
-        <h1>Playground</h1>
-        <p class="lead">
+        </span>
+        <h1 class="title">Playground</h1>
+        <p class="lede">
           An STF editor with diagnostics as you type, and conversion between STF and JSON,
           JSON5, NDJSON, YAML, TOML, MessagePack, and CBOR — running the JavaScript reference
           implementation in the browser, so the errors reported here are the ones every other
           implementation reports.
         </p>
-      </section>
+      </div></section>
 
-      <section class="placeholder">
+      <section class="section"><div class="container placeholder">
         <p>
           Until it ships, the <code>stf</code> command-line tool performs the same conversions
           offline, and refuses what the target format cannot represent rather than losing the
@@ -30,7 +30,7 @@ export default function Playground() {
         <pre>
           <code>{COMMANDS}</code>
         </pre>
-      </section>
+      </div></section>
     </main>
   );
 }

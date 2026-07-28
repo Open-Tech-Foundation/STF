@@ -24,9 +24,6 @@
   --stf-text: #0f172a;
   --stf-muted: #64748b;
   --stf-faint: #94a3b8;
-  --stf-yes: #4f46e5;
-  --stf-no: #94a3b8;
-  --stf-varies: #b45309;
 }
 
 [data-theme="dark"] {
@@ -43,9 +40,6 @@
   --stf-text: #e2e8f0;
   --stf-muted: #94a3b8;
   --stf-faint: #64748b;
-  --stf-yes: #8b93ff;
-  --stf-no: #64748b;
-  --stf-varies: #fbbf24;
 }
 
 * {
@@ -57,35 +51,40 @@ body {
 }
 
 .landing {
-  min-height: 100vh;
-  padding: 4rem 2rem 6rem;
   background: var(--stf-bg);
   color: var(--stf-text);
 }
 
-.landing section {
-  width: min(100%, 62rem);
+.container {
+  width: min(100%, 68rem);
   margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.section {
+  padding: 4rem 0;
+  border-top: 1px solid var(--stf-border);
 }
 
 .landing h2 {
-  margin: 0 0 0.75rem;
-  font-size: 1.35rem;
+  margin: 0 0 0.5rem;
+  font-size: 1.4rem;
   font-weight: 650;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
-.landing .section-lead,
-.landing .caption {
-  margin: 0;
+.landing .sub {
+  max-width: 60ch;
+  margin: 0 0 2rem;
   color: var(--stf-muted);
   font-size: 0.95rem;
-  line-height: 1.65;
+  line-height: 1.6;
 }
 
-.landing .caption {
-  margin-top: 0.875rem;
-  font-size: 0.875rem;
+.landing .note {
+  margin: 1.5rem 0 0;
+  color: var(--stf-faint);
+  font-size: 0.85rem;
 }
 
 .landing code {
@@ -96,228 +95,301 @@ body {
 /* Hero ------------------------------------------------------------------- */
 
 .hero {
-  padding: 3rem 0 2.5rem;
+  padding: 4.5rem 0 4rem;
 }
 
-.status {
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 2.5rem;
+  align-items: center;
+}
+
+.eyebrow {
   display: inline-flex;
   gap: 0.5rem;
   align-items: center;
-  margin: 0 0 1.5rem;
-  padding: 0.35rem 0.75rem;
+  margin-bottom: 1.25rem;
+  padding: 0.3rem 0.7rem;
   border: 1px solid var(--stf-border);
   border-radius: 999px;
   background: var(--stf-surface);
   color: var(--stf-muted);
-  font-size: 0.8rem;
-  letter-spacing: 0.01em;
+  font-size: 0.78rem;
 }
 
-.status-dot {
-  width: 0.45rem;
-  height: 0.45rem;
+.dot {
+  width: 0.4rem;
+  height: 0.4rem;
   border-radius: 50%;
   background: var(--otfw-accent);
 }
 
-.hero h1 {
-  max-width: 20ch;
-  margin: 0 0 1.25rem;
-  font-size: clamp(2.25rem, 5vw, 3.25rem);
+.title {
+  max-width: 18ch;
+  margin: 0 0 1rem;
+  font-size: clamp(2.1rem, 4.6vw, 3.1rem);
   font-weight: 680;
-  line-height: 1.08;
+  line-height: 1.1;
   letter-spacing: -0.03em;
 }
 
-.lead {
-  max-width: 62ch;
-  margin: 0 0 2rem;
-  color: var(--stf-muted);
-  font-size: 1.075rem;
-  line-height: 1.7;
+.grad {
+  background: linear-gradient(90deg, var(--otfw-accent), #a855f7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
-.actions {
+.lede {
+  max-width: 52ch;
+  margin: 0 0 1.75rem;
+  color: var(--stf-muted);
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+
+.cta-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.7rem;
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
-  padding: 0.6rem 1.15rem;
+  padding: 0.6rem 1.1rem;
   border: 1px solid transparent;
   border-radius: 0.5rem;
-  font-size: 0.925rem;
+  font-size: 0.92rem;
   font-weight: 550;
   text-decoration: none;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.btn.primary {
+.btn-primary {
   background: var(--otfw-accent);
   color: var(--otfw-accent-contrast);
 }
 
-.btn.primary:hover {
+.btn-primary:hover {
   filter: brightness(1.08);
 }
 
-.btn.secondary {
+.btn-ghost {
   border-color: var(--stf-border-strong);
   color: var(--stf-text);
 }
 
-.btn.secondary:hover {
+.btn-ghost:hover {
   border-color: var(--otfw-accent);
   color: var(--otfw-accent);
 }
 
-/* Code blocks ------------------------------------------------------------ */
+/* Code panel ------------------------------------------------------------- */
 
-.landing pre {
-  margin: 0;
-  padding: 1.5rem;
-  overflow-x: auto;
-  background: var(--stf-surface);
-  border: 1px solid var(--stf-border);
+/* Custom elements are inline by default, which collapses a component host inside a grid.
+ * `StfCode` is a pure wrapper, so its host is made layout-transparent and `.codeblock`
+ * becomes the grid item itself — the convention the docs theme documents and uses for its
+ * own link and navbar hosts. The host is addressed by the stable `web-<kebab>` class the
+ * compiler stamps; the element tag is module-hashed and not a reliable selector. */
+.web-stf-code {
+  display: contents;
+}
+
+/* Fixed dark in both themes: a document reads as an artefact of an editor, and the token
+ * colours below are tuned for one background rather than two. */
+.codeblock {
+  --code-bg: #0b1020;
+  --code-line: #1e2440;
+  overflow: hidden;
+  background: var(--code-bg);
+  border: 1px solid var(--code-line);
   border-radius: var(--otfw-radius);
-  line-height: 1.65;
+  box-shadow: 0 1.5rem 3rem -1.5rem rgba(2, 6, 23, 0.5);
 }
 
-.landing pre code {
-  font-size: 0.875rem;
-  white-space: pre;
-  color: var(--stf-text);
+.codeblock-bar {
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid var(--code-line);
 }
 
-.sample,
-.tooling,
-.normative,
-.compare,
-.conformance,
-.status-note {
-  margin-bottom: 4rem;
+.codeblock-name {
+  color: #7c869c;
+  font-family: var(--otfw-mono);
+  font-size: 0.74rem;
 }
 
-/* Normative sections ----------------------------------------------------- */
+.codeblock pre {
+  margin: 0;
+  padding: 1.1rem 1.25rem 1.35rem;
+  overflow-x: auto;
+  color: #cbd5e1;
+  font-family: var(--otfw-mono);
+  font-size: 0.8rem;
+  line-height: 1.75;
+}
 
-.normative dl {
+.codeblock .cm {
+  color: #5b6478;
+  font-style: italic;
+}
+
+.codeblock .dir {
+  color: #c084fc;
+}
+
+.codeblock .k {
+  color: #e2e8f0;
+}
+
+.codeblock .s {
+  color: #7dd3fc;
+}
+
+.codeblock .ctor {
+  color: #a5b4fc;
+  font-weight: 600;
+}
+
+.codeblock .pl,
+.codeblock .n {
+  color: #fbbf24;
+}
+
+.codeblock .t {
+  color: #f472b6;
+}
+
+.codeblock .pn {
+  color: #64748b;
+}
+
+/* Card grid -------------------------------------------------------------- */
+
+.grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-  gap: 1.5rem 2.5rem;
-  margin: 1.75rem 0 0;
+  gap: 1rem;
 }
 
-.normative-item dt {
-  margin-bottom: 0.4rem;
+.card {
+  padding: 1.4rem;
+  border: 1px solid var(--stf-border);
+  border-radius: var(--otfw-radius);
+  background: var(--stf-surface);
+}
+
+.ico {
+  margin-bottom: 0.6rem;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
   font-weight: 620;
-  font-size: 0.975rem;
 }
 
-.normative-item dd {
+.card p {
   margin: 0;
   color: var(--stf-muted);
   font-size: 0.9rem;
-  line-height: 1.65;
+  line-height: 1.6;
 }
 
-.ref {
-  margin-left: 0.35rem;
-  padding: 0.1rem 0.4rem;
-  border-radius: 0.3rem;
-  background: var(--otfw-accent-soft);
-  color: var(--otfw-accent);
-  font-family: var(--otfw-mono);
-  font-size: 0.72rem;
-  font-weight: 500;
-}
-
-/* Comparison table ------------------------------------------------------- */
+/* Comparison ------------------------------------------------------------- */
 
 .table-scroll {
-  margin-top: 1.75rem;
   overflow-x: auto;
   border: 1px solid var(--stf-border);
   border-radius: var(--otfw-radius);
 }
 
-.compare table {
+.table-scroll table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
 }
 
-.compare th,
-.compare td {
-  padding: 0.75rem 1rem;
+.table-scroll th,
+.table-scroll td {
+  padding: 0.7rem 1rem;
   text-align: left;
   border-bottom: 1px solid var(--stf-border);
 }
 
-.compare thead th {
+.table-scroll thead th {
   background: var(--stf-surface);
   color: var(--stf-muted);
+  font-size: 0.78rem;
   font-weight: 600;
-  font-size: 0.8rem;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-.compare thead th:nth-child(2) {
+.table-scroll thead th:nth-child(2) {
   color: var(--otfw-accent);
 }
 
-.compare tbody th {
+.table-scroll tbody th {
   font-weight: 500;
   color: var(--stf-text);
 }
 
-.compare tbody tr:last-child th,
-.compare tbody tr:last-child td {
+.table-scroll tbody td {
+  width: 5.5rem;
+  text-align: center;
+}
+
+.table-scroll tbody tr:last-child th,
+.table-scroll tbody tr:last-child td {
   border-bottom: none;
 }
 
-.compare td {
-  font-variant-numeric: tabular-nums;
+.cmp-y,
+.cmp-p,
+.cmp-n {
+  cursor: help;
+  font-size: 0.95rem;
 }
 
-.cell-yes {
-  color: var(--stf-yes);
-  font-weight: 550;
+.cmp-legend-row {
+  margin-top: 1rem;
 }
 
-.cell-no {
-  color: var(--stf-no);
-}
-
-.cell-varies {
-  color: var(--stf-varies);
-}
-
-/* Conformance ------------------------------------------------------------ */
-
-.impls {
-  margin: 1.75rem 0 0;
-  padding: 0;
-  list-style: none;
-  border: 1px solid var(--stf-border);
-  border-radius: var(--otfw-radius);
-  overflow: hidden;
-}
-
-.impls li {
-  display: grid;
-  grid-template-columns: 8rem 6rem 1fr;
+.cmp-legend {
+  display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
-  align-items: baseline;
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid var(--stf-border);
+  color: var(--stf-muted);
+  font-size: 0.82rem;
 }
 
-.impls li:last-child {
-  border-bottom: none;
+/* Split section ---------------------------------------------------------- */
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.split-copy ul {
+  margin: 0 0 1.5rem;
+  padding-left: 1.1rem;
+  color: var(--stf-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.split-copy li {
+  margin: 0.5rem 0;
+}
+
+.split-copy li code {
+  color: var(--otfw-accent);
 }
 
 .impl-name {
@@ -325,55 +397,134 @@ body {
 }
 
 .impl-score {
-  font-family: var(--otfw-mono);
-  font-size: 0.85rem;
   color: var(--otfw-accent);
+  font-family: var(--otfw-mono);
+  font-size: 0.82rem;
 }
 
 .impl-note {
   color: var(--stf-muted);
-  font-size: 0.875rem;
+  font-size: 0.87rem;
 }
 
-/* Stability -------------------------------------------------------------- */
+/* Org footer ------------------------------------------------------------- */
 
-.status-note {
-  padding: 1.5rem;
-  border: 1px solid var(--stf-border);
-  border-left: 3px solid var(--otfw-accent);
-  border-radius: var(--otfw-radius);
-  background: var(--stf-surface);
+/* The shell and inner row come from the docs theme; these are the org pieces tsr and the
+ * other OTF sites carry. Theme tokens rather than tsr's hardcoded darks, so the footer
+ * follows light and dark like the rest of the page. */
+.otfw-footer-org {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
 }
 
-.status-note p {
-  max-width: 76ch;
-  margin: 0;
-  color: var(--stf-muted);
-  font-size: 0.925rem;
-  line-height: 1.7;
+.otfw-footer-org-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--otfw-text);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.otfw-footer-org-link:hover {
+  color: var(--otfw-accent);
+}
+
+.otfw-footer-org-logo {
+  display: block;
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.otfw-footer-license {
+  color: var(--otfw-text-muted);
+}
+
+/* The badge keeps the OTF Web brand colours in both themes; it is a mark, not furniture. */
+.otfw-footer-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.45rem 0.95rem 0.45rem 0.55rem;
+  border: 1px solid var(--otfw-border);
+  border-radius: 9999px;
+  background: #ffffff;
+  text-decoration: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.otfw-footer-badge:hover {
+  border-color: var(--otfw-accent);
+}
+
+.otfw-footer-badge-mark {
+  display: block;
+  flex-shrink: 0;
+}
+
+.otfw-footer-badge-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  line-height: 1.1;
+}
+
+.otfw-footer-badge-muted {
+  color: #52525b;
+  font-size: 0.5625rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.otfw-footer-badge-brand {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.otfw-footer-badge-brand-otf {
+  color: #000000;
+}
+
+.otfw-footer-badge-brand-web {
+  color: #ff851b;
 }
 
 /* Placeholder routes ----------------------------------------------------- */
 
 .placeholder {
-  padding: 2rem;
+  padding: 1.75rem;
   border: 1px dashed var(--stf-border-strong);
   border-radius: var(--otfw-radius);
   color: var(--stf-muted);
-  line-height: 1.7;
+  line-height: 1.65;
 }
 
 .placeholder pre {
-  margin-top: 1rem;
+  margin: 1rem 0 0;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  background: var(--stf-surface);
+  border: 1px solid var(--stf-border);
+  border-radius: var(--otfw-radius);
+  color: var(--stf-text);
+  font-size: 0.83rem;
 }
 
-@media (max-width: 760px) {
-  .landing {
-    padding: 2.5rem 1.25rem 4rem;
+@media (max-width: 860px) {
+  .hero-grid,
+  .two-col {
+    grid-template-columns: 1fr;
   }
 
-  .impls li {
-    grid-template-columns: 1fr;
-    gap: 0.25rem;
+  .hero {
+    padding: 3rem 0;
   }
+
 }

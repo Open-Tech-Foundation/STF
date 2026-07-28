@@ -8,14 +8,19 @@ export default defineDocsConfig({
 
   docs: {
     title: "STF",
+    version: "1.0 draft",
     // Also used as the summary at the top of the generated /llms.txt.
     description:
       "The Structured Text Format: a human-readable data format whose dates, decimals, big integers, and binary values are explicit in the syntax rather than encoded in strings.",
     dir: "docs",
+    // The navbar renders the centre search only when a provider is configured, and the
+    // GitHub icon only when `github` is set — which is why neither appeared before.
+    search: { provider: "pagefind" },
+    github: "https://github.com/Open-Tech-Foundation/STF",
     nav: [
+      { label: "Home", href: "/" },
       { label: "Docs", href: "/docs" },
       { label: "Playground", href: "/playground" },
-      { label: "GitHub", href: "https://github.com/Open-Tech-Foundation/STF" },
     ],
     footer: {
       text: "STF — a project of the Open Tech Foundation. Public domain under CC0 1.0.",

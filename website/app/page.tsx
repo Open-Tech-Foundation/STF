@@ -1,217 +1,239 @@
 // The landing page for a specification, not a product page.
 //
-// The claims here are load-bearing: every capability in the comparison table is one a reader
-// can check against `doc/spec.md`, and every "Varies" is a case where implementations
-// genuinely disagree. Overclaiming against JSON, YAML, or TOML would be the fastest way to
-// lose the audience this format is for.
+// Structure follows the org's other sites (tsr.opentechf.org, esrun.opentechf.org): a hero
+// grid with copy beside a code panel, a "why" card grid, a comparison table with a legend,
+// and a two-column split for the configuration example. Detail belongs in /docs.
+
+import { RawHtml } from "@opentf/web";
+
+import { highlightToHtml, type TokenKind } from "../lib/highlight.ts";
 
 export default function Home() {
   return (
     <main class="landing">
       <section class="hero">
-        <p class="status">
-          <span class="status-dot" aria-hidden="true" />
-          STF 1.0 · Draft specification
-        </p>
-        <h1>A replacement for JSON, not a superset of it.</h1>
-        <p class="lead">
-          STF is a specification for a text format whose dates, timestamps, decimals, big
-          integers, and binary values are part of the grammar rather than conventions layered
-          on strings. It defines the data model, the canonical byte encoding, and the exact
-          error code for every rejection — so parsers in Rust, JavaScript, Python, and Go
-          accept the same documents and refuse the same documents, case for case.
-        </p>
-        <div class="actions">
-          <a href="/docs" class="btn primary">
-            Read the specification
-          </a>
-          <a href="/playground" class="btn secondary">
-            Playground
-          </a>
+        <div class="container hero-grid">
+          <div>
+            <span class="eyebrow">
+              <span class="dot" aria-hidden="true" />
+              STF 1.0 · draft specification
+            </span>
+            <h1 class="title">
+              A structured text format for <span class="grad">configuration and data</span>.
+            </h1>
+            <p class="lede">
+              Every value carries its own type: dates, timestamps, decimals, big integers, and
+              binary are part of the grammar.
+            </p>
+            <div class="cta-row">
+              <a href="/docs" class="btn btn-primary">
+                Read the specification
+              </a>
+              <a href="/playground" class="btn btn-ghost">
+                Playground
+              </a>
+            </div>
+          </div>
+
+          <StfCode name="config.stf" source={SAMPLE} />
         </div>
       </section>
 
-      <section class="sample" aria-label="An STF document">
-        <pre>
-          <code>{SAMPLE}</code>
-        </pre>
-        <p class="caption">
-          A reader recovers the author's intent from the document alone. No schema is consulted,
-          and no key name is inspected to decide what a value means.
-        </p>
+      <section class="section">
+        <div class="container">
+          <h2>Why STF</h2>
+          <p class="sub">A format a reader can trust without a schema beside it.</p>
+          <div class="grid">
+            {REASONS.map((reason) => (
+              <div class="card">
+                <div class="ico" aria-hidden="true">
+                  {reason.icon}
+                </div>
+                <h3>{reason.title}</h3>
+                <p>{reason.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
-      <section class="normative" aria-labelledby="defines">
-        <h2 id="defines">What the specification defines</h2>
-        <dl>
-          {NORMATIVE.map((item) => (
-            <div class="normative-item">
-              <dt>
-                {item.title} <span class="ref">{item.ref}</span>
-              </dt>
-              <dd>{item.body}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      <section class="compare" aria-labelledby="compare-heading">
-        <h2 id="compare-heading">Against the alternatives</h2>
-        <p class="section-lead">
-          Where a cell reads <em>Varies</em>, the format permits the capability but
-          implementations disagree on it, which is the failure mode STF exists to remove.
-        </p>
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Capability</th>
-                <th scope="col">STF</th>
-                <th scope="col">JSON</th>
-                <th scope="col">JSON5</th>
-                <th scope="col">YAML</th>
-                <th scope="col">TOML</th>
-              </tr>
-            </thead>
-            <tbody>
-              {COMPARISON.map((row) => (
+      <section class="section">
+        <div class="container">
+          <h2>How it compares</h2>
+          <p class="sub">Where a format permits a capability but implementations disagree.</p>
+          <div class="table-scroll">
+            <table>
+              <thead>
                 <tr>
-                  <th scope="row">{row.capability}</th>
-                  {row.cells.map((cell) => (
-                    <td class={cellClass(cell)}>{cell}</td>
+                  <th scope="col">Capability</th>
+                  {FORMATS.map((format) => (
+                    <th scope="col">{format}</th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {COMPARISON.map((row) => (
+                  <tr>
+                    <th scope="row">{row.capability}</th>
+                    {row.cells.map((cell) => (
+                      <td>
+                        <span
+                          class={`cmp-${cell}`}
+                          title={MARKS[cell].label}
+                          aria-label={MARKS[cell].label}
+                        >
+                          {MARKS[cell].glyph}
+                        </span>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div class="cmp-legend-row">
+            <div class="cmp-legend">
+              <span>✅ yes</span>
+              <span>🟡 varies by implementation</span>
+              <span>❌ no</span>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section class="conformance" aria-labelledby="conformance-heading">
-        <h2 id="conformance-heading">Implementations</h2>
-        <p class="section-lead">
-          A document written by one of these is read identically by the others: the same eleven
-          value kinds, the same error code for every rejection, and the same canonical bytes.
-          That is checked, not asserted — 258 shared cases, each traced to a rule in the
-          specification, compared on error code and value kind rather than on message text.
-        </p>
-        <ul class="impls">
-          {IMPLEMENTATIONS.map((impl) => (
-            <li>
-              <span class="impl-name">{impl.name}</span>
-              <span class="impl-score">{impl.score}</span>
-              <span class="impl-note">{impl.note}</span>
-            </li>
-          ))}
-        </ul>
+      <section class="section">
+        <div class="container two-col">
+          <div class="split-copy">
+            <h2>One specification, no dialects</h2>
+            <p class="sub">
+              Every rule below is normative, so two conformant parsers cannot disagree about a
+              document.
+            </p>
+            <ul>
+              {NORMATIVE.map((item) => (
+                <li>
+                  <code>{item.ref}</code> — {item.body}
+                </li>
+              ))}
+            </ul>
+            <div class="cta-row">
+              <a href="/docs" class="btn btn-ghost">
+                Specification
+              </a>
+            </div>
+          </div>
+
+          <StfCode name="events.stfs" source={STREAM} />
+        </div>
       </section>
 
-      <section class="tooling" aria-labelledby="tooling-heading">
-        <h2 id="tooling-heading">Tooling</h2>
-        <pre>
-          <code>{TOOLING}</code>
-        </pre>
-        <p class="caption">
-          <code>stf lsp</code> serves the Language Server Protocol from the same parser, so an
-          editor reports the error code that continuous integration will report.
-        </p>
-      </section>
-
-      <section class="status-note" aria-labelledby="status-heading">
-        <h2 id="status-heading">Stability</h2>
-        <p>
-          STF is pre-release. The 1.0 draft is complete and every implementation passes the
-          corpus, but the specification may still change incompatibly, and no compatibility
-          guarantee is offered until 1.0 is tagged. It is published for review and feedback.
-        </p>
-      </section>
     </main>
   );
 }
 
-function cellClass(value: string): string {
-  if (value === "No") return "cell-no";
-  if (value === "Varies") return "cell-varies";
-  return "cell-yes";
+// The docs theme highlights fenced Markdown at build time with syntect, which never sees a
+// runtime string and does not know STF — so, as tsr does for its tasks.toml, the panel emits
+// its own token spans.
+const TOKEN_CLASS: Record<TokenKind, string> = {
+  comment: "cm",
+  directive: "dir",
+  key: "k",
+  string: "s",
+  constructor: "ctor",
+  payload: "pl",
+  number: "n",
+  literal: "t",
+  punct: "pn",
+  plain: "",
+};
+
+function StfCode(props: { name: string; source: string }) {
+  return (
+    <div class="codeblock">
+      <div class="codeblock-bar">
+        <span class="codeblock-name">{props.name}</span>
+      </div>
+      <pre>
+        <RawHtml html={highlightToHtml(props.source, TOKEN_CLASS)} />
+      </pre>
+    </div>
+  );
 }
 
-const SAMPLE = `# A configuration file
-{
+const SAMPLE = `{
   service: \`checkout-api\`,
   port: 8080,
   enabled: T,
   deploy_after: TIMESTAMP(2026-01-15T10:30:00Z),
-  price_cap: DECIMAL(199.00),        # exact — scale is preserved
+  price_cap: DECIMAL(199.00),
   account_id: BIGINT(9007199254740993),
   signing_key: BINARY(SGVsbG8=),
   regions: [\`eu-west-1\`, \`us-east-1\`],
 }`;
 
-const TOOLING = `stf check config.stf              # verify, with normative error codes
-stf fmt --write config.stf        # format in place
-stf lint config.stf               # flag stringly-typed values
-stf canon config.stf | sha256sum  # canonical form, for hashing and signing
-stf convert data.json --to stf    # refuses what STF cannot represent`;
+// Kept narrow so the panel never clips at the hero's column width.
+const STREAM = `@version(1.0)
+{at: TIMESTAMP(2026-01-15T10:30:00Z), level: \`warn\`}
+{at: TIMESTAMP(2026-01-15T10:30:04Z), level: \`info\`}`;
+
+// A glyph on its own is not an answer to a screen reader, hence the label.
+const MARKS: Record<string, { glyph: string; label: string }> = {
+  y: { glyph: "✅", label: "yes" },
+  p: { glyph: "🟡", label: "varies by implementation" },
+  n: { glyph: "❌", label: "no" },
+};
+
+const FORMATS = ["STF", "JSON", "JSON5", "YAML", "TOML", "Ion"];
+
+const REASONS = [
+  {
+    icon: "🏷️",
+    title: "Types in the syntax",
+    body: "DATE, TIMESTAMP, DECIMAL, BIGINT, and BINARY are grammar, so a reader never infers a type from a key name.",
+  },
+  {
+    icon: "🎯",
+    title: "Exact decimals",
+    body: "DECIMAL(1.5) and DECIMAL(1.50) are different values. Scale survives the round trip, so money is representable.",
+  },
+  {
+    icon: "🧱",
+    title: "Strict by design",
+    body: "Every rejection maps to exactly one documented code, and a conversion that would lose a type fails instead.",
+  },
+  {
+    icon: "🔏",
+    title: "Canonical form",
+    body: "One byte encoding per value, so a document can be hashed, signed, and diffed byte-for-byte.",
+  },
+  {
+    icon: "🧾",
+    title: "Record streams",
+    body: "A .stfs file is one document per line, and a malformed record never invalidates the rest of the stream.",
+  },
+  {
+    icon: "🛠️",
+    title: "Editor and CLI",
+    body: "stf check, fmt, lint, canon, and convert, plus a language server that reports the same codes as CI.",
+  },
+];
 
 const NORMATIVE = [
-  {
-    title: "Data model",
-    ref: "§3",
-    body:
-      "Eleven value kinds, defined independently of any host language, with equality specified per kind. Representing a typed value as a string sentinel is explicitly non-conformant.",
-  },
-  {
-    title: "Serialization",
-    ref: "§13",
-    body:
-      "parse(serialize(v)) ≡ v is a MUST. A serializer may not inspect string content to decide to emit a constructor, and must fail rather than emit output it cannot parse back.",
-  },
-  {
-    title: "Canonical form",
-    ref: "§14",
-    body:
-      "An optional profile giving every value exactly one byte encoding, so a document can be hashed, signed, and diffed byte-for-byte. Default serialization preserves authored order and spacing.",
-  },
-  {
-    title: "Resource limits",
-    ref: "§15",
-    body:
-      "A nesting depth limit is mandatory and defaults to 64, so a document accepted by one conformant parser is accepted by all. Document and payload size limits are optional.",
-  },
-  {
-    title: "Error codes",
-    ref: "normative",
-    body:
-      "A condition-to-code table covering every rejection the specification requires. Exactly one code per condition, compared exactly; message text is explicitly not normative.",
-  },
-  {
-    title: "Stream profile",
-    ref: ".stfs",
-    body:
-      "One document per line for append-only logs and telemetry. A record cannot contain a raw line terminator, so a reader splits on LF before parsing, and one malformed record does not invalidate the stream.",
-  },
+  { ref: "§3", body: "eleven value kinds, defined independently of any host language." },
+  { ref: "§13", body: "parse(serialize(v)) ≡ v, and no constructor inferred from string content." },
+  { ref: "§14", body: "canonical form: one byte encoding per value." },
+  { ref: "§15", body: "a mandatory nesting depth limit, defaulting to 64." },
+  { ref: "codes", body: "one documented code per rejection; message text is not normative." },
 ];
 
 const COMPARISON = [
-  { capability: "Dates and timestamps as a distinct type", cells: ["Yes", "No", "No", "Varies", "Yes"] },
-  { capability: "Exact decimals, scale preserved", cells: ["Yes", "No", "No", "No", "No"] },
-  { capability: "Integers beyond 2⁵³ without loss", cells: ["Yes", "No", "No", "Varies", "Varies"] },
-  { capability: "Binary data as a distinct type", cells: ["Yes", "No", "No", "Varies", "No"] },
-  { capability: "Comments", cells: ["Yes", "No", "Yes", "Yes", "Yes"] },
-  { capability: "Duplicate keys rejected", cells: ["Yes", "No", "No", "Varies", "Yes"] },
-  { capability: "One documented code per rejection", cells: ["Yes", "No", "No", "No", "No"] },
-  { capability: "Canonical form in the same specification", cells: ["Yes", "No", "No", "Varies", "No"] },
+  { capability: "Dates and timestamps as a distinct type", cells: ["y", "n", "n", "p", "y", "y"] },
+  { capability: "Exact decimals, scale preserved", cells: ["y", "n", "n", "n", "n", "y"] },
+  { capability: "Integers beyond 2⁵³ without loss", cells: ["y", "n", "n", "p", "p", "y"] },
+  { capability: "Binary data as a distinct type", cells: ["y", "n", "n", "p", "n", "y"] },
+  { capability: "Comments", cells: ["y", "n", "y", "y", "y", "y"] },
+  { capability: "Duplicate keys rejected", cells: ["y", "n", "n", "p", "y", "n"] },
+  { capability: "One documented code per rejection", cells: ["y", "n", "n", "n", "n", "n"] },
+  { capability: "Canonical form in the same specification", cells: ["y", "n", "n", "p", "n", "n"] },
 ];
 
-// The note is the reason a reader would pick one: what it costs to adopt, and what it gives
-// beyond parsing.
-const IMPLEMENTATIONS = [
-  {
-    name: "Rust",
-    score: "258/258",
-    note: "The normative reference. Ships the stf command-line tool and the language server.",
-  },
-  { name: "JavaScript", score: "258/258", note: "TypeScript sources. No runtime dependencies." },
-  { name: "Python", score: "258/258", note: "Pure Python. No extension module to build." },
-  { name: "Go", score: "258/258", note: "No module dependencies." },
-];
