@@ -143,7 +143,14 @@ export default function Playground() {
   let mode = $state<Mode>("document");
   let tab = $state<Tab>("convert");
   let target = $state<Target>("json");
-  let policy = $state<Policy>("strict");
+  // Lossy by default, which is the opposite of `stf convert` — and the status line says so, so
+  // nobody infers the CLI's behaviour from this page. The reason is that the two policies answer
+  // different questions and only one of them is the question a first-time visitor is asking.
+  // Strict answers "may I convert this?", and on any document worth demonstrating the answer is
+  // no, so the page opened on a refusal and showed no output at all. Lossy answers "what would I
+  // get?", which is the thing you came to look at — and the cards above are what stop that from
+  // being flattery, since they count what the output silently threw away.
+  let policy = $state<Policy>("lossy");
   let digest = $state<string | null>(null);
   let copied = $state(false);
 
@@ -686,6 +693,24 @@ function ConvertTab(props: any) {
   const output = $derived(props.outcome.output ?? "");
   const highlighted = $derived(props.outputIsStf ? highlightToHtml(output, TOKEN_CLASS) : "");
 
+  const policyGroupLabel = $derived(
+    `What to do with values ${props.targetLabel} cannot hold`,
+  );
+
+  /**
+   * What the chosen policy means, in this document's terms.
+   *
+   * The toggle governs one decision — what happens to a value the target has no home for — and
+   * the two answers are worth stating rather than naming. Both notes end on the CLI flag, because
+   * `stf convert` defaults to the *other* one and a reader should not have to discover that by
+   * being refused at a terminal.
+   */
+  const policyNote = $derived(
+    props.policy === "lossy"
+      ? "Lossy: values the target cannot hold are written in the nearest form it has, so there is always output. The cards above count what that costs. Same as stf convert --lossy."
+      : "Strict: the conversion is refused outright if any value would not read back as the same STF value. This is what stf convert does by default.",
+  );
+
   return (
     <div class="pg-tabbody">
       <div class="pg-bar">
@@ -700,21 +725,25 @@ function ConvertTab(props: any) {
           ))}
         </select>
 
+        {/* Labelled by what the button does, not by the policy's name. "Strict" and "Lossy" are
+          * the names `stf convert` uses and they are worth learning, but they say nothing to
+          * someone meeting them for the first time — so the name moves to the note below, where
+          * there is room to say which CLI flag it corresponds to. */}
         {props.isFormatTarget ? (
-          <div class="pg-toggle">
-            <button
-              type="button"
-              class={props.policy === "strict" ? "pg-chip pg-chip-on" : "pg-chip"}
-              onclick={() => props.onPolicy("strict")}
-            >
-              Strict
-            </button>
+          <div class="pg-toggle" role="group" aria-label={policyGroupLabel}>
             <button
               type="button"
               class={props.policy === "lossy" ? "pg-chip pg-chip-on" : "pg-chip"}
               onclick={() => props.onPolicy("lossy")}
             >
-              Lossy
+              Convert anyway
+            </button>
+            <button
+              type="button"
+              class={props.policy === "strict" ? "pg-chip pg-chip-on" : "pg-chip"}
+              onclick={() => props.onPolicy("strict")}
+            >
+              Refuse
             </button>
           </div>
         ) : null}
@@ -737,8 +766,9 @@ function ConvertTab(props: any) {
               <li>{line}</li>
             ))}
           </ul>
+          {/* The same name as the chip that gets you here, so the action reads as one thing. */}
           <button type="button" class="pg-chip" onclick={() => props.onPolicy("lossy")}>
-            Convert with the lossy policy
+            Convert anyway
           </button>
         </div>
       ) : props.outputIsStf ? (
@@ -751,6 +781,7 @@ function ConvertTab(props: any) {
 
       <div class="pg-status">
         <span class="pg-note">{props.targetNote}</span>
+        {props.isFormatTarget ? <span class="pg-note pg-note-policy">{policyNote}</span> : null}
       </div>
     </div>
   );

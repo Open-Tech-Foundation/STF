@@ -409,9 +409,22 @@ body {
 
 /* Org footer ------------------------------------------------------------- */
 
+/* The footer is dark in both themes, so it reads as the base the site stands on rather than as
+ * one more band of page. Redefining the tokens on the shell rather than restyling each piece
+ * means the org row, the license and the links all follow, including the theme's own rules for
+ * `.otfw-footer` and `.otfw-footer-inner` — a custom property set on an element resolves for
+ * that element's own declarations too. The values are the docs theme's dark palette verbatim,
+ * so the footer matches the site in dark mode instead of being a second, nearby dark. */
+.otfw-footer {
+  --otfw-bg-surface: #0b1220;
+  --otfw-text: #e2e8f0;
+  --otfw-text-muted: #94a3b8;
+  --otfw-border: #1e293b;
+  --otfw-accent: #ff943d;
+}
+
 /* The shell and inner row come from the docs theme; these are the org pieces tsr and the
- * other OTF sites carry. Theme tokens rather than tsr's hardcoded darks, so the footer
- * follows light and dark like the rest of the page. */
+ * other OTF sites carry. */
 .otfw-footer-org {
   display: flex;
   flex-wrap: wrap;
@@ -1071,6 +1084,12 @@ body {
 .pg-digest,
 .pg-note {
   color: var(--pg-faint);
+}
+
+/* The policy note is a sentence, not a tag, so it takes its own line rather than being squeezed
+ * against the target note by the row's `space-between`. */
+.pg-note-policy {
+  flex-basis: 100%;
 }
 
 /* --- tabs ------------------------------------------------------------------------------------ */

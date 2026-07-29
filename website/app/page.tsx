@@ -234,6 +234,18 @@ const COMPARISON = [
   { capability: "Binary data as a distinct type", cells: ["y", "n", "n", "p", "n", "y"] },
   { capability: "Comments", cells: ["y", "n", "y", "y", "y", "y"] },
   { capability: "Duplicate keys rejected", cells: ["y", "n", "n", "p", "y", "n"] },
+  // YAML has had document streams since 1.1 (`---`) and Ion is defined as a value stream, so
+  // this row is not a win for STF and is not written as one. The row below it is where the
+  // difference lives.
+  { capability: "Record streams in the same specification", cells: ["y", "n", "n", "y", "n", "y"] },
+  // The property NDJSON relies on without ever stating. STF Stream §3.2 forbids a raw line
+  // terminator anywhere inside a record, so splitting on U+000A before parsing is guaranteed
+  // correct rather than conventional. JSON gets a "varies": it happens to hold, because RFC 8259
+  // forbids raw control characters in strings, but NDJSON, JSON Lines and RFC 7464 are three
+  // separate documents that disagree about framing. JSON5 loses it outright — a string may span
+  // lines by escaping the newline, so the newline itself is raw in the source. TOML's multi-line
+  // strings do the same, YAML's structure is the indentation, and Ion text is not line-delimited.
+  { capability: "Splittable on newlines before parsing", cells: ["y", "p", "n", "n", "n", "n"] },
   { capability: "One documented code per rejection", cells: ["y", "n", "n", "n", "n", "n"] },
   { capability: "Canonical form in the same specification", cells: ["y", "n", "n", "p", "n", "n"] },
 ];
