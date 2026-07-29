@@ -216,8 +216,16 @@ function HeroPanel() {
   const documentHtml = highlightToHtml(SAMPLE, TOKEN_CLASS);
   const streamHtml = highlightToHtml(STREAM, TOKEN_CLASS);
 
-  const documentHidden = $derived(active !== "document");
-  const streamHidden = $derived(active !== "stream");
+  // A class rather than the `hidden` attribute, because `hidden` means `display: none` and the two
+  // panes have to keep occupying the same grid cell for the panel to hold one height across a
+  // switch. `visibility: hidden` leaves the pane in the layout — and out of the accessibility
+  // tree, which is the part `hidden` was doing usefully.
+  const documentPane = $derived(
+    active === "document" ? "codeblock-pane" : "codeblock-pane codeblock-pane-off",
+  );
+  const streamPane = $derived(
+    active === "stream" ? "codeblock-pane" : "codeblock-pane codeblock-pane-off",
+  );
 
   return (
     <div class="codeblock">
@@ -226,7 +234,9 @@ function HeroPanel() {
           <button
             type="button"
             role="tab"
+            id="hero-tab-document"
             aria-selected={documentSelected}
+            aria-controls="hero-pane-document"
             class={active === "document" ? "code-tab code-tab-on" : "code-tab"}
             onclick={() => (active = "document")}
           >
@@ -235,7 +245,9 @@ function HeroPanel() {
           <button
             type="button"
             role="tab"
+            id="hero-tab-stream"
             aria-selected={streamSelected}
+            aria-controls="hero-pane-stream"
             class={active === "stream" ? "code-tab code-tab-on" : "code-tab"}
             onclick={() => (active = "stream")}
           >
@@ -245,21 +257,37 @@ function HeroPanel() {
         <span class="codeblock-name">{name}</span>
       </div>
 
-      <div hidden={documentHidden}>
-        <pre>
-          <RawHtml html={documentHtml} />
-        </pre>
-        <p class="codeblock-caption">One root object. Every value carries its own kind.</p>
-      </div>
+      {/* Both panes share one grid cell, so the panel is always as tall as the taller of them and
+        * switching moves nothing. Each pane is a column with its `pre` flexing, which keeps the
+        * caption — and the rule above it — on the same line of the page in both tabs; equal outer
+        * height alone would still have let that divider jump by seven lines. */}
+      <div class="codeblock-panes">
+        <div
+          class={documentPane}
+          id="hero-pane-document"
+          role="tabpanel"
+          aria-labelledby="hero-tab-document"
+        >
+          <pre>
+            <RawHtml html={documentHtml} />
+          </pre>
+          <p class="codeblock-caption">One root object. Every value carries its own kind.</p>
+        </div>
 
-      <div hidden={streamHidden}>
-        <pre>
-          <RawHtml html={streamHtml} />
-        </pre>
-        <p class="codeblock-caption">
-          One document per line. No record may contain a raw newline, so a reader may split the
-          file before parsing any of it.
-        </p>
+        <div
+          class={streamPane}
+          id="hero-pane-stream"
+          role="tabpanel"
+          aria-labelledby="hero-tab-stream"
+        >
+          <pre>
+            <RawHtml html={streamHtml} />
+          </pre>
+          <p class="codeblock-caption">
+            One document per line. No record may contain a raw newline, so a reader may split the
+            file before parsing any of it.
+          </p>
+        </div>
       </div>
     </div>
   );

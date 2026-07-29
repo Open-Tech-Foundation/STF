@@ -246,10 +246,15 @@ body {
   color: #cbd5e1;
 }
 
+/* The site's accent, so the selected tab is marked in the same colour as the primary CTA beside
+ * it. The label is the panel's own background rather than `--otfw-accent-contrast`: that token is
+ * #ffffff in light mode, which is 2.44:1 on the orange, and a 0.76rem label is the last place to
+ * inherit that. Panel-dark on the accent gives 7.8:1 light and 8.6:1 dark. */
 .code-tab-on,
 .code-tab-on:hover {
-  background: #1a2136;
-  color: #e2e8f0;
+  background: var(--otfw-accent);
+  color: var(--code-bg);
+  font-weight: 600;
 }
 
 /* Keyboard focus stays visible on a dark panel, where the UA's default outline usually is not. */
@@ -262,6 +267,31 @@ body {
   color: #7c869c;
   font-family: var(--otfw-mono);
   font-size: 0.74rem;
+}
+
+/* Both panes occupy the same grid cell, so the panel's height is the taller of the two and a tab
+ * switch moves nothing below it. The document example is ten lines and the stream is three, so
+ * without this the page jumped by most of a screen. */
+.codeblock-panes {
+  display: grid;
+}
+
+.codeblock-pane {
+  display: flex;
+  flex-direction: column;
+  grid-area: 1 / 1;
+}
+
+/* The `pre` takes the slack, which pins the caption and its rule to the bottom of the shared
+ * height. Equalising only the outer box would still have let that rule jump seven lines. */
+.codeblock-pane pre {
+  flex: 1;
+}
+
+/* Hidden but still laid out — and still in the markup, so the stream example stays in the static
+ * page for a reader without JavaScript and for anything that indexes the HTML. */
+.codeblock-pane-off {
+  visibility: hidden;
 }
 
 /* The caption is the tab's payload: without it the second tab is the first one with more braces. */
