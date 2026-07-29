@@ -1,32 +1,47 @@
 // The playground's conversions, kept out of the component so they can be tested directly.
 //
 // Everything here runs the reference implementation. Nothing re-implements a rule, and no
-// conversion guesses: where a target format cannot represent a value, the reference
-// implementation raises `ERR_UNREPRESENTABLE` and that is what the reader sees.
+// conversion guesses: where a target format cannot represent a value, the conversion is refused
+// and the reader is told which values are in the way and why.
 
 import {
   CANONICAL,
-  fromJSONText,
+  keysOf,
+  kindOf,
   parse,
   pretty,
   serialize,
   STFError,
-  toJSON,
   toTaggedJSON,
-  keysOf,
-  kindOf,
   type STFObject,
   type STFValue,
 } from "@open-tech-foundation/stf";
 
-export type Target = "json" | "json-lossy" | "kinds" | "canonical" | "formatted";
+import { ConversionRefused, FORMATS, read, write, type FormatId, type Policy } from "./formats.ts";
+import { analyze, type Report } from "./lossiness.ts";
 
-export const TARGETS: { id: Target; label: string; note: string }[] = [
-  { id: "json", label: "JSON", note: "Refuses values JSON cannot represent." },
-  { id: "json-lossy", label: "JSON (lossy)", note: "Typed payloads become strings; the type is lost." },
-  { id: "kinds", label: "Tagged kinds", note: "Each value's kind, as the conformance corpus writes it." },
-  { id: "canonical", label: "Canonical form", note: "One byte encoding per value, for hashing." },
-  { id: "formatted", label: "Formatted STF", note: "What `stf fmt` produces." },
+/** The STF-side renderings, which are not conversions to another format but views of this one. */
+export type StfTarget = "kinds" | "canonical" | "formatted";
+export type Target = FormatId | StfTarget;
+
+/** Which way the conversion runs. STF is always one end of it. */
+export type Direction = "from-stf" | "to-stf";
+
+export const TARGETS: { id: Target; label: string; note: string; convertible: boolean }[] = [
+  ...FORMATS.map((f) => ({ id: f.id as Target, label: f.label, note: f.note, convertible: true })),
+  {
+    id: "kinds",
+    label: "Tagged kinds",
+    note: "Each value's kind, as the conformance corpus writes it.",
+    convertible: false,
+  },
+  {
+    id: "canonical",
+    label: "Canonical STF",
+    note: "One byte encoding per value, for hashing.",
+    convertible: false,
+  },
+  { id: "formatted", label: "Formatted STF", note: "What `stf fmt` produces.", convertible: false },
 ];
 
 export interface Diagnostic {
@@ -43,8 +58,12 @@ export interface Outcome {
   parseError: Diagnostic | null;
   /** Present when the document is valid but the target cannot represent it. */
   convertError: string | null;
+  /** The specific values behind a refusal, so the reader is not left guessing. */
+  blocking: string[];
   /** Number of values in the parsed document, for the status line. */
   valueCount: number;
+  /** The parsed root, reused by the other tabs rather than parsed once per tab. */
+  root: STFObject | null;
 }
 
 /** Reads the message and position off a thrown error without assuming it is an STFError. */
@@ -98,52 +117,68 @@ export function parseError(source: string): { code: string; message: string; off
   }
 }
 
-/** Parses `source` and renders it into `target`. */
-export function convert(source: string, target: Target): Outcome {
+/** Parses `source` as STF and renders it into `target`. */
+export function convert(source: string, target: Target, policy: Policy): Outcome {
   let root: STFObject;
   try {
     root = parse(source);
   } catch (error) {
-    return { output: null, parseError: toDiagnostic(error), convertError: null, valueCount: 0 };
+    return {
+      output: null,
+      parseError: toDiagnostic(error),
+      convertError: null,
+      blocking: [],
+      valueCount: 0,
+      root: null,
+    };
   }
 
   const valueCount = countValues(root);
+  const ok = (output: string): Outcome => ({
+    output,
+    parseError: null,
+    convertError: null,
+    blocking: [],
+    valueCount,
+    root,
+  });
+
   try {
-    return { output: render(root, target), parseError: null, convertError: null, valueCount };
+    switch (target) {
+      case "kinds":
+        return ok(JSON.stringify(toTaggedJSON(root), null, 2));
+      case "canonical":
+        return ok(serialize(root, CANONICAL));
+      case "formatted":
+        return ok(serialize(root, pretty("  ")));
+      default:
+        return ok(write(root, target, policy));
+    }
   } catch (error) {
-    const e = error as Partial<STFError>;
     return {
       output: null,
       parseError: null,
       convertError: describe(error),
+      blocking: error instanceof ConversionRefused ? error.findings : [],
       valueCount,
+      root,
     };
   }
 }
 
-function render(root: STFObject, target: Target): string {
-  switch (target) {
-    case "json":
-      return JSON.stringify(toJSON(root), null, 2);
-    case "json-lossy":
-      return JSON.stringify(toJSON(root, "payload-as-string"), null, 2);
-    case "kinds":
-      return JSON.stringify(toTaggedJSON(root), null, 2);
-    case "canonical":
-      return serialize(root, CANONICAL);
-    case "formatted":
-      return serialize(root, pretty("  "));
+/** Reads `source` as `format` and renders it as STF. */
+export function convertToStf(source: string, format: FormatId): { output: string | null; error: string | null } {
+  if (source.trim() === "") return { output: null, error: null };
+  try {
+    return { output: read(source, format), error: null };
+  } catch (error) {
+    return { output: null, error: describe(error) };
   }
 }
 
-/** Converts JSON text into STF, refusing what STF cannot represent. */
-export function jsonToStf(text: string): { output: string | null; error: string | null } {
-  try {
-    return { output: serialize(fromJSONText(text), pretty("  ")), error: null };
-  } catch (error) {
-    const e = error as Partial<STFError>;
-    return { output: null, error: describe(error) };
-  }
+/** The lossiness report for the document against every target format at once. */
+export function reportAll(root: STFObject): Report[] {
+  return FORMATS.map((f) => analyze(root, f.id));
 }
 
 /** SHA-256 of the canonical bytes — what `stf canon | sha256sum` prints. */
@@ -195,12 +230,23 @@ export const SAMPLES: { label: string; source: string }[] = [
   {
     label: "Scale is data",
     source: `# DECIMAL(1.5) and DECIMAL(1.50) are different values.
-# Convert to JSON and the conversion is refused, because JSON
-# has no exact decimal to convert them into.
+# No target format has an exact decimal, so every one of them
+# collapses these three into the same binary float.
 {
   half: DECIMAL(1.5),
   half_again: DECIMAL(1.50),
   price: DECIMAL(19.99),
+}`,
+  },
+  {
+    label: "What TOML keeps",
+    source: `# TOML is the one target with real dates — and no null at all.
+# Convert this to TOML and to JSON, and compare the reports.
+{
+  released_on: DATE(2026-01-15),
+  checked_at: TIMESTAMP(2026-01-15T10:30:00Z),
+  successor: N,
+  checksum: BINARY(SGVsbG8=),
 }`,
   },
   {

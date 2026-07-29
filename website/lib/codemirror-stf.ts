@@ -166,27 +166,61 @@ const theme = EditorView.theme(
 /** Diagnostics as CodeMirror sees them, from a parse of the current document. */
 export type Parse = (text: string) => { code: string; message: string; offset: number } | null;
 
-/** Everything the playground needs: language, colours, theme, and parser-backed diagnostics. */
-export function stfExtensions(parse: Parse) {
-  return [
-    StreamLanguage.define({ ...stfParser, tokenTable }),
-    syntaxHighlighting(highlightStyle),
-    theme,
-    linter((view): Diagnostic[] => {
-      const text = view.state.doc.toString();
-      const error = parse(text);
-      if (!error) return [];
-      // `offset` is in UTF-16 code units — the same coordinates as the document.
-      const from = Math.max(0, Math.min(error.offset < 0 ? 0 : error.offset, text.length));
-      return [
-        {
-          from,
-          to: Math.min(from + 1, text.length),
-          severity: "error",
-          source: error.code,
-          message: error.message,
-        },
-      ];
-    }),
-  ];
+/** One diagnostic per failing record, as a stream read reports them. */
+export type ParseStream = (text: string) => { line: number; code: string; message: string }[];
+
+/**
+ * Language, colours and theme — everything that makes the editor legible.
+ *
+ * Deliberately separate from the linters below. These must stay applied for the editor's whole
+ * life: the theme carries the background, the text colour and the gutter styling, so swapping it
+ * out along with a linter leaves dark text on a dark pane and the editor looks empty.
+ */
+export function stfBase() {
+  return [StreamLanguage.define({ ...stfParser, tokenTable }), syntaxHighlighting(highlightStyle), theme];
+}
+
+/** Whole-document diagnostics: one parse, one error, at the parser's own offset. */
+export function stfLinter(parse: Parse) {
+  return linter((view): Diagnostic[] => {
+    const text = view.state.doc.toString();
+    const error = parse(text);
+    if (!error) return [];
+    // `offset` is in UTF-16 code units — the same coordinates as the document.
+    const from = Math.max(0, Math.min(error.offset < 0 ? 0 : error.offset, text.length));
+    return [
+      {
+        from,
+        to: Math.min(from + 1, text.length),
+        severity: "error",
+        source: error.code,
+        message: error.message,
+      },
+    ];
+  });
+}
+
+/**
+ * Per-record diagnostics for a stream.
+ *
+ * A stream is many documents, so linting it as one would report line 2 as trailing content and
+ * mark the whole file bad. Marking each failing record on its own line is both correct and the
+ * property the profile exists to demonstrate: a bad line is a bad line, not a bad file.
+ */
+export function stfStreamLinter(parseStream: ParseStream) {
+  return linter((view): Diagnostic[] => {
+    const doc = view.state.doc;
+    return parseStream(doc.toString())
+      .filter((record) => record.line >= 1 && record.line <= doc.lines)
+      .map((record) => {
+        const line = doc.line(record.line);
+        return {
+          from: line.from,
+          to: line.to,
+          severity: "error" as const,
+          source: record.code,
+          message: record.message,
+        };
+      });
+  });
 }

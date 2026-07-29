@@ -537,29 +537,331 @@ body {
   display: contents;
 }
 
-.playground .pg-title {
-  margin: 0 0 0.5rem;
-  font-size: 1.6rem;
-  font-weight: 680;
+/* Playground ------------------------------------------------------------- */
+
+/*
+ * Two surfaces, one rule.
+ *
+ * The *chrome* — bars, tabs, meters, cards, tables — follows the site theme, because it is
+ * interface and a light-theme reader should get a light interface. The *code* — the editor, the
+ * converted output, the paste target — is fixed dark in both themes, the same decision the
+ * landing page's code panels make: a document reads as an artefact of an editor, and the token
+ * colours below are tuned for one background rather than two.
+ *
+ * Everything is a token so the two never get confused. Reach for `--pg-code-*` only inside a
+ * code surface; reach for the rest everywhere else.
+ */
+.playground {
+  --pg-surface: var(--stf-surface);
+  --pg-raised: var(--stf-bg);
+  --pg-border: var(--stf-border);
+  --pg-border-strong: var(--stf-border-strong);
+  --pg-text: var(--stf-text);
+  --pg-muted: var(--stf-muted);
+  --pg-faint: var(--stf-faint);
+  --pg-accent: var(--otfw-accent);
+
+  --pg-good: #15803d;
+  --pg-warn: #b45309;
+  --pg-bad: #b91c1c;
+
+  /* Validated for this surface with the palette checker, light and dark separately. Teal rather
+   * than amber for "kind lost": amber beside red is genuinely hard to separate under
+   * deuteranopia, and no legend rescues a pair the eye cannot split. */
+  --pg-seg-intact: #4f46e5;
+  --pg-seg-degraded: #0d9488;
+  --pg-seg-lost: #dc2626;
+
+  --pg-code-bg: #0b1020;
+  --pg-code-text: #cbd5e1;
+}
+
+[data-theme="dark"] .playground {
+  --pg-good: #86efac;
+  --pg-warn: #fbbf24;
+  --pg-bad: #fca5a5;
+
+  --pg-seg-intact: #6366f1;
+  --pg-seg-degraded: #0891b2;
+  --pg-seg-lost: #ef4444;
+}
+
+/* The playground is a tool, not a page of prose: it fills the viewport below the navbar so the
+ * footer sits under the fold and both panes get every pixel of height available. */
+.playground {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - var(--otfw-navbar-height, 3.75rem));
+}
+
+.playground .section {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 1.25rem 0 1.5rem;
+  border-top: none;
+}
+
+/* Wider than the prose container: this is a two-pane tool with a table in it, and 68rem
+ * squeezes the lossiness notes into a column of two-word lines. */
+.playground .container {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  width: min(100%, 92rem);
+}
+
+/* --- measurement cards -----------------------------------------------------------------------
+ *
+ * Four questions about the document in the editor, one per card: how much of it survives the
+ * selected target, what it weighs, which kinds the target has no home for, and how much it loses
+ * without saying so. They are the answers a reader came for, so they are set as figures — the
+ * earlier layout put the sizes in the same 0.72rem grey as the parse position, which read as
+ * metadata about the header rather than as one of the two numbers on the page that matter.
+ *
+ * The cards are the header, not a band above it: a full-width strip holding a title and one bar
+ * left most of a 92rem row empty, and the emptiness was the complaint. Four cards fill it with
+ * four measurements instead of stretching one.
+ *
+ * The cards sit on the page background and are divided by hairlines rather than boxed. Four boxes
+ * above two boxed panes is three levels of container for one screen, and the boxed treatment is
+ * worth more below, where a border means "this is an editor" and means it exclusively. */
+
+.pg-header {
+  flex: none;
+  margin-bottom: 1rem;
+}
+
+.pg-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1px;
+  background: var(--pg-border);
+  border-block: 1px solid var(--pg-border);
+}
+
+/* The 1px grid gap is the divider: the cards sit on the border colour and paint over it. */
+.pg-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.8rem 1rem 0.85rem;
+  background: var(--pg-raised);
+}
+
+.pg-card-wide {
+  grid-column: 1 / -1;
+}
+
+.pg-card-label {
+  color: var(--pg-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+/* Tabular figures so the numbers hold their column as the reader types and the counts change —
+ * a figure that shifts sideways on every keystroke reads as a flicker rather than as a measure. */
+.pg-card-figure {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+  color: var(--pg-text);
+  font-size: 1.65rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
   letter-spacing: -0.02em;
 }
 
+/* An error code is a name, not a quantity: mono, and small enough that ERR_INVALID_NUMBER does
+ * not set the height of the whole row. */
+.pg-card-bad .pg-card-figure {
+  color: var(--pg-bad);
+  font-family: var(--otfw-mono);
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.pg-card-good .pg-card-figure {
+  color: var(--pg-good);
+}
+
+.pg-card-unit {
+  color: var(--pg-faint);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.pg-card-note {
+  color: var(--pg-muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+/* --- the size card's two rows ---
+ *
+ * The one card that holds a comparison rather than a quantity, so it is the one card without a
+ * figure. Each encoding is named on its own row and weighed beside the other, because the version
+ * that led with `251 bytes` and mentioned `290 B as STF` underneath left a reader to work out
+ * which number belonged to which format — and to guess whose gzipped size was being quoted.
+ *
+ * The bars are scaled against the larger of the two rows, so the ratio arrives before the digits
+ * do. Colour separates them, but the names carry the identity, so nothing depends on the colour. */
+
+.pg-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+}
+
+.pg-row {
+  display: grid;
+  grid-template-columns: minmax(2.5rem, auto) 1fr auto;
+  gap: 0.15rem 0.5rem;
+  align-items: center;
+}
+
+.pg-row-name {
+  color: var(--pg-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.pg-row-track {
+  height: 0.55rem;
+  overflow: hidden;
+  background: var(--pg-border);
+  border-radius: 0.2rem;
+}
+
+.pg-row-fill {
+  display: block;
+  height: 100%;
+  background: var(--pg-muted);
+  border-radius: 0.2rem;
+  transition: width 160ms ease-out;
+}
+
+.pg-row-own .pg-row-fill {
+  background: var(--pg-accent);
+}
+
+.pg-row-raw {
+  color: var(--pg-text);
+  font-family: var(--otfw-mono);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The gzipped size sits under its own row's raw size, in the third column, so it is unambiguous
+ * whose it is — the previous layout put one gzipped figure in a shared note and left the reader
+ * to assume. */
+.pg-row-gz {
+  grid-column: 3;
+  color: var(--pg-faint);
+  font-family: var(--otfw-mono);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-row-fill {
+    transition: none;
+  }
+}
+
+/* A 2px gap between segments rather than a hairline border: the surface shows through, so the
+ * boundary reads at any segment width without adding a colour. */
+.pg-card-track {
+  display: flex;
+  gap: 2px;
+  height: 0.35rem;
+  margin-top: 0.1rem;
+  overflow: hidden;
+  background: var(--pg-border);
+  border-radius: 0.2rem;
+}
+
+.pg-seg {
+  height: 100%;
+  border-radius: 0.2rem;
+  transition: width 160ms ease-out;
+}
+
+.pg-seg-intact {
+  background: var(--pg-seg-intact);
+}
+
+.pg-seg-degraded {
+  background: var(--pg-seg-degraded);
+}
+
+.pg-seg-lost {
+  background: var(--pg-seg-lost);
+}
+
+/* A target that holds everything is the one card that reads as a win — and its figure is already
+ * green, so the colour is never carrying the meaning alone. */
+.pg-card-good .pg-seg-intact {
+  background: var(--pg-good);
+}
+
+.pg-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin-top: 0.6rem;
+  color: var(--pg-faint);
+  font-size: 0.7rem;
+}
+
+.pg-legend-item {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.pg-swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 0.15rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-seg {
+    transition: none;
+  }
+}
+
+/* --- panes ------------------------------------------------------------------------------------ */
+
 .pg-grid {
   display: grid;
+  flex: 1;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr);
   gap: 1.25rem;
-  align-items: start;
+  min-height: 0;
 }
 
 .pg-pane {
-  /* A fixed pane height with a flexing body keeps both panes identical whatever their bars
-   * wrap to — the left one carries a filename and the sample chips, the right a select. */
+  /* The pane fills its grid row, and its body flexes, so both panes stay identical whatever
+   * their bars wrap to — the left one carries a filename and the sample chips, the right a
+   * select. */
   display: flex;
   flex-direction: column;
-  height: 34rem;
+  min-height: 0;
   overflow: hidden;
-  background: #0b1020;
-  border: 1px solid #1e2440;
+  background: var(--pg-surface);
+  border: 1px solid var(--pg-border);
   border-radius: var(--otfw-radius);
 }
 
@@ -570,11 +872,11 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid #1e2440;
+  border-bottom: 1px solid var(--pg-border);
 }
 
 .pg-name {
-  color: #7c869c;
+  color: var(--pg-muted);
   font-family: var(--otfw-mono);
   font-size: 0.74rem;
 }
@@ -588,10 +890,10 @@ body {
 .pg-chip,
 .pg-select {
   padding: 0.25rem 0.6rem;
-  border: 1px solid #2a3255;
+  border: 1px solid var(--pg-border-strong);
   border-radius: 0.4rem;
-  background: #131a33;
-  color: #c7d0e4;
+  background: var(--pg-raised);
+  color: var(--pg-text);
   font-family: inherit;
   font-size: 0.75rem;
   cursor: pointer;
@@ -599,8 +901,8 @@ body {
 
 .pg-chip:hover:not(:disabled),
 .pg-select:hover {
-  border-color: #8b93ff;
-  color: #e2e8f0;
+  border-color: var(--pg-accent);
+  color: var(--pg-accent);
 }
 
 .pg-chip:disabled {
@@ -608,10 +910,30 @@ body {
   cursor: default;
 }
 
+.pg-chip-on {
+  border-color: var(--pg-accent);
+  background: var(--otfw-accent-soft);
+  color: var(--pg-accent);
+}
+
+.pg-bar-sub {
+  justify-content: flex-start;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+}
+
+.pg-toggle {
+  display: flex;
+  gap: 0.3rem;
+}
+
+/* --- code surfaces: fixed dark in both themes -------------------------------------------------- */
+
 .pg-editor {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  background: var(--pg-code-bg);
 }
 
 /* CodeMirror fills the pane rather than growing with the document. */
@@ -625,7 +947,8 @@ body {
   margin: 0;
   padding: 0.85rem 1rem;
   overflow: auto;
-  color: #cbd5e1;
+  background: var(--pg-code-bg);
+  color: var(--pg-code-text);
   font-family: var(--otfw-mono);
   font-size: 0.79rem;
   line-height: 1.7;
@@ -641,7 +964,8 @@ body {
 }
 
 /* A refusal is a result, not a failure: the target cannot hold the value, and the tool says so
- * rather than approximating. Amber, with the alternative one click away. */
+ * rather than approximating. Amber, with the alternative one click away. Tuned for the dark code
+ * surface it always sits on. */
 .pg-refused {
   border-left: 3px solid #fbbf24;
 }
@@ -661,32 +985,35 @@ body {
   line-height: 1.65;
 }
 
-.pg-status {
-  padding: 0.5rem 0.75rem;
-  border-top: 1px solid #1e2440;
-  font-size: 0.76rem;
-  line-height: 1.5;
+.pg-blocking {
+  margin: 0 0 0.9rem;
+  padding-left: 1rem;
+  color: #cbd5e1;
+  font-family: var(--otfw-mono);
+  font-size: 0.72rem;
+  line-height: 1.6;
 }
 
-.pg-good {
-  color: #86efac;
+.pg-textarea {
+  flex: 1;
+  min-height: 7rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-bottom: 1px solid var(--pg-border);
+  background: var(--pg-code-bg);
+  color: var(--pg-code-text);
+  font-family: var(--otfw-mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  resize: none;
 }
 
-.pg-bad {
-  color: #fca5a5;
+.pg-textarea:focus {
+  outline: 2px solid var(--pg-accent);
+  outline-offset: -2px;
 }
 
-.pg-bad code {
-  color: #fca5a5;
-  font-weight: 600;
-}
-
-.pg-digest,
-.pg-note {
-  color: #64748b;
-}
-
-/* The playground's panes are dark in both themes, like the code panels. */
+/* Syntax colours, always on the dark code surface. */
 .playground .pg-output .cm { color: #5b6478; font-style: italic; }
 .playground .pg-output .dir { color: #c084fc; }
 .playground .pg-output .k { color: #e2e8f0; }
@@ -697,12 +1024,311 @@ body {
 .playground .pg-output .t { color: #f472b6; }
 .playground .pg-output .pn { color: #64748b; }
 
+/* --- status line ------------------------------------------------------------------------------ */
+
+.pg-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--pg-border);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+/* A diagnostic is a route into the reference, not a dead end. */
+.pg-errlink {
+  color: var(--pg-accent);
+  font-size: 0.72rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pg-errlink:hover {
+  text-decoration: underline;
+}
+
+.pg-good {
+  color: var(--pg-good);
+}
+
+.pg-bad {
+  color: var(--pg-bad);
+}
+
+.pg-warn {
+  color: var(--pg-warn);
+  font-size: 0.74rem;
+}
+
+.pg-bad code {
+  color: var(--pg-bad);
+  font-weight: 600;
+}
+
+.pg-digest,
+.pg-note {
+  color: var(--pg-faint);
+}
+
+/* --- tabs ------------------------------------------------------------------------------------ */
+
+.pg-tabs {
+  display: flex;
+  gap: 0.15rem;
+  padding: 0.4rem 0.5rem 0;
+  border-bottom: 1px solid var(--pg-border);
+}
+
+.pg-tab {
+  padding: 0.4rem 0.7rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--pg-muted);
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.pg-tab:hover:not(:disabled) {
+  color: var(--pg-text);
+}
+
+.pg-tab:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.pg-tab-on {
+  border-bottom-color: var(--pg-accent);
+  color: var(--pg-accent);
+}
+
+/* The body flexes so each tab's own scroller owns the overflow and the pane height never moves. */
+.pg-tabbody {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.pg-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 0.85rem 1rem;
+  overflow-y: auto;
+}
+
+.pg-lead {
+  margin: 0 0 0.9rem;
+  color: var(--pg-muted);
+  font-size: 0.79rem;
+  line-height: 1.6;
+}
+
+.pg-output-inline {
+  flex: none;
+  max-height: 12rem;
+}
+
+/* --- lossiness ------------------------------------------------------------------------------- */
+
+.pg-card {
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--pg-raised);
+  border: 1px solid var(--pg-border);
+  border-radius: 0.45rem;
+}
+
+.pg-card-clean {
+  border-color: var(--pg-good);
+}
+
+.pg-card-head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.pg-card-name {
+  color: var(--pg-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.pg-card-head .pg-good {
+  font-size: 0.74rem;
+}
+
+.pg-findings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pg-finding {
+  margin-top: 0.55rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--pg-border-strong);
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.pg-finding.pg-unrepresentable {
+  border-left-color: var(--pg-seg-lost);
+}
+
+.pg-finding.pg-degraded {
+  border-left-color: var(--pg-seg-degraded);
+}
+
+.pg-path {
+  color: var(--pg-text);
+  font-family: var(--otfw-mono);
+  font-size: 0.73rem;
+}
+
+.pg-kindtag {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.25rem;
+  background: var(--otfw-accent-soft);
+  color: var(--pg-accent);
+  font-size: 0.68rem;
+}
+
+/* Silent corruption is the finding that matters most: no error, wrong data. */
+.pg-silent {
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.25rem;
+  background: var(--pg-seg-lost);
+  color: #ffffff;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pg-findnote {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--pg-muted);
+}
+
+/* --- size ------------------------------------------------------------------------------------ */
+
+.pg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+}
+
+.pg-table th {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--pg-border-strong);
+  color: var(--pg-muted);
+  font-weight: 600;
+  text-align: left;
+}
+
+.pg-table td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--pg-border);
+  color: var(--pg-text);
+}
+
+.pg-table .pg-num {
+  font-family: var(--otfw-mono);
+  text-align: right;
+}
+
+.pg-footnote {
+  margin: 0.9rem 0 0;
+  font-size: 0.73rem;
+  line-height: 1.6;
+}
+
+.pg-footnote code {
+  color: var(--pg-accent);
+}
+
+/* --- streams --------------------------------------------------------------------------------- */
+
+.pg-records {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.pg-record {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--pg-border);
+  font-size: 0.74rem;
+}
+
+.pg-lineno {
+  min-width: 1.5rem;
+  color: var(--pg-faint);
+  font-family: var(--otfw-mono);
+  text-align: right;
+}
+
+.pg-record-bad .pg-record-text {
+  color: var(--pg-bad);
+}
+
+.pg-record-err {
+  color: var(--pg-bad);
+  font-family: var(--otfw-mono);
+  font-size: 0.7rem;
+  text-decoration: none;
+}
+
+.pg-record-err:hover {
+  text-decoration: underline;
+}
+
+.pg-record-text {
+  color: var(--pg-text);
+  font-family: var(--otfw-mono);
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 860px) {
+  /* Stacked, the panes cannot share one viewport height — the page scrolls instead, and each
+   * pane gets a workable fixed height back. */
+  .playground {
+    min-height: 0;
+  }
+
   .pg-grid {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
   }
 
   .pg-pane {
     height: 26rem;
+  }
+
+  /* Two cards per row rather than four: at 13rem a card holds "Survives as JSON" on one line,
+   * and below that the label wraps to two while the figure keeps its own line anyway. */
+  .pg-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .pg-card-figure {
+    font-size: 1.4rem;
+  }
+
+  .pg-table {
+    font-size: 0.72rem;
   }
 }
