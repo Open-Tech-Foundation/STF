@@ -31,7 +31,7 @@ export default function Home() {
               record stream.
             </p>
             <div class="cta-row">
-              <a href="/docs" class="btn btn-primary">
+              <a href="/spec" class="btn btn-primary">
                 Read the specification
               </a>
               <a href="/playground" class="btn btn-ghost">
@@ -137,13 +137,19 @@ export default function Home() {
             <ul>
               {NORMATIVE.map((item) => (
                 <li>
-                  <code>{item.ref}</code> — {item.body}
+                  <a class="norm-ref" href={item.href}>
+                    <code>{item.ref}</code>
+                  </a>{" "}
+                  — {item.body}
                 </li>
               ))}
             </ul>
             <div class="cta-row">
-              <a href="/docs" class="btn btn-ghost">
+              <a href="/spec" class="btn btn-ghost">
                 Specification
+              </a>
+              <a href="/docs" class="btn btn-ghost">
+                Guides
               </a>
             </div>
           </div>
@@ -379,12 +385,34 @@ const REASONS = [
   },
 ];
 
+// Each reference links to the section it cites. A specification reference that a reader cannot
+// follow in one click is a citation, and the point of publishing the text was to stop it being one.
 const NORMATIVE = [
-  { ref: "§3", body: "eleven value kinds, defined independently of any host language." },
-  { ref: "§13", body: "parse(serialize(v)) ≡ v, and no constructor inferred from string content." },
-  { ref: "§14", body: "canonical form: one byte encoding per value." },
-  { ref: "§15", body: "a mandatory nesting depth limit, defaulting to 64." },
-  { ref: "codes", body: "one documented code per rejection; message text is not normative." },
+  {
+    ref: "§3",
+    href: "/spec#3-data-model",
+    body: "eleven value kinds, defined independently of any host language.",
+  },
+  {
+    ref: "§13",
+    href: "/spec#13-serialization",
+    body: "parse(serialize(v)) ≡ v, and no constructor inferred from string content.",
+  },
+  {
+    ref: "§14",
+    href: "/spec#14-canonical-form",
+    body: "canonical form: one byte encoding per value.",
+  },
+  {
+    ref: "§15",
+    href: "/spec#15-resource-limits",
+    body: "a mandatory nesting depth limit, defaulting to 64.",
+  },
+  {
+    ref: "codes",
+    href: "/spec#errors",
+    body: "one documented code per rejection; message text is not normative.",
+  },
 ];
 
 const COMPARISON = [

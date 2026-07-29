@@ -246,14 +246,17 @@ body {
   color: #cbd5e1;
 }
 
-/* The site's accent, so the selected tab is marked in the same colour as the primary CTA beside
- * it. The label is the panel's own background rather than `--otfw-accent-contrast`: that token is
- * #ffffff in light mode, which is 2.44:1 on the orange, and a 0.76rem label is the last place to
- * inherit that. Panel-dark on the accent gives 7.8:1 light and 8.6:1 dark. */
+/* The site's accent, so the selected tab is marked in the same colour as the primary CTA beside it.
+ *
+ * The label uses the accent's own contrast token. An earlier version set it to the panel's dark
+ * background, on the strength of a contrast check run against the docs theme's default orange —
+ * but this file overrides `--otfw-accent` to indigo forty lines up, so the real pair was #0b1020
+ * on #4f46e5, which is 3.01:1 and fails AA. The token exists precisely so this cannot be got
+ * wrong by hand: #ffffff on #4f46e5 is 6.29:1, and #0b1220 on #8b93ff is 6.88:1. */
 .code-tab-on,
 .code-tab-on:hover {
   background: var(--otfw-accent);
-  color: var(--code-bg);
+  color: var(--otfw-accent-contrast);
   font-weight: 600;
 }
 
@@ -1448,4 +1451,203 @@ body {
   .pg-table {
     font-size: 0.72rem;
   }
+}
+
+/* Specification page --------------------------------------------------------
+ *
+ * A different frame from /docs on purpose. A guide is read forwards; a specification is entered
+ * at a section, checked, and cited. So the contents are the primary navigation rather than a
+ * right-margin afterthought — every section and subsection listed, always, on a rail that scrolls
+ * independently of the text. */
+
+.spec {
+  display: grid;
+  grid-template-columns: 19rem minmax(0, 1fr);
+  gap: 2.5rem;
+  width: min(100%, 82rem);
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.spec-toc {
+  position: sticky;
+  top: var(--otfw-navbar-height, 3.75rem);
+  align-self: start;
+  max-height: calc(100vh - var(--otfw-navbar-height, 3.75rem));
+  padding: 1.75rem 0.5rem 2rem 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--otfw-border);
+  font-size: 0.8rem;
+}
+
+.spec-toc-title {
+  margin: 0 0 0.9rem;
+  color: var(--otfw-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.spec-toc-group + .spec-toc-group {
+  margin-top: 1.4rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--otfw-border);
+}
+
+/* The note, not the document title, because the first entry in each group *is* the title — the
+ * rail would otherwise say "STF Stream 1.0" twice in a row. */
+.spec-toc-group-note {
+  margin: 0 0 0.5rem;
+  color: var(--otfw-text-muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.spec-toc ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.spec-toc li {
+  margin: 0;
+}
+
+.spec-toc-link {
+  display: block;
+  padding: 0.24rem 0.6rem;
+  border-left: 2px solid transparent;
+  color: var(--otfw-text-muted);
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.spec-toc-link:hover {
+  color: var(--otfw-text);
+}
+
+/* Scroll-spy marks position with a rule and a weight, never colour alone. */
+.spec-toc-on {
+  border-left-color: var(--otfw-accent);
+  color: var(--otfw-text);
+  font-weight: 600;
+}
+
+.spec-toc-sub .spec-toc-link {
+  padding-left: 1.5rem;
+  font-size: 0.74rem;
+}
+
+.spec-body {
+  min-width: 0;
+  padding: 1.75rem 0 4rem;
+}
+
+.spec-head {
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.75rem;
+  border-bottom: 1px solid var(--otfw-border);
+}
+
+.spec-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  margin: 0 0 0.85rem;
+  color: var(--otfw-text-muted);
+  font-size: 0.76rem;
+}
+
+.spec-badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--otfw-accent-soft);
+  color: var(--otfw-accent);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.spec .spec-head h1 {
+  margin: 0 0 0.75rem;
+}
+
+.spec-lede {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--otfw-text-muted);
+  line-height: 1.65;
+}
+
+/* Each document's opening heading. Larger than a section so the boundary between the core format
+ * and an optional profile is not something a reader has to infer from the numbering restarting. */
+.spec .spec-doc-title {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+  font-size: 1.75rem;
+}
+
+.spec .spec-doc-note {
+  margin: -0.35rem 0 2rem;
+  color: var(--otfw-text-muted);
+  font-size: 0.85rem;
+}
+
+.spec .spec-rule {
+  margin: 4rem 0 2.5rem;
+  border: 0;
+  border-top: 2px solid var(--otfw-border);
+}
+
+@media (max-width: 1080px) {
+  /* The rail becomes a disclosure at the top rather than a column: at this width a 19rem rail
+   * leaves the normative text in a gutter, and the text is the point. */
+  .spec {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .spec-toc {
+    position: static;
+    max-height: 22rem;
+    padding: 1.25rem 0;
+    border-right: none;
+    border-bottom: 1px solid var(--otfw-border);
+  }
+}
+
+/* GitHub's alert syntax is GitHub's alone, so the generator rewrites it into this. The draft
+ * notice is the one line on the page that must not look like a typo. */
+.spec-alert {
+  margin: 1.5rem 0;
+  padding: 0.85rem 1.1rem;
+  border-left: 3px solid var(--otfw-border);
+  border-radius: 0 var(--otfw-radius) var(--otfw-radius) 0;
+  background: var(--otfw-bg-surface);
+}
+
+.spec-alert > :first-child {
+  margin-top: 0;
+}
+
+.spec-alert > :last-child {
+  margin-bottom: 0;
+}
+
+.spec-alert-warning,
+.spec-alert-caution {
+  border-left-color: var(--otfw-accent);
+}
+
+/* A section reference that cannot be followed in one click is a citation, not a link. */
+.norm-ref {
+  color: inherit;
+  text-decoration: none;
+}
+
+.norm-ref:hover code {
+  color: var(--otfw-accent);
 }

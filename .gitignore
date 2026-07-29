@@ -67,3 +67,9 @@ benchmarks/*/bench_*.json
 
 # VS Code extension build output
 /vscode-stf/out/
+
+# Generated from doc/*.md by website/scripts/gen-spec.ts — the repository is the source of truth.
+# Paths are repo-relative: this file is at the root, so a bare `app/spec/...` matched nothing and
+# the generated copies were committed alongside the originals they are generated from.
+website/app/spec/page.mdx
+website/app/spec/contents.ts

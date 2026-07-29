@@ -20,6 +20,7 @@ export default defineDocsConfig({
     nav: [
       { label: "Home", href: "/" },
       { label: "Docs", href: "/docs" },
+      { label: "Spec", href: "/spec" },
       { label: "Playground", href: "/playground" },
     ],
     footer: {

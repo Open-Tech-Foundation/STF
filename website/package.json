@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "otfw dev",
-    "build": "otfw build --ssg",
+    "dev": "bun scripts/gen-spec.ts && otfw dev",
+    "build": "bun scripts/gen-spec.ts && otfw build --ssg",
     "test": "bun test lib"
   },
   "dependencies": {
