@@ -193,7 +193,8 @@ body {
  * becomes the grid item itself — the convention the docs theme documents and uses for its
  * own link and navbar hosts. The host is addressed by the stable `web-<kebab>` class the
  * compiler stamps; the element tag is module-hashed and not a reliable selector. */
-.web-stf-code {
+.web-stf-code,
+.web-hero-panel {
   display: contents;
 }
 
@@ -214,10 +215,63 @@ body {
   border-bottom: 1px solid var(--code-line);
 }
 
+/* The tabbed bar puts the control at the reading edge and the filename opposite, so the filename
+ * reads as the tab's consequence rather than as a second control. */
+.codeblock-bar-tabs {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem 0.4rem 0.45rem;
+}
+
+.code-tabs {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.code-tab {
+  padding: 0.3rem 0.7rem;
+  border: none;
+  border-radius: calc(var(--otfw-radius) - 0.25rem);
+  background: transparent;
+  color: #7c869c;
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.code-tab:hover {
+  color: #cbd5e1;
+}
+
+.code-tab-on,
+.code-tab-on:hover {
+  background: #1a2136;
+  color: #e2e8f0;
+}
+
+/* Keyboard focus stays visible on a dark panel, where the UA's default outline usually is not. */
+.code-tab:focus-visible {
+  outline: 2px solid var(--otfw-accent);
+  outline-offset: -2px;
+}
+
 .codeblock-name {
   color: #7c869c;
   font-family: var(--otfw-mono);
   font-size: 0.74rem;
+}
+
+/* The caption is the tab's payload: without it the second tab is the first one with more braces. */
+.codeblock-caption {
+  margin: 0;
+  padding: 0.6rem 1.25rem 0.75rem;
+  border-top: 1px solid var(--code-line);
+  color: #7c869c;
+  font-size: 0.74rem;
+  line-height: 1.55;
 }
 
 .codeblock pre {
