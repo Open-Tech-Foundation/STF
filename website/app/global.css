@@ -367,6 +367,20 @@ body {
   font-size: 0.82rem;
 }
 
+/* Set at reading width and in the body colour, not shrunk into fine print — a caveat typeset as
+ * something to skip is worth less than no caveat at all. */
+.cmp-caveat {
+  max-width: 68ch;
+  margin: 0.85rem 0 0;
+  color: var(--stf-muted);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.cmp-caveat a {
+  color: var(--otfw-accent);
+}
+
 /* Split section ---------------------------------------------------------- */
 
 .two-col {

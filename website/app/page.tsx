@@ -60,7 +60,9 @@ export default function Home() {
       <section class="section">
         <div class="container">
           <h2>How it compares</h2>
-          <p class="sub">Where a format permits a capability but implementations disagree.</p>
+          <p class="sub">
+            What each specification requires, including the row STF loses.
+          </p>
           <div class="table-scroll">
             <table>
               <thead>
@@ -94,9 +96,27 @@ export default function Home() {
           <div class="cmp-legend-row">
             <div class="cmp-legend">
               <span>✅ yes</span>
-              <span>🟡 varies by implementation</span>
+              <span>🟡 varies, or holds with a caveat</span>
               <span>❌ no</span>
             </div>
+            {/* Naming the bias rather than hoping it goes unnoticed. The last two rows are
+              * criteria STF chose for itself, and a reader who spots that unaided discounts the
+              * whole table; a reader who is told it up front can weigh those rows and keep the
+              * rest. Throughput is missing because a tick cannot carry it — so it is linked
+              * rather than silently dropped, since it is the other axis where Ion wins. */}
+            <p class="cmp-caveat">
+              The last two rows are criteria STF set for itself, so every other format scores ❌ or
+              🟡 by construction — weigh them accordingly. Ion beats STF on payload size and parse
+              throughput, which no column of ticks can show;{" "}
+              <a href="https://github.com/Open-Tech-Foundation/STF/blob/main/doc/comparison.md">
+                comparison.md
+              </a>{" "}
+              gives the long form, and{" "}
+              <a href="https://github.com/Open-Tech-Foundation/STF/blob/main/benchmarks/RESULTS.md">
+                the benchmarks
+              </a>{" "}
+              give the numbers.
+            </p>
           </div>
         </div>
       </section>
@@ -234,10 +254,12 @@ const COMPARISON = [
   { capability: "Binary data as a distinct type", cells: ["y", "n", "n", "p", "n", "y"] },
   { capability: "Comments", cells: ["y", "n", "y", "y", "y", "y"] },
   { capability: "Duplicate keys rejected", cells: ["y", "n", "n", "p", "y", "n"] },
-  // YAML has had document streams since 1.1 (`---`) and Ion is defined as a value stream, so
-  // this row is not a win for STF and is not written as one. The row below it is where the
-  // difference lives.
-  { capability: "Record streams in the same specification", cells: ["y", "n", "n", "y", "n", "y"] },
+  // YAML has had document streams since 1.1 (`---`) and Ion is defined as a value stream, so this
+  // row is not a win for STF and is not written as one. It was first written as "record streams in
+  // the same specification", which was worse than useless: STF Stream is a sibling document to the
+  // core spec, exactly as Ion Hash is to Ion's — so the qualifier that was about to deny Ion its
+  // canonical form was one STF could not satisfy either. The qualifier is gone from both rows.
+  { capability: "Record streams", cells: ["y", "n", "n", "y", "n", "y"] },
   // The property NDJSON relies on without ever stating. STF Stream §3.2 forbids a raw line
   // terminator anywhere inside a record, so splitting on U+000A before parsing is guaranteed
   // correct rather than conventional. JSON gets a "varies": it happens to hold, because RFC 8259
@@ -246,7 +268,17 @@ const COMPARISON = [
   // lines by escaping the newline, so the newline itself is raw in the source. TOML's multi-line
   // strings do the same, YAML's structure is the indentation, and Ion text is not line-delimited.
   { capability: "Splittable on newlines before parsing", cells: ["y", "p", "n", "n", "n", "n"] },
+  // The row STF loses, and it sits with the others rather than at the end. A table whose every row
+  // resolves in favour of the format that published it is read as advertising no matter how well
+  // each row is sourced, and comparison.md §2.5 already concedes this one in prose — filtering it
+  // out of the summary is how a fair document becomes an unfair one.
+  { capability: "Compact binary encoding", cells: ["n", "n", "n", "n", "n", "y"] },
   { capability: "One documented code per rejection", cells: ["y", "n", "n", "n", "n", "n"] },
-  { capability: "Canonical form in the same specification", cells: ["y", "n", "n", "p", "n", "n"] },
+  // Ion is "varies", not "no". Ion Hash defines a canonicalization over the Ion data model with a
+  // stated equivalence relation, so the capability exists — but as an algorithm for feeding a hash
+  // function, in a sibling specification, rather than as a byte form you can write out and store.
+  // STF §14 emits a canonical document that is itself valid STF. A flat ❌ here would be wrong,
+  // and wrong in the direction that suits us, which is the kind a reader is right to punish.
+  { capability: "Canonical form", cells: ["y", "n", "n", "p", "n", "p"] },
 ];
 
