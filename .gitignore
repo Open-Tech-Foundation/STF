@@ -73,3 +73,4 @@ benchmarks/*/bench_*.json
 # the generated copies were committed alongside the originals they are generated from.
 website/app/spec/page.mdx
 website/app/spec/contents.ts
+website/screenshots/
