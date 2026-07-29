@@ -1,0 +1,27 @@
+# tasks.toml — the workspace root anchor and config for `tsr`.
+# Docs: https://tsr.opentechf.org/docs
+
+[workspace]
+members = ["website", "vscode-stf"]
+
+# The published specification is derived from doc/*.md, and the derived files are committed.
+#
+# They used to be generated on every `bun run build`, which put a code generator on the critical
+# path of every deploy to produce a file that changes only when the specification does. The
+# specification is the most stable thing in the repository — it is the thing everything else is
+# checked against — so it is generated deliberately, reviewed in the diff like any other change,
+# and the site just reads it.
+#
+# The cost of committing generated output is drift, so `spec-check` exists to make drift a failure
+# rather than a surprise. Run it after editing anything under doc/.
+[tasks.spec]
+run = "bun website/scripts/gen-spec.ts"
+
+[tasks.spec-check]
+run = "bun website/scripts/gen-spec.ts --check"
+
+# Screenshots of the running site, light and dark. Playwright lives in the workspace root rather
+# than in website/ on purpose: the deploy runs `bun install` inside website/, and a browser
+# automation library has no business being resolved on a build host that will never open a browser.
+[tasks.shots]
+run = "node website/scripts/shots.mjs"

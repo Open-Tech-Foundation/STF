@@ -1,0 +1,1751 @@
+---
+title: STF 1.0 Specification
+description: The normative text — the format, its optional profiles, and the error registry, on one page.
+---
+
+{/* GENERATED from doc/*.md by website/scripts/gen-spec.ts. Do not edit.
+    Edit the Markdown under doc/, then run `tsr spec` from the repository root. */}
+
+<h2 class="spec-doc-title" id="stf-1-0">STF 1.0</h2>
+
+<p class="spec-doc-note">The format itself. Required of every implementation.</p>
+
+**By the [Open Tech Foundation](https://github.com/Open-Tech-Foundation)**
+
+<div class="spec-alert spec-alert-warning">
+
+**Warning** — This specification is in a **draft state** and is subject to change.
+
+</div>
+
+
+---
+
+## 1. Overview
+
+**STF (Structured Text Format)** is a human-readable, structured data format designed for
+configuration and high-performance data interchange.
+
+An STF document represents a **single object**, explicitly delimited by `{}`.
+STF emphasizes:
+
+* strict and predictable syntax
+* fast parsing
+* minimal token noise
+* explicit typing via uppercase constructor literals
+* human readability without implicit semantics
+
+### 1.1 Conformance Language
+
+The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**,
+**SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL** are to be interpreted as described
+in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174).
+
+A **conformant parser** implements §2–§12 and rejects every input this specification requires
+to be rejected, with the exact error code given in §16.
+A **conformant serializer** implements §13.
+An implementation MAY be a parser only.
+
+### 1.2 Media Type and File Extension
+
+* **Media type (interim)**: `application/vnd.stf`
+* **Media type (post-registration)**: `application/stf`
+* **File extension**: `.stf`
+* **Schema file extension**: `.schema.stf`
+* **Stream file extension**: `.stfs` — see [STF Stream](#stream)
+
+### 1.3 Non-Goals
+
+To maintain simplicity and predictability, the following are **NOT** goals of the core STF format:
+
+* **Programming Logic**: STF has no execution semantics, variables, or functions.
+* **Schema Validation**: Schema validation is defined in a separate specification
+  ([STF Schema](#schema)) and is decoupled from core parsing for performance.
+* **Resource Referencing**: STF does not support internal references (anchors) or external imports.
+* **Streaming Framing**: The core format is a discrete document, not a framing protocol.
+  Append-only record streams are served by the separate [STF Stream](#stream) profile, which
+  layers on this specification without altering it.
+* **Comments as Data**: Comments are purely for documentation and MUST be ignored by processors.
+
+### 1.4 Supplementary Documentation
+
+* [Standardized Error Codes](#errors) — normative
+* [STF Schema Specification](#schema) — normative, separate layer
+* [STF Stream Profile](#stream) — normative, optional profile for record streams
+* [Migration Guide (JSON → STF)](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/migration-guide.md) — non-normative
+* [Comparison with Other Formats](https://github.com/Open-Tech-Foundation/STF/blob/main/doc/comparison.md) — non-normative
+
+---
+
+## 2. Character Encoding
+
+* STF documents **MUST** be encoded in **UTF-8**.
+* Parsers **MUST** reject input that is not well-formed UTF-8 with `ERR_INVALID_UTF8`.
+* Parsers **MUST NOT** substitute `U+FFFD` for malformed sequences.
+* A **byte order mark** (`U+FEFF`) at the start of a document is **NOT** whitespace and
+  **MUST** be rejected with `ERR_SYNTAX`. Tools that write STF **SHOULD NOT** emit a BOM.
+* `U+FEFF` appearing inside a string literal is an ordinary character.
+
+---
+
+## 3. Data Model
+
+This section is **normative**. It defines what a parsed STF document *is*, independently
+of any host language.
+
+An STF **value** is exactly one of eleven kinds:
+
+| Kind | Description |
+| :--- | :--- |
+| **Null** | The absence of a value. |
+| **Boolean** | `true` or `false`. |
+| **Number** | An IEEE 754 `binary64` value. See §7. |
+| **String** | A finite sequence of Unicode scalar values. |
+| **Array** | An ordered sequence of values. |
+| **Object** | An ordered sequence of unique key/value members. |
+| **BigInt** | An arbitrary-precision integer. |
+| **Decimal** | An exact signed decimal: a coefficient and a scale. See §10.2. |
+| **Date** | A wall date with no time and no offset. |
+| **Timestamp** | An absolute instant with a mandatory UTC offset. |
+| **Binary** | A finite sequence of octets, possibly empty. |
+
+### 3.1 Type Distinctness (Critical)
+
+These eleven kinds are **mutually distinct**. In particular:
+
+* A **String MUST NOT be represented as, or be indistinguishable from, any other kind**,
+  and no other kind may be represented as a String.
+* Implementations **MUST NOT** encode `BigInt`, `Decimal`, `Date`, `Timestamp`, or `Binary`
+  as strings carrying a marker prefix or any other in-band sentinel.
+
+> **Rationale.** An in-band sentinel (for example representing `DECIMAL(1.5)` as the string
+> `"$decimal:1.5"`) makes a user-authored string indistinguishable from a typed value, causes
+> a plain string to be silently promoted to a constructor on serialization, and can produce
+> unparseable output. Constructors exist precisely to remove this ambiguity; encoding them as
+> strings reintroduces it. Implementations MUST provide distinct host types (a wrapper struct,
+> class, tagged union, or the language's native equivalent).
+
+Given values `a` and `b` of different kinds, `a ≠ b`. Cross-kind numeric coercion is **NOT**
+performed: `Number(1)`, `BigInt(1)`, and `Decimal(1)` are three distinct values.
+
+### 3.2 Equality
+
+* **Null**, **Boolean**: identity.
+* **Number**: IEEE 754 equality, except that `NaN` cannot occur (§7.3) and `+0.0 ≠ -0.0`
+  for the purposes of round-tripping (§13.4).
+* **String**: equality of the Unicode scalar sequence.
+* **BigInt**: mathematical integer equality.
+* **Decimal**: **scale-sensitive** — equal only if both coefficient *and* scale are equal.
+  `DECIMAL(1.5) ≠ DECIMAL(1.50)`. See §10.2.
+* **Date**, **Timestamp**: equality of the written field values. `TIMESTAMP(2026-01-15T10:00:00Z)`
+  and `TIMESTAMP(2026-01-15T15:30:00+05:30)` denote the same instant but are **not equal** as
+  STF values, because the offset is preserved data.
+* **Binary**: equality of the octet sequence. The base64 spelling is not data (§10.5).
+* **Array**: equal length and pairwise-equal elements, in order.
+* **Object**: equal key sets with pairwise-equal values. **Member order does not affect equality**
+  (but is preserved — see §11.2).
+
+---
+
+## 4. Whitespace and Comments
+
+### 4.1 Whitespace
+
+The whitespace characters are exactly:
+
+| Character | Code point |
+| :--- | :--- |
+| Space | `U+0020` |
+| Horizontal tab | `U+0009` |
+| Line feed | `U+000A` |
+| Carriage return | `U+000D` |
+
+Carriage return is whitespace **on its own**, not only as part of `\r\n`. No other Unicode
+character (including `U+00A0`, `U+2028`, `U+2029`, and `U+FEFF`) is whitespace.
+
+Whitespace may appear between any two tokens and has **no semantic meaning**.
+
+### 4.2 Comments
+
+* STF supports **single-line comments** only.
+* A comment begins with `#` and continues to the next line feed (`U+000A`) or carriage
+  return (`U+000D`), or to end of input.
+* A comment is equivalent to whitespace and MUST be discarded.
+* `#` inside a string literal is an ordinary character and does **not** start a comment.
+
+```stf
+# This is a comment
+{
+  key: 123, # trailing comment
+  note: `this # is not a comment`,
+}
+```
+
+---
+
+## 5. Document Structure
+
+```ebnf
+document = ws { directive ws } object ws EOF ;
+```
+
+A document consists of zero or more **directives**, followed by exactly one **root object**.
+
+* The root **MUST** be an object. A root array, string, number, boolean, null, or constructor
+  **MUST** be rejected with `ERR_ROOT_NOT_OBJECT`.
+* Empty input, or input containing only whitespace, comments, and directives, **MUST** be
+  rejected with `ERR_ROOT_NOT_OBJECT`.
+* Any non-whitespace, non-comment content after the root object **MUST** be rejected with
+  `ERR_TRAILING_CONTENT`. This includes a second object and a directive placed after the root.
+
+```stf
+@schema(https://example.com/config.schema.stf)
+{
+  name: `example`,
+  count: 10,
+}
+```
+
+### 5.1 Directives
+
+```ebnf
+directive = "@" identifier "(" payload ")" ;
+```
+
+* Directives **MUST** appear before the root object.
+* No whitespace is permitted between `@` and the name, or between the name and `(`.
+  Whitespace there **MUST** be rejected with `ERR_SYNTAX`.
+* The payload is the raw character sequence up to the matching `)`; it MUST NOT contain
+  `(` or `)` (§10.1).
+* Directive names are case-sensitive.
+* A parser **MUST** accept an unknown directive and **MUST NOT** fail on it. It **SHOULD**
+  surface a warning. Unknown directives carry no semantics.
+* Directives are **document metadata**, not data. They **MUST NOT** appear in the parsed
+  data model of §3. Implementations SHOULD expose them through a separate accessor.
+
+| Directive | Payload | Meaning |
+| :--- | :--- | :--- |
+| `@schema` | URI or relative path | Associates the document with an STF Schema. |
+| `@version` | Version string | Declares the authoring STF version. |
+
+A document MUST NOT contain the same directive name twice; a repeat **MUST** be rejected
+with `ERR_SYNTAX`.
+
+---
+
+## 6. Keys
+
+### 6.1 Key Syntax
+
+* Keys are **unquoted identifiers**.
+* Allowed characters:
+  * ASCII letters `A–Z`, `a–z`
+  * ASCII digits `0–9`
+  * underscore `_`
+  * hyphen `-`
+* Keys are **case-sensitive** and **MUST NOT** be empty.
+* Leading digits **ARE** allowed.
+* Hyphens **ARE** allowed anywhere, including as the entire key.
+
+```stf
+{
+  a: 1,
+  user_id: 2,
+  123key: 3,
+  content-type: 4,
+}
+```
+
+### 6.2 Disallowed in Keys
+
+The following **MUST** be rejected with `ERR_INVALID_IDENTIFIER`:
+
+* Dot (`.`), and any other character outside the set in §6.1
+* Whitespace within a key
+* Non-ASCII characters, including accented Latin letters and emoji
+* Quoted keys (`"key":` or `` `key`: ``) — these are `ERR_SYNTAX`
+* The empty key (`{ : 1 }`)
+
+```stf
+{
+  user.name: 1,   # ERR_INVALID_IDENTIFIER
+  café: 2,        # ERR_INVALID_IDENTIFIER
+  "user": 3,      # ERR_SYNTAX
+}
+```
+
+**Whitespace inside a key versus a missing colon.** Both `{ a b: 1 }` and `{ a 1 }` are a key
+followed by whitespace and then an unexpected token. They are distinguished by what follows:
+if the text after the whitespace is an identifier that is itself followed by `:`, the input is
+one key containing whitespace and **MUST** be rejected with `ERR_INVALID_IDENTIFIER`.
+Otherwise the key is complete and its `:` is missing, which is `ERR_MISSING_COLON`.
+
+> **Note.** Because keys cannot be quoted, not every host-language map is representable in
+> STF. Serializers MUST fail rather than emit an invalid key — see §13.6.
+
+### 6.3 Key Disambiguation vs Constructors
+
+A bare uppercase word in **key position** is an ordinary key identifier. The parser
+disambiguates constructors from identifiers by the `(` immediately following an identifier
+in **value position**.
+
+```stf
+{
+  DATE: 1,      # VALID key
+  BIGINT: 2,    # VALID key
+  DECIMAL: 3,   # VALID key
+}
+```
+
+---
+
+## 7. Numbers
+
+A `number` literal denotes a **Number** (§3): an IEEE 754 `binary64` value.
+
+### 7.1 Grammar
+
+```ebnf
+number   = [ "-" ] integer [ fraction ] [ exponent ] ;
+integer  = "0" | digit1_9 { digit } ;
+fraction = "." digit { digit } ;
+exponent = ( "e" | "E" ) [ "+" | "-" ] digit { digit } ;
+```
+
+Accepted:
+
+```stf
+0    123    -42    3.14    1e9    1E+9    -2.5E-3    -0
+```
+
+Rejected with `ERR_INVALID_NUMBER`:
+
+| Input | Reason |
+| :--- | :--- |
+| `+1` | leading `+` |
+| `01`, `-01` | leading zero |
+| `.5` | missing integer part |
+| `1.` | missing fraction digits |
+| `1e`, `1e+` | missing exponent digits |
+| `-` | no digits |
+
+Hexadecimal, binary, and octal literals, digit separators (`1_000`), `NaN`, and `Infinity`
+are not part of the number grammar and are rejected by §7.4.
+
+### 7.2 Value Domain and Precision
+
+A number literal **MUST** be converted to the nearest `binary64` value using round-to-nearest,
+ties-to-even.
+
+**Precision loss is expected and conformant.** `{ a: 9007199254740993 }` yields `9007199254740992`
+in every conformant implementation. Implementations **MUST NOT** widen the domain — for example,
+returning an arbitrary-precision integer for a large literal is **non-conformant**, because it
+makes the same document mean different things in different languages.
+
+Use `BIGINT(...)` for exact integers and `DECIMAL(...)` for exact decimals.
+
+### 7.3 Overflow and Non-Finite Values
+
+* A literal whose magnitude is too large to represent as a finite `binary64` (for example
+  `1e400`) **MUST** be rejected with `ERR_NUMBER_OVERFLOW`. Implementations **MUST NOT**
+  produce an infinity.
+* A literal that underflows to zero (for example `1e-400`) **MUST** be accepted and yields
+  `0.0` (or `-0.0`), consistent with IEEE 754 gradual underflow.
+* `NaN` and the infinities are **not** members of the Number kind and can never result from
+  parsing. A serializer given such a host value MUST fail — see §13.4.
+* `-0` denotes negative zero and is a distinct bit pattern from `0`.
+
+### 7.4 Token Boundaries
+
+A number literal **MUST NOT** be immediately followed by an identifier character
+(`A–Z`, `a–z`, `0–9`, `_`, `-`) or by `.`. Violation **MUST** be rejected with
+`ERR_INVALID_NUMBER`.
+
+This rule is what rejects `0x10`, `1_000`, and `1.2.3` at the offending character, rather
+than letting a prefix parse as a complete value and reporting a misleading separator error.
+
+The same boundary rule applies to the `T`, `F`, and `N` literals of §9, where violation is
+`ERR_SYNTAX`. It is why `NaN`, `Infinity`, `true`, and `True` are rejected as literals rather
+than parsed as `N` + `aN`, `T` + `rue`, and so on.
+
+---
+
+## 8. Strings
+
+STF has two string forms. Both denote the same **String** kind (§3); the choice of form is
+**not** data.
+
+### 8.1 Raw Strings (Backticks)
+
+```ebnf
+raw_string = "`" { char_not_backtick } "`" ;
+```
+
+* Delimited by backticks (`` ` ``).
+* A backtick **cannot** appear inside a raw string, and there is no escape for it. A string
+  containing a backtick MUST use the interpreted form.
+* Literal line feeds and carriage returns **ARE** allowed and are preserved verbatim.
+* **No** escape processing occurs. `\n` inside a raw string is a backslash followed by `n`.
+* An unterminated raw string **MUST** be rejected with `ERR_UNTERMINATED`.
+
+### 8.2 Interpreted Strings (Double Quotes)
+
+```ebnf
+interpreted_string = '"' { interpreted_char | escape } '"' ;
+interpreted_char   = ? any Unicode scalar except '"', "\", U+000A, U+000D ? ;
+escape             = "\" ( '"' | "\" | "/" | "b" | "f" | "n" | "r" | "t" | "u" hex hex hex hex ) ;
+```
+
+* Delimited by double quotes (`"`).
+* Supports exactly the JSON escape set: `\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, `\uXXXX`.
+* Any other escape (`\x41`, `\U0041`, `\'`) **MUST** be rejected with `ERR_INVALID_STRING`.
+  `\u` not followed by exactly four hexadecimal digits is likewise `ERR_INVALID_STRING`.
+* A literal line feed or carriage return inside an interpreted string **MUST** be rejected with
+  `ERR_INVALID_STRING`.
+* An unterminated interpreted string **MUST** be rejected with `ERR_UNTERMINATED`.
+
+### 8.3 Surrogates
+
+`\uXXXX` escapes designate UTF-16 code units.
+
+* A high surrogate (`U+D800`–`U+DBFF`) **MUST** be immediately followed by a `\uXXXX` escape
+  denoting a low surrogate (`U+DC00`–`U+DFFF`); the pair denotes the corresponding supplementary
+  scalar value.
+* An **unpaired** surrogate — high without a following low, or a lone low surrogate —
+  **MUST** be rejected with `ERR_INVALID_STRING`.
+* Implementations **MUST NOT** substitute `U+FFFD`.
+
+> **Rationale.** §2 requires documents to be valid UTF-8, and an unpaired surrogate has no
+> UTF-8 encoding. Permitting it would make some parsed strings unserializable.
+
+```stf
+{
+  ok:  "\uD83D\uDE00",  # 😀 — valid surrogate pair
+  ok2: `😀`,             # 😀 — literal UTF-8, also valid
+  bad: "\uD800",         # ERR_INVALID_STRING
+}
+```
+
+### 8.4 Control Characters
+
+Unescaped C0 control characters (`U+0000`–`U+001F`) other than the whitespace characters of
+§4.1 **SHOULD** be avoided in raw strings. They are permitted for compatibility, but serializers
+MUST escape them in interpreted output (§13.5). `U+0000` is a legal string content character
+and MUST NOT terminate a string.
+
+---
+
+## 9. Boolean and Null Literals
+
+| Literal | Kind | Value |
+| :--- | :--- | :--- |
+| `T` | Boolean | true |
+| `F` | Boolean | false |
+| `N` | Null | null |
+
+Literals are strictly **case-sensitive** and MUST be uppercase. `t`, `true`, `True`, `null`,
+and `n` in value position are **NOT** literals and MUST be rejected with `ERR_SYNTAX`.
+
+A literal MUST NOT be immediately followed by an identifier character (§7.4). This is why
+`NaN` and `Infinity` are `ERR_SYNTAX` rather than being read as `N` followed by stray text.
+
+---
+
+## 10. Constructor Literals
+
+Constructor literals provide **explicit typed values**.
+
+### 10.1 General Syntax
+
+```ebnf
+constructor = constructor_name "(" payload ")" ;
+payload     = { char_not_paren } ;
+```
+
+* There **MUST NOT** be whitespace between the name and `(`. `DATE (…)` is `ERR_SYNTAX`.
+* The payload is the raw character sequence between the parentheses. It is **not** tokenized:
+  whitespace, `#`, and quotes within it are ordinary characters.
+* The payload **MUST NOT** contain `(` or `)`. Encountering `(` while scanning a payload
+  **MUST** be rejected with `ERR_NESTED_CONSTRUCTOR` (this is what makes `DATE(DATE(x))`
+  invalid). Reaching end of input before `)` is `ERR_UNTERMINATED`.
+* The payload **MAY** be empty. Whether an empty payload is valid is defined per constructor;
+  only `BINARY()` accepts it.
+* Each constructor validates its payload against the grammar in §10.2–§10.5. A payload that
+  fails validation **MUST** be rejected with `ERR_INVALID_CONSTRUCTOR_PAYLOAD`, except where
+  a more specific code is named.
+
+**Constructor names and the reserved namespace.**
+
+The five names defined by STF 1.0 are `BIGINT`, `DECIMAL`, `DATE`, `TIMESTAMP`, `BINARY`.
+
+* Names are matched **byte-for-byte**. Parsers **MUST NOT** case-fold. `Date(…)`, `date(…)`,
+  `BigNumber(…)`, and `Binary(…)` are **not** aliases.
+* An identifier immediately followed by `(` in value position is in the **reserved namespace**
+  if either:
+  1. it begins with an ASCII uppercase letter (`A–Z`), or
+  2. it is an ASCII case-insensitive match of one of the five names above.
+
+  A reserved name that is not a byte-for-byte match of one of the five **MUST** be rejected with
+  `ERR_UNKNOWN_CONSTRUCTOR`. Rule 1 covers `CUSTOM(…)`, `MY_TYPE(…)`, `Date(…)`, and
+  `BigNumber(…)`; rule 2 additionally covers `date(…)` and `binary(…)`, so a near-miss of
+  spelling is reported as a wrong constructor rather than as generic syntax.
+* Any other identifier immediately followed by `(` in value position is `ERR_SYNTAX`
+  (for example `foo(1)`).
+
+### 10.2 `DECIMAL(...)` — Exact Decimal
+
+An exact signed decimal number in plain notation.
+
+```ebnf
+decimal_payload = [ "-" ] ( "0" | digit1_9 { digit } ) [ "." digit { digit } ] ;
+```
+
+```stf
+DECIMAL(1.5)      DECIMAL(1.50)      DECIMAL(15)      DECIMAL(-0.001)
+```
+
+**Scale is data.** The **scale** of a decimal is the number of digits after the decimal point
+(0 if there is no point). `DECIMAL(1.5)` has scale 1; `DECIMAL(1.50)` has scale 2; these are
+**distinct values** that MUST NOT compare equal and MUST NOT be normalized.
+
+**Significant digits** are defined as: take the payload, remove the sign and the decimal point,
+and strip leading zeros. If the result is empty (the value is zero), the count is 1; otherwise
+it is the length of the result. Trailing zeros **are** significant; leading zeros are **not**.
+
+* Significant digits **MUST NOT** exceed **34** (decimal128 coefficient precision). Exceeding
+  this **MUST** be rejected with `ERR_DECIMAL_OVERFLOW`.
+* Scale **MUST NOT** exceed **6143** (decimal128 exponent range); exceeding it is
+  `ERR_DECIMAL_OVERFLOW`.
+* `DECIMAL(0.00000000000000000000000000000000000001)` has **1** significant digit and scale 38.
+  It is **valid**.
+
+Rejected with `ERR_INVALID_CONSTRUCTOR_PAYLOAD`: exponent notation (`1.5e3`), leading `+`,
+leading zeros (`01.5`), a trailing point (`1.`), `NaN`, `Infinity`, hexadecimal, underscores,
+whitespace, and the empty payload.
+
+> **Implementation note.** Native `==` on Python `Decimal`, Go `shopspring/decimal`, and Rust
+> `rust_decimal` compares **numerically**, so `1.5 == 1.50` is true in those libraries. STF
+> equality is scale-sensitive; implementations MUST compare coefficient and scale explicitly.
+
+Arithmetic on decimals is out of scope for this specification.
+
+### 10.3 `BIGINT(...)` — Arbitrary-Precision Integer
+
+```ebnf
+bigint_payload = "0" | [ "-" ] digit1_9 { digit } ;
+```
+
+```stf
+BIGINT(9007199254740993)      BIGINT(-123456789012345678901234567890)      BIGINT(0)
+```
+
+* There is no magnitude limit.
+* Leading zeros (`BIGINT(007)`) are **rejected** with `ERR_INVALID_CONSTRUCTOR_PAYLOAD`.
+  A parser MUST NOT silently rewrite them; the payload spelling is canonical and unique.
+* Negative zero (`BIGINT(-0)`) is rejected — zero has exactly one spelling.
+* Fractional components, exponents, leading `+`, and the empty payload are rejected.
+
+### 10.4 Temporal Constructors
+
+Both temporal constructors use the **proleptic Gregorian calendar** and **MUST** be validated
+for full calendar correctness, including month lengths and leap years. A syntactically
+well-formed but nonexistent date **MUST** be rejected with `ERR_INVALID_CONSTRUCTOR_PAYLOAD`.
+
+#### `DATE(...)` — Wall Date
+
+```ebnf
+date_payload = digit digit digit digit "-" digit digit "-" digit digit ;
+```
+
+```stf
+DATE(2026-01-15)      DATE(2024-02-29)   # valid: 2024 is a leap year
+```
+
+* Format is exactly `YYYY-MM-DD`, zero-padded. `DATE(2026-1-5)` is rejected.
+* Year range is `0000`–`9999`. Month `01`–`12`. Day `01` through the length of that month.
+* `DATE(2026-02-31)`, `DATE(2026-13-01)`, `DATE(2026-01-00)`, and `DATE(2025-02-29)` are
+  **rejected**.
+* Any time, offset, or `T` component is rejected.
+
+#### `TIMESTAMP(...)` — Instant
+
+```ebnf
+timestamp_payload = date_payload "T" hh ":" mm ":" ss [ "." digit { digit } ] offset ;
+offset            = "Z" | ( "+" | "-" ) hh ":" mm ;
+```
+
+```stf
+TIMESTAMP(2026-01-15T10:30:00Z)
+TIMESTAMP(2026-01-15T10:30:00.123456789+05:30)
+```
+
+* The date/time separator is an uppercase `T`. A space separator is **rejected**.
+* The zone designator is an uppercase `Z`, or a numeric offset `±HH:MM`.
+* A **UTC offset is mandatory**. `TIMESTAMP(2026-01-15T10:30:00)` is rejected, to prevent
+  ambiguity.
+* Field ranges: hour `00`–`23`, minute `00`–`59`, second `00`–`59`. Offset hour `00`–`23`,
+  offset minute `00`–`59`.
+* **Leap seconds are not supported**: a seconds field of `60` is **rejected**. Most host
+  time libraries cannot represent it, and admitting it would make round-tripping
+  implementation-dependent.
+* The fractional part, if present, MUST have 1–9 digits. Trailing zeros in the fraction are
+  preserved (`.100` ≠ `.1`), as is the offset spelling (`+00:00` ≠ `Z`).
+* The date part is subject to the same calendar validation as `DATE`.
+
+> `TIME`, `DURATION`, and naive (offset-less) date-times have no constructor in STF 1.0. Use a
+> string with an ISO 8601 convention. Note that `TIME(...)` is in the reserved namespace and
+> currently raises `ERR_UNKNOWN_CONSTRUCTOR`.
+
+### 10.5 `BINARY(...)` — Octet Sequence
+
+Binary data encoded with the standard Base64 alphabet, RFC 4648 §4.
+
+```stf
+BINARY(SGVsbG8=)      BINARY(SGVsbG9X)      BINARY()   # empty octet sequence
+```
+
+* Alphabet is `A–Z`, `a–z`, `0–9`, `+`, `/`, plus `=` for padding. The URL-safe alphabet
+  (`-`, `_`) is **rejected**.
+* Encoding **MUST** be canonical:
+  * Total length **MUST** be a multiple of 4, achieved with `=` padding.
+    Padding is therefore present only when the octet count is not a multiple of 3 — a payload
+    such as `BINARY(SGVsbG9X)` correctly carries **no** `=`.
+  * `=` **MUST NOT** appear anywhere except as the final one or two characters.
+  * Non-canonical trailing bits **MUST** be rejected. In a payload ending `X=`, the unused
+    low 2 bits of `X` MUST be zero; ending `X==`, the unused low 4 bits of `X` MUST be zero.
+    `BINARY(Zh==)` is rejected.
+  * Internal whitespace and line breaks are rejected.
+* The **empty payload is valid** and denotes the empty octet sequence.
+* **Encoding is not data.** The value is the decoded octet sequence; base64 is only its
+  text serialization. Two payloads that decode to the same octets are equal — but note that
+  canonicality means each octet sequence has exactly one legal spelling.
+
+---
+
+## 11. Arrays and Objects
+
+### 11.1 Arrays
+
+```ebnf
+array = "[" ws [ value ws { "," ws value ws } [ "," ws ] ] "]" ;
+```
+
+* Elements may be of mixed kinds.
+* A **trailing comma is permitted** after the last element.
+* Consecutive commas (`[1,,2]`), a leading comma (`[,1]`), and a missing separator are
+  rejected with `ERR_MISSING_COMMA`.
+* An unterminated array is `ERR_UNTERMINATED`.
+
+### 11.2 Objects
+
+```ebnf
+object = "{" ws [ member ws { "," ws member ws } [ "," ws ] ] "}" ;
+member = key ws ":" ws value ;
+```
+
+* A **trailing comma is permitted** after the last member.
+* A missing `:` after a key is `ERR_MISSING_COLON`. A missing `,` between members is
+  `ERR_MISSING_COMMA`. A missing value after `:` is `ERR_SYNTAX`.
+* **Duplicate keys are forbidden.** An object containing the same key twice **MUST** be
+  rejected with `ERR_DUPLICATE_KEY`, at any depth. Implementations MUST NOT silently
+  last-write-wins.
+* **Member order MUST be preserved** by parsers and serializers, so that documents round-trip
+  as authored. Order does not affect value equality (§3.2).
+
+### 11.3 Nesting Depth
+
+Implementations **MUST** enforce a maximum nesting depth and reject deeper input with
+`ERR_NESTING_DEPTH`. The **default limit is 64**, counting the root object as depth 1.
+The limit MAY be configurable; the default MUST be 64 so that a document accepted by one
+conformant parser is accepted by all.
+
+---
+
+## 12. Grammar Summary
+
+```ebnf
+(* STF 1.0 Grammar *)
+
+document           = ws { directive ws } object ws EOF ;
+directive          = "@" identifier "(" payload ")" ;
+
+object             = "{" ws [ member ws { "," ws member ws } [ "," ws ] ] "}" ;
+member             = key ws ":" ws value ;
+key                = identifier ;
+
+array              = "[" ws [ value ws { "," ws value ws } [ "," ws ] ] "]" ;
+
+value              = number | boolean | null | raw_string | interpreted_string
+                   | array | object | constructor ;
+
+constructor        = constructor_name "(" payload ")" ;
+constructor_name   = "BIGINT" | "DECIMAL" | "DATE" | "TIMESTAMP" | "BINARY" ;
+payload            = { char_not_paren } ;
+
+raw_string         = "`" { char_not_backtick } "`" ;
+interpreted_string = '"' { interpreted_char | escape } '"' ;
+interpreted_char   = ? any Unicode scalar except '"', "\", U+000A, U+000D ? ;
+escape             = "\" ( '"' | "\" | "/" | "b" | "f" | "n" | "r" | "t"
+                         | "u" hex hex hex hex ) ;
+
+boolean            = "T" | "F" ;
+null               = "N" ;
+
+number             = [ "-" ] integer [ fraction ] [ exponent ] ;
+integer            = "0" | digit1_9 { digit } ;
+fraction           = "." digit { digit } ;
+exponent           = ( "e" | "E" ) [ "+" | "-" ] digit { digit } ;
+
+identifier         = id_char { id_char } ;
+id_char            = letter | digit | "_" | "-" ;
+
+ws                 = { whitespace | comment } ;
+whitespace         = " " | "\t" | "\n" | "\r" ;
+comment            = "#" { char_not_line_terminator } ;
+
+letter             = "A" … "Z" | "a" … "z" ;
+digit              = "0" … "9" ;
+digit1_9           = "1" … "9" ;
+hex                = digit | "A" … "F" | "a" … "f" ;
+
+char_not_paren            = ? any Unicode scalar except "(" and ")" ? ;
+char_not_backtick         = ? any Unicode scalar except "`" ? ;
+char_not_line_terminator  = ? any Unicode scalar except U+000A and U+000D ? ;
+```
+
+The grammar alone is not sufficient for conformance: constructor payloads are further
+constrained by §10.2–§10.5, and the rules in §5, §8.3, and §11.2–§11.3 are context-sensitive.
+
+---
+
+## 13. Serialization
+
+A **conformant serializer** maps a §3 data model value to STF text. Implementations that only
+parse MAY omit this section.
+
+### 13.1 Round-Trip (Critical)
+
+For every value `v` expressible in the data model:
+
+```
+parse(serialize(v)) ≡ v
+```
+
+Serializers **MUST NOT** emit text that a conformant parser rejects. Where a value cannot be
+represented, the serializer **MUST** fail with `ERR_UNREPRESENTABLE` rather than emit
+invalid output.
+
+### 13.2 Strings Are Never Constructors
+
+A **String** value **MUST** be serialized as a string literal, whatever its content. A
+serializer **MUST NOT** inspect string content to decide to emit `DECIMAL(...)`, `BIGINT(...)`,
+`DATE(...)`, `TIMESTAMP(...)`, or `BINARY(...)`. This follows from §3.1 and is called out
+separately because violating it silently corrupts data and can produce unparseable documents.
+
+### 13.3 Choice of String Form
+
+* If the string contains no backtick, a serializer **SHOULD** emit the raw form.
+* If the string contains a backtick, the serializer **MUST** emit the interpreted form.
+* The choice is never observable in the data model.
+
+### 13.4 Numbers
+
+* A Number **MUST** be emitted in the shortest decimal form that parses back to the identical
+  `binary64` value (for example via Ryū or Grisu).
+* Negative zero **MUST** be emitted as `-0`.
+* A host value that is `NaN` or infinite is not in the data model; the serializer **MUST**
+  fail with `ERR_UNREPRESENTABLE`.
+
+### 13.5 Escaping
+
+In interpreted strings, `"` and `\` **MUST** be escaped, and C0 controls (`U+0000`–`U+001F`)
+**MUST** be escaped using `\b`, `\f`, `\n`, `\r`, `\t` where defined and `\uXXXX` otherwise.
+`/` **SHOULD NOT** be escaped. Non-ASCII scalars **SHOULD** be emitted literally as UTF-8
+rather than as `\uXXXX`.
+
+### 13.6 Keys
+
+Every key **MUST** match `identifier` (§6.1). A host map key that is empty or contains any
+other character is not representable; the serializer **MUST** fail with `ERR_UNREPRESENTABLE`.
+
+### 13.7 Typed Values
+
+`Decimal` **MUST** be emitted with its exact coefficient and scale — normalizing `1.50` to
+`1.5` is **non-conformant**. `Date` and `Timestamp` MUST preserve the recorded fields,
+including fractional-second trailing zeros and the offset spelling. `Binary` MUST be emitted
+in canonical base64 (§10.5).
+
+---
+
+## 14. Canonical Form
+
+**STF Canonical Form** is an OPTIONAL profile producing exactly one byte sequence for a given
+value, for hashing, signing, and byte-level diffing. It is not required for general use, and
+default serialization (§13) preserves authored order and spacing instead.
+
+Every canonical document is a valid STF document. A canonical serializer **MUST**:
+
+1. Emit UTF-8 with **no** BOM, and use `U+000A` as the only line terminator (canonical output
+   contains no line terminators at all under rule 3).
+2. Omit all comments. Directives are preserved, in their original order, before the root object.
+3. Emit no whitespace except where required to separate tokens — none is ever required, so
+   canonical output is `{a:1,b:[1,2]}`.
+4. Emit **no trailing commas**.
+5. Order object members by **ascending lexicographic order of their UTF-8 key bytes**.
+6. Emit every string in the **interpreted** form, escaping only `"`, `\`, and C0 controls
+   per §13.5, and emitting all other scalars literally.
+7. Emit numbers per §13.4.
+8. Emit constructors in the canonical payload spelling of §10, preserving decimal scale.
+
+Canonicalization operates on the data model, so it **does not** preserve the input's key order,
+string form, or spacing. Two documents that are equal under §3.2 have identical canonical forms.
+
+---
+
+## 15. Resource Limits
+
+Parsers process untrusted input and **MUST** be able to reject oversized documents rather than
+exhaust memory.
+
+| Limit | Requirement | Error |
+| :--- | :--- | :--- |
+| Nesting depth | **MUST** enforce; default **64** | `ERR_NESTING_DEPTH` |
+| Document size | **MAY** enforce; no default | `ERR_DOCUMENT_SIZE` |
+| Constructor payload size | **MAY** enforce; no default | `ERR_PAYLOAD_SIZE` |
+
+An implementation that enforces an optional limit **MUST** document its default and **SHOULD**
+make it configurable.
+
+---
+
+## 16. Error Reporting
+
+Every rejection defined by this specification maps to exactly one code from
+[Standardized Error Codes](#errors), which is normative and includes a condition → code
+table. Conformant parsers **MUST** report the specified code — approximate or substituted codes
+are non-conformant.
+
+Implementations **SHOULD** additionally report a byte offset and a human-readable message. The
+message text is not normative.
+
+
+<hr class="spec-rule" />
+
+<h2 class="spec-doc-title" id="stream">STF Stream 1.0</h2>
+
+<p class="spec-doc-note">Optional profile — .stfs record streams.</p>
+
+**By the [Open Tech Foundation](https://github.com/Open-Tech-Foundation)**
+
+<div class="spec-alert spec-alert-warning">
+
+**Warning** — This specification is in a **draft state** and is subject to change.
+
+</div>
+
+
+---
+
+<h2 id="stream-1-overview">1. Overview</h2>
+
+**STF Stream** is an OPTIONAL profile of [STF 1.0](#stf-1-0) for **append-only record streams**:
+event logs, audit trails, telemetry, change feeds, and batch export.
+
+A stream is a sequence of complete STF documents, one per line.
+
+```stfs
+@schema(https://example.com/event.schema.stf)
+{ts:TIMESTAMP(2026-01-15T10:30:00Z),lvl:`info`,msg:`server started`}
+{ts:TIMESTAMP(2026-01-15T10:30:01Z),lvl:`warn`,msg:`retrying upstream`}
+{ts:TIMESTAMP(2026-01-15T10:30:02Z),lvl:`error`,msg:`upstream unavailable`}
+```
+
+The profile exists because the discrete-document model of STF 1.0 §5 cannot express an
+unbounded, append-only sequence: a document has exactly one root object, and anything after it
+is `ERR_TRAILING_CONTENT`. Rather than relax that rule — which would cost the single-document
+fast path and make error recovery ambiguous — streams are a separate, explicitly-selected
+profile.
+
+<h3 id="stream-1-1-design-properties">1.1 Design Properties</h3>
+
+* **Appendable.** A writer appends a line and flushes. No trailing delimiter to rewrite, no
+  enclosing bracket to close, so a stream is valid at every instant, including mid-write.
+* **Splittable without parsing.** Because a record can never contain a raw line terminator
+  (§3.2), a reader may split on `U+000A` before parsing anything. This permits parallel and
+  ranged reads, and `tail`/`grep`/`split` work as expected.
+* **Independently recoverable.** Records are parsed independently, so one malformed record
+  does not invalidate the rest of the stream (§5).
+* **Core-compatible.** Every record is a valid STF 1.0 document. No new value kinds, no
+  changes to the data model, and `.stf` files are entirely unaffected.
+
+<h3 id="stream-1-2-media-type-and-file-extension">1.2 Media Type and File Extension</h3>
+
+* **Media type (interim)**: `application/vnd.stf-stream`
+* **Media type (post-registration)**: `application/stf-stream`
+* **File extension**: `.stfs`
+
+<h3 id="stream-1-3-conformance-language">1.3 Conformance Language</h3>
+
+The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, **MAY**, and **OPTIONAL**
+are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and
+[RFC 8174](https://www.rfc-editor.org/rfc/rfc8174).
+
+Everything in [STF 1.0](#stf-1-0) applies to each record unless this document overrides it.
+Support for this profile is OPTIONAL; an implementation MAY support STF 1.0 without it.
+
+---
+
+<h2 id="stream-2-stream-structure">2. Stream Structure</h2>
+
+```ebnf
+stream       = { line } ;
+line         = ( header | record | ignorable ) terminator ;
+ignorable    = hws [ comment ] ;
+terminator   = LF | CRLF | EOF ;
+hws          = { " " | "\t" } ;
+```
+
+A stream is a sequence of **lines**, each terminated by `U+000A` (LF) or by end of input.
+
+* A single `U+000D` (CR) immediately preceding the terminating LF **MUST** be accepted and
+  discarded, so CRLF-terminated files read correctly. Writers **MUST NOT** emit CR.
+* The final line **MAY** omit its terminator. A stream **SHOULD** end with a terminator so
+  that appending is a pure write.
+* A line containing only horizontal whitespace and/or a comment is **ignorable** and MUST be
+  skipped. This makes a trailing newline at end of file harmless.
+* An empty stream — zero bytes, or only ignorable lines — is **valid** and contains zero records.
+* The stream **MUST** be encoded in UTF-8, per spec §2. A leading byte order mark **MUST** be
+  rejected.
+
+<h3 id="stream-2-1-line-numbering">2.1 Line Numbering</h3>
+
+Implementations **MUST** report errors with a **1-based line number** counting every line,
+including ignorable ones, so that reported positions match what a text editor shows.
+
+---
+
+<h2 id="stream-3-records">3. Records</h2>
+
+A **record** is a complete STF 1.0 document occupying exactly one line.
+
+* A record **MUST** consist of a single root object, per spec §5. All of spec §6–§11 applies
+  unchanged.
+* A record **MUST NOT** contain directives; see §4.
+* Records are parsed **independently**. Nothing in one record affects another. There is no
+  shared state, no symbol table, and no cross-record references.
+* Leading and trailing horizontal whitespace around a record is permitted and ignored.
+* A trailing comment after a record is permitted: `{a:1} # note`.
+
+<h3 id="stream-3-1-records-are-not-homogeneous">3.1 Records Are Not Homogeneous</h3>
+
+Records in one stream **need not** share a shape. Heterogeneity is expected in event logs.
+A `@schema` header (§4) constrains records only if the schema itself permits variation.
+
+<h3 id="stream-3-2-line-terminators-inside-records-critical">3.2 Line Terminators Inside Records (Critical)</h3>
+
+A record **MUST NOT** contain a raw `U+000A` or `U+000D` anywhere — including inside a raw
+backtick string, where STF 1.0 §8.1 would otherwise preserve them.
+
+A string value containing a line break **MUST** therefore be written in the interpreted form
+using `\n` and `\r` escapes:
+
+```stfs
+{msg:"line one\nline two"}      # correct
+```
+
+```stf
+{msg:`line one
+line two`}                       # valid .stf, INVALID as a stream record
+```
+
+Violation is rejected with `ERR_STREAM_RAW_NEWLINE`.
+
+> **Rationale.** This single restriction is what makes a stream splittable on LF without
+> parsing. Without it, a reader could not know whether a newline ends a record or sits inside
+> a string, and every property in §1.1 would be lost.
+
+Serializers writing a stream **MUST** apply this automatically: emit the interpreted form
+whenever a string contains a line terminator, rather than failing. Escaping is already
+required by spec §13.5.
+
+---
+
+<h2 id="stream-4-stream-header">4. Stream Header</h2>
+
+A stream **MAY** begin with a **header line** carrying one or more directives and no object:
+
+```stfs
+@schema(https://example.com/event.schema.stf)
+{ts:TIMESTAMP(2026-01-15T10:30:00Z),lvl:`info`}
+```
+
+* The header, if present, **MUST** be the first non-ignorable line.
+* It **MUST** contain only directives — a header line with an object is a record, not a header.
+* Directive syntax and semantics are those of spec §5.1: no whitespace around `@` or before
+  `(`, names are case-sensitive, a repeated name is `ERR_SYNTAX`, and an unknown directive
+  **MUST NOT** fail (warn instead).
+* Header directives apply to **every record** in the stream.
+* Multiple directives MAY appear on the header line, separated by whitespace.
+* A directive appearing on any later line, or alongside an object, **MUST** be rejected with
+  `ERR_STREAM_DIRECTIVE_IN_RECORD`.
+
+| Directive | Payload | Meaning |
+| :--- | :--- | :--- |
+| `@schema` | URI or relative path | Every record conforms to this STF Schema. |
+| `@version` | Version string | Authoring STF version. |
+
+Because the header is optional and applies stream-wide, concatenating two streams with
+different headers is **not** valid. Concatenate the record lines and write a single header, or
+keep the streams separate.
+
+---
+
+<h2 id="stream-5-error-handling-and-recovery">5. Error Handling and Recovery</h2>
+
+Each record is validated independently, which is the profile's central operational property.
+
+* A reader encountering a malformed record **MUST** report the error with its line number, and
+  **MUST** be able to continue with the next line.
+* Whether it continues or aborts is a **caller policy**, not a format rule. Implementations
+  **MUST** offer both, and **SHOULD** default to aborting so that corruption is not silently
+  skipped.
+* Errors within a record use the codes of [error-codes.md](#errors) unchanged. This
+  profile adds only the two codes in §6.
+* A reader **MUST NOT** attempt to repair a record, join a record across lines, or infer a
+  missing brace.
+
+---
+
+<h2 id="stream-6-additional-error-codes">6. Additional Error Codes</h2>
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_STREAM_RAW_NEWLINE` | A record contains a raw LF or CR (§3.2). |
+| `ERR_STREAM_DIRECTIVE_IN_RECORD` | A directive appears outside the header line (§4). |
+
+<h3 id="stream-6-1-condition-code">6.1 Condition → Code</h3>
+
+| Condition | Example | Code |
+| :--- | :--- | :--- |
+| Raw newline inside a record's string | `` \{a:`x<LF>y`\} `` | `ERR_STREAM_RAW_NEWLINE` |
+| Directive on a non-header line | record line, then `@schema(x)` | `ERR_STREAM_DIRECTIVE_IN_RECORD` |
+| Directive alongside an object | `@schema(x) {a:1}` | `ERR_STREAM_DIRECTIVE_IN_RECORD` |
+| Repeated directive name in header | `@schema(a) @schema(b)` | `ERR_SYNTAX` |
+| Leading byte order mark | `U+FEFF` at offset 0 | `ERR_SYNTAX` |
+| Record root is not an object | `[1,2]` on a line | `ERR_ROOT_NOT_OBJECT` |
+| Two objects on one line | `{a:1}{b:2}` | `ERR_TRAILING_CONTENT` |
+| Empty stream | zero bytes | **valid**, zero records |
+| Blank or comment-only line | `` or `# note` | **valid**, ignored |
+| CRLF line terminators | `{a:1}<CR><LF>` | **valid**, CR discarded |
+| Trailing comment after a record | `{a:1} # note` | **valid** |
+
+---
+
+<h2 id="stream-7-canonical-form">7. Canonical Form</h2>
+
+A stream is in **STF Canonical Stream Form** when every record is in STF Canonical Form
+(spec §14) and:
+
+1. Records are terminated by a single `U+000A`, including the final record.
+2. There are no ignorable lines — no blank lines, no comment-only lines, no trailing comments.
+3. The header, if present, is the first line, with single spaces between directives.
+
+Record **order is preserved** and is significant: a stream is a sequence, and canonicalization
+MUST NOT reorder records. This differs from object members within a record, which spec §14
+sorts.
+
+---
+
+<h2 id="stream-8-interoperability-note">8. Interoperability Note</h2>
+
+Converting NDJSON or JSONL to STF Stream is a line-by-line application of STF 1.0's conversion
+rules, and is subject to the same constraint: **STF keys are identifiers** (spec §6.1), so a
+JSON record with a key that is not a valid STF identifier cannot be converted. Such a record
+**MUST** be reported with its line number and rejected, not silently renamed.
+
+STF Stream is not intended to be a drop-in reader for NDJSON. It is the STF-native solution
+for the same use case.
+
+
+<hr class="spec-rule" />
+
+<h2 class="spec-doc-title" id="schema">STF Schema 1.0</h2>
+
+<p class="spec-doc-note">Optional profile — validation.</p>
+
+**By the [Open Tech Foundation](https://github.com/Open-Tech-Foundation)**
+
+<div class="spec-alert spec-alert-warning">
+
+**Warning** — This specification is in a **draft state** and is subject to change.
+
+</div>
+
+
+---
+
+<h2 id="schema-1-overview">1. Overview</h2>
+
+STF Schema describes the structural and type constraints of an [STF 1.0](#stf-1-0) document.
+
+**A schema document is itself an ordinary STF document.** It introduces no new syntax: no
+generics, no suffix operators, no constraint call syntax. Everything is expressed with objects,
+strings, and the constructor literals already defined in the core specification.
+
+That is a deliberate constraint, not a limitation. Because a schema is plain STF:
+
+* the core parser reads it — there is no second grammar to specify or implement;
+* `stf fmt`, `stf lint`, editor support, and syntax highlighting work on schemas for free;
+* constraint values are **real STF values**, so `min: DECIMAL(0.00)` carries its scale, and a
+  timestamp bound is a `TIMESTAMP(...)` rather than a string to be re-parsed.
+
+Validation is **decoupled** from parsing, so the cost is opt-in:
+
+```
+document → [STF parser] → data model → [schema validator] → result
+```
+
+| Library | Role |
+| :--- | :--- |
+| `stf` | Core parser. Never performs schema validation. |
+| `stf-schema` | Optional validator. Raises only `ERR_SCHEMA_*` codes. |
+
+<h3 id="schema-1-1-conformance-language">1.1 Conformance Language</h3>
+
+**MUST**, **MUST NOT**, **SHOULD**, **MAY**, and **OPTIONAL** are as described in
+[RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and
+[RFC 8174](https://www.rfc-editor.org/rfc/rfc8174).
+
+<h3 id="schema-1-2-file-extension-and-association">1.2 File Extension and Association</h3>
+
+Schema files use `.schema.stf`. A data document associates itself with a schema using the
+`@schema` directive (spec §5.1):
+
+```stf
+@schema(https://example.com/product.schema.stf)
+{
+  name: `Widget`,
+}
+```
+
+A schema document declares itself with `@schema-def`, whose payload is the schema language
+version:
+
+```stf
+@schema-def(1.0)
+{
+  name: { type: `String` },
+}
+```
+
+`@schema-def` is REQUIRED in a schema document. Its absence is `ERR_SCHEMA_INVALID`.
+
+---
+
+<h2 id="schema-2-document-shape">2. Document Shape</h2>
+
+The **root of a schema document is a field map**: each key names a field of the document being
+validated, and each value is a **schema node** (§3).
+
+```stf
+@schema-def(1.0)
+{
+  name:    { type: `String`, min: 1, max: 100 },
+  price:   { type: `DECIMAL`, scale: 2, min: DECIMAL(0.00) },
+  created: { type: `Date` },
+  updated: { type: `Timestamp` },
+  count:   { type: `BigInt` },
+  avatar:  { type: `Binary`, optional: T },
+  tags:    { type: `Array`, items: { type: `String` } },
+}
+```
+
+The root is a field map rather than a schema node because the root of an STF document is
+**always** an object (spec §5) — its type is not in question. Everywhere below the root, a
+schema is a node.
+
+To constrain the root itself, use the reserved key `_` , whose value is a schema node with
+`type: `Object`` applied to the root:
+
+```stf
+@schema-def(1.0)
+{
+  _: { additional: F },        # reject unknown top-level keys
+  name: { type: `String` },
+}
+```
+
+`_` is a legal STF identifier (spec §6.1) and is reserved by this specification for that
+purpose. A document field literally named `_` cannot be constrained; rename it.
+
+---
+
+<h2 id="schema-3-schema-nodes">3. Schema Nodes</h2>
+
+A schema node is an STF object. Every node MAY carry `type` and the general keywords of §4.
+A node with no `type` accepts any value, equivalent to `type: `Any``.
+
+```stf
+{ type: `String`, min: 1, max: 100 }
+```
+
+An unknown keyword in a schema node **MUST** be rejected with `ERR_SCHEMA_INVALID`. Silently
+ignoring it would let a typo disable a constraint.
+
+---
+
+<h2 id="schema-4-types">4. Types</h2>
+
+`type` is a **string** naming one of the eleven kinds of the STF data model (spec §3), or `Any`.
+
+| `type` | Matches | Notes |
+| :--- | :--- | :--- |
+| `` `Null` `` | `N` | |
+| `` `Boolean` `` | `T`, `F` | |
+| `` `Number` `` | a bare number | IEEE 754 binary64 (spec §7.2) |
+| `` `String` `` | either string form | the form is not data |
+| `` `Array` `` | `[...]` | see `items` |
+| `` `Object` `` | `{...}` | see `fields` |
+| `` `BigInt` `` | `BIGINT(...)` | |
+| `` `Decimal` `` | `DECIMAL(...)` | see `scale` |
+| `` `Date` `` | `DATE(...)` | |
+| `` `Timestamp` `` | `TIMESTAMP(...)` | |
+| `` `Binary` `` | `BINARY(...)` | |
+| `` `Any` `` | any value | |
+
+Type names are written in **TitleCase** and are case-sensitive. They are ordinary STF strings,
+so they never collide with the reserved uppercase constructor namespace of spec §10.1.
+
+Matching is by **kind, not by coincidence of text**. A `String` value never satisfies
+`type: `Decimal``, even if its text happens to read `1.50`. A value whose kind differs from
+`type` **MUST** be rejected with `ERR_SCHEMA_TYPE_MISMATCH`.
+
+There is no `Int` or `Float` type. Bare numbers are a single kind; use `integer: T` (§5.4) to
+require an integral value.
+
+---
+
+<h2 id="schema-5-constraint-keywords">5. Constraint Keywords</h2>
+
+STF Schema 1.0 defines eleven keywords. The set is intentionally small.
+
+| Keyword | Applies to | Value |
+| :--- | :--- | :--- |
+| `type` | all | type name (§4) |
+| `optional` | all | `T` / `F` — default `F` |
+| `nullable` | all | `T` / `F` — default `F` |
+| `const` | all | an exact value |
+| `enum` | all | array of permitted values |
+| `min` | `Number` `BigInt` `Decimal` `Date` `Timestamp` `String` `Array` | bound |
+| `max` | same as `min` | bound |
+| `integer` | `Number` | `T` / `F` — default `F` |
+| `scale` | `Decimal` | integer 0–6143 |
+| `items` | `Array` | a schema node |
+| `fields` | `Object` | a field map |
+| `additional` | `Object` | `T` / `F` — default `T` |
+
+> `pattern` (regular-expression matching) and `multipleOf` are intentionally **not** in 1.0.
+> `multipleOf` would require decimal division in every implementation; `scale` covers the
+> monetary case it was wanted for. `pattern` would pull a regular-expression engine and its
+> dialect differences into a validator whose whole appeal is that it is small.
+
+<h3 id="schema-5-1-optional-and-nullable">5.1 `optional` and `nullable`</h3>
+
+These are distinct and orthogonal:
+
+* `optional: T` — the **key may be absent**. A missing key with `optional: F` is
+  `ERR_SCHEMA_REQUIRED`.
+* `nullable: T` — the value **may be `N`**. An `N` value with `nullable: F` is
+  `ERR_SCHEMA_TYPE_MISMATCH`.
+
+```stf
+{
+  nickname:  { type: `String`, optional: T },              # may be absent
+  deleted_at:{ type: `Timestamp`, nullable: T },           # must be present, may be N
+  middle:    { type: `String`, optional: T, nullable: T }, # either
+}
+```
+
+<h3 id="schema-5-2-min-and-max">5.2 `min` and `max`</h3>
+
+Meaning depends on the type:
+
+| Type | `min` / `max` mean | Bound is |
+| :--- | :--- | :--- |
+| `Number`, `BigInt`, `Decimal` | value bounds, inclusive | a numeric value |
+| `Date`, `Timestamp` | chronological bounds, inclusive | a `DATE(...)` / `TIMESTAMP(...)` |
+| `String` | length in **Unicode scalar values** | a `Number` |
+| `Array` | element count | a `Number` |
+
+String length counts scalar values, not bytes and not UTF-16 code units, so `"😀"` has length 1
+in every implementation.
+
+The bound **SHOULD** be written in the type being constrained: `min: DECIMAL(0.00)` for a
+`Decimal` field. A bound of a different numeric kind is compared numerically. A bound that is
+not comparable to the type is `ERR_SCHEMA_INVALID`.
+
+A value outside its bounds is `ERR_SCHEMA_RANGE`.
+
+<h3 id="schema-5-3-scale">5.3 `scale`</h3>
+
+`scale` requires an **exact** decimal scale — the digit count after the decimal point.
+
+```stf
+{ balance: { type: `Decimal`, scale: 2 } }
+```
+
+* `DECIMAL(1.50)` **passes** `scale: 2`.
+* `DECIMAL(1.5)` **fails** `scale: 2` — expected scale 2, actual scale 1.
+* `DECIMAL(1.500)` **fails** `scale: 2`.
+* `scale: 0` is valid and requires an integral spelling, e.g. `DECIMAL(100)`.
+* `scale` ranges 0–6143, matching spec §10.2. (Coefficient precision is capped separately at 34
+  significant digits; scale and significant digits are different quantities.)
+
+A scale mismatch is `ERR_SCHEMA_SCALE_MISMATCH`, and the message **MUST** state expected versus
+actual scale.
+
+<h3 id="schema-5-4-integer">5.4 `integer`</h3>
+
+`integer: T` requires a `Number` to have no fractional part. `{a: 3}` and `{a: 3.0}` both pass;
+`{a: 3.5}` is `ERR_SCHEMA_RANGE`.
+
+This does not make the value exact — it is still binary64. Use `BigInt` when exactness matters.
+
+<h3 id="schema-5-5-items-fields-and-additional">5.5 `items`, `fields`, and `additional`</h3>
+
+```stf
+@schema-def(1.0)
+{
+  tags: { type: `Array`, items: { type: `String`, min: 1 } },
+
+  address: {
+    type: `Object`,
+    additional: F,
+    fields: {
+      city:     { type: `String` },
+      postcode: { type: `String`, optional: T },
+    },
+  },
+}
+```
+
+* `items` applies one schema node to **every** element. Tuple typing is not supported in 1.0.
+* `fields` is a field map, exactly as at the root (§2).
+* `additional: F` rejects keys not named in `fields`, with `ERR_SCHEMA_UNKNOWN_FIELD`. The
+  default is `T`.
+* An `Object` node without `fields` constrains only the kind.
+
+<h3 id="schema-5-6-const-and-enum">5.6 `const` and `enum`</h3>
+
+`const` requires an exact value; `enum` requires membership in a list.
+
+```stf
+{
+  currency: { type: `String`, enum: [`GBP`, `EUR`, `USD`] },
+  version:  { const: 1 },
+  rate:     { type: `Decimal`, enum: [DECIMAL(0.00), DECIMAL(0.05), DECIMAL(0.20)] },
+}
+```
+
+A failure is `ERR_SCHEMA_ENUM`.
+
+---
+
+<h2 id="schema-6-equality-and-ordering-families">6. Equality and Ordering Families</h2>
+
+Two comparison rules apply, and the difference is observable for decimals and timestamps.
+
+**Equality family** — `const`, `enum`. Uses **data-model equality** (spec §3.2), which is
+scale-sensitive and offset-sensitive:
+
+* `DECIMAL(1.50)` does **not** match `enum: [DECIMAL(1.5)]`.
+* `TIMESTAMP(2026-01-15T10:00:00Z)` does **not** match
+  `const: TIMESTAMP(2026-01-15T15:30:00+05:30)`, though they are the same instant.
+
+**Ordering family** — `min`, `max`. Uses **numeric and chronological comparison**:
+
+* `DECIMAL(1.50)` **satisfies** `min: DECIMAL(1.0)`.
+* `TIMESTAMP(2026-01-15T15:30:00+05:30)` **satisfies**
+  `max: TIMESTAMP(2026-01-15T10:00:00Z)` — the offsets are normalised before comparing.
+
+This split is deliberate: an enumeration of permitted values is about the exact value written,
+whereas a bound is about magnitude.
+
+> **Implementation note.** Native `==` on Python `Decimal`, Go `shopspring/decimal`, and Rust
+> `rust_decimal` compares numerically, so `1.5 == 1.50` is true. The equality family **MUST NOT**
+> use it — compare coefficient and scale.
+
+---
+
+<h2 id="schema-7-validation-semantics">7. Validation Semantics</h2>
+
+* Validation operates on the **data model** (spec §3), never on document text. Comments,
+  whitespace, member order, and the choice of string form are invisible to a validator.
+* Validation is **order-independent**: the result does not depend on the order of members in the
+  document or of keys in the schema.
+* A validator **SHOULD** report **all** violations, not only the first, each with a path such as
+  `$.address.postcode` and its error code.
+* A validator **MUST NOT** modify the document: no defaults are applied, no values coerced. The
+  format has no coercion, and a validator that added it would reintroduce the ambiguity STF
+  exists to remove.
+* Validating the **schema document itself** happens before validating any data. A malformed
+  schema is `ERR_SCHEMA_INVALID` and **MUST NOT** be reported as a data error.
+
+---
+
+<h2 id="schema-8-error-codes">8. Error Codes</h2>
+
+Defined normatively in [error-codes.md](#errors). Raised only by a validator, never by a
+core parser.
+
+| Code | Raised when |
+| :--- | :--- |
+| `ERR_SCHEMA_INVALID` | The schema document is malformed, or a keyword or bound is unusable. |
+| `ERR_SCHEMA_TYPE_MISMATCH` | Value kind does not match `type`, or `N` with `nullable: F`. |
+| `ERR_SCHEMA_REQUIRED` | A key with `optional: F` is absent. |
+| `ERR_SCHEMA_RANGE` | `min`, `max`, or `integer` violated. |
+| `ERR_SCHEMA_SCALE_MISMATCH` | `scale` violated. Message states expected vs actual. |
+| `ERR_SCHEMA_ENUM` | `const` or `enum` violated. |
+| `ERR_SCHEMA_UNKNOWN_FIELD` | A key is not in `fields` and `additional: F`. |
+
+---
+
+<h2 id="schema-9-complete-example">9. Complete Example</h2>
+
+```stf
+@schema-def(1.0)
+{
+  _: { additional: F },
+
+  id:       { type: `BigInt`, min: BIGINT(1) },
+  sku:      { type: `String`, min: 3, max: 32 },
+  name:     { type: `String`, min: 1, max: 100 },
+  price:    { type: `Decimal`, scale: 2, min: DECIMAL(0.00) },
+  currency: { type: `String`, enum: [`GBP`, `EUR`, `USD`] },
+  weight_g: { type: `Number`, integer: T, min: 0 },
+  released: { type: `Date`, min: DATE(2000-01-01) },
+  updated:  { type: `Timestamp` },
+  retired:  { type: `Timestamp`, nullable: T },
+  avatar:   { type: `Binary`, optional: T },
+  tags:     { type: `Array`, max: 10, items: { type: `String`, min: 1 } },
+
+  supplier: {
+    type: `Object`,
+    additional: F,
+    fields: {
+      name:    { type: `String` },
+      country: { type: `String`, min: 2, max: 2 },
+    },
+  },
+}
+```
+
+A document this schema accepts:
+
+```stf
+@schema(product.schema.stf)
+{
+  id: BIGINT(90071992547409931),
+  sku: `WIDGET-001`,
+  name: `Widget`,
+  price: DECIMAL(19.99),
+  currency: `GBP`,
+  weight_g: 250,
+  released: DATE(2026-01-15),
+  updated: TIMESTAMP(2026-01-15T10:30:00Z),
+  retired: N,
+  tags: [`tools`, `hardware`],
+  supplier: {
+    name: `Acme Ltd`,
+    country: `GB`,
+  },
+}
+```
+
+
+<hr class="spec-rule" />
+
+<h2 class="spec-doc-title" id="errors">Error codes</h2>
+
+<p class="spec-doc-note">The normative registry referenced by §16.</p>
+
+**By the [Open Tech Foundation](https://github.com/Open-Tech-Foundation)**
+
+This document is **normative**. It is the companion to [the STF 1.0 specification](#stf-1-0).
+
+Every input that STF 1.0 requires to be rejected maps to **exactly one** code below.
+A conformant parser **MUST** report that code. Reporting a related-but-different code
+(for example `ERR_SYNTAX` in place of `ERR_INVALID_NUMBER`) is **non-conformant**:
+callers cannot branch on error codes that vary by implementation, and conformance suites
+that accept substitutions cannot detect divergence.
+
+Implementations **SHOULD** also report a byte offset and a human-readable message.
+**Message text is not normative** and MUST NOT be relied upon by callers.
+
+---
+
+<h2 id="errors-1-code-index">1. Code Index</h2>
+
+<h3 id="errors-encoding">Encoding</h3>
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_INVALID_UTF8` | Input is not well-formed UTF-8. |
+
+<h3 id="errors-general-syntax">General Syntax</h3>
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_SYNTAX` | A token is not valid in this position, and no more specific code applies. |
+| `ERR_UNTERMINATED` | Input ended before a string, object, array, or constructor was closed. |
+| `ERR_TRAILING_CONTENT` | Content follows the root object. |
+
+<h3 id="errors-structure">Structure</h3>
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_ROOT_NOT_OBJECT` | The document root is not a `{}` object. |
+| `ERR_DUPLICATE_KEY` | An object contains the same key more than once. |
+| `ERR_MISSING_COLON` | Expected `:` after a key. |
+| `ERR_MISSING_COMMA` | Expected `,` between members or elements. |
+
+<h3 id="errors-identifiers">Identifiers</h3>
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_INVALID_IDENTIFIER` | A key is empty or contains a character outside `[A-Za-z0-9_-]`. |
+
+<h3 id="errors-primitive-values">Primitive Values</h3>
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_INVALID_NUMBER` | Number literal violates the grammar of spec §7.1. |
+| `ERR_NUMBER_OVERFLOW` | Number literal exceeds finite `binary64` range. |
+| `ERR_INVALID_STRING` | Invalid escape, illegal literal newline, or unpaired surrogate. |
+
+<h3 id="errors-constructors">Constructors</h3>
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_UNKNOWN_CONSTRUCTOR` | Reserved-namespace name is not an STF 1.0 constructor. |
+| `ERR_INVALID_CONSTRUCTOR_PAYLOAD` | Payload does not satisfy the constructor's grammar or semantics. |
+| `ERR_NESTED_CONSTRUCTOR` | `(` encountered while scanning a constructor payload. |
+| `ERR_DECIMAL_OVERFLOW` | `DECIMAL` exceeds 34 significant digits or scale 6143. |
+
+<h3 id="errors-resource-limits">Resource Limits</h3>
+| Code | Meaning | Enforcement |
+| :--- | :--- | :--- |
+| `ERR_NESTING_DEPTH` | Nesting exceeds the maximum depth. | **MUST**, default 64 |
+| `ERR_DOCUMENT_SIZE` | Document exceeds the configured size limit. | MAY, no default |
+| `ERR_PAYLOAD_SIZE` | Constructor payload exceeds the configured size limit. | MAY, no default |
+
+<h3 id="errors-serialization">Serialization</h3>
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_UNREPRESENTABLE` | A host value has no valid STF representation (spec §13.1). |
+
+<h3 id="errors-stream-profile">Stream Profile</h3>
+Raised only when reading [STF Stream](#stream) (`.stfs`). Never raised by a core parser.
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_STREAM_RAW_NEWLINE` | A record contains a raw LF or CR (stream §3.2). |
+| `ERR_STREAM_DIRECTIVE_IN_RECORD` | A directive appears outside the header line (stream §4). |
+
+<h3 id="errors-schema-validation">Schema Validation</h3>
+Raised by `stf-schema`, never by a core parser. See [schema.md](#schema).
+
+| Code | Meaning |
+| :--- | :--- |
+| `ERR_SCHEMA_INVALID` | The schema document itself is malformed, or a keyword or bound is unusable. |
+| `ERR_SCHEMA_TYPE_MISMATCH` | Value kind does not match `type`, or `N` where `nullable: F`. |
+| `ERR_SCHEMA_REQUIRED` | A key with `optional: F` is absent. |
+| `ERR_SCHEMA_RANGE` | `min`, `max`, or `integer` violated. |
+| `ERR_SCHEMA_SCALE_MISMATCH` | Decimal scale does not match the required `scale`. Message MUST state expected vs actual. |
+| `ERR_SCHEMA_ENUM` | `const` or `enum` violated. |
+| `ERR_SCHEMA_UNKNOWN_FIELD` | A key is not named in `fields` and `additional: F`. |
+
+---
+
+<h2 id="errors-2-condition-code-normative">2. Condition → Code (Normative)</h2>
+
+This table is the authority for conformance testing. Where two rows could apply, the
+**earlier** row wins.
+
+<h3 id="errors-2-1-encoding-and-document-framing">2.1 Encoding and document framing</h3>
+
+| Condition | Example | Code |
+| :--- | :--- | :--- |
+| Malformed UTF-8 byte sequence | `0xFF` in input | `ERR_INVALID_UTF8` |
+| Leading byte order mark | `U+FEFF` before `{` | `ERR_SYNTAX` |
+| Empty input | `` | `ERR_ROOT_NOT_OBJECT` |
+| Whitespace / comments only | `# hi` | `ERR_ROOT_NOT_OBJECT` |
+| Directives but no root object | `@schema(x)` | `ERR_ROOT_NOT_OBJECT` |
+| Root is an array | `[]` | `ERR_ROOT_NOT_OBJECT` |
+| Root is a scalar or string | `42`, `` `hi` ``, `T` | `ERR_ROOT_NOT_OBJECT` |
+| Root is a constructor | `DATE(2026-01-15)` | `ERR_ROOT_NOT_OBJECT` |
+| Second object after root | `{a:1}{b:2}` | `ERR_TRAILING_CONTENT` |
+| Any other content after root | `{a:1} x` | `ERR_TRAILING_CONTENT` |
+| Directive after root | `{a:1}\n@schema(x)` | `ERR_TRAILING_CONTENT` |
+| Whitespace after `@` or before `(` | `@ schema(x)`, `@schema (x)` | `ERR_SYNTAX` |
+| Same directive name twice | `@schema(a)\n@schema(b)` | `ERR_SYNTAX` |
+| **Unknown directive** | `@nope(1)\n{a:1}` | **not an error** — warn |
+
+<h3 id="errors-2-2-objects-arrays-keys">2.2 Objects, arrays, keys</h3>
+
+| Condition | Example | Code |
+| :--- | :--- | :--- |
+| Empty key | `{ : 1 }` | `ERR_INVALID_IDENTIFIER` |
+| Key contains a disallowed character | `{ a.b: 1 }` | `ERR_INVALID_IDENTIFIER` |
+| Non-ASCII key | `{ café: 1 }`, `{ 🔑: 1 }` | `ERR_INVALID_IDENTIFIER` |
+| Quoted key | `{ "a": 1 }`, ``\{ `a`: 1 \}`` | `ERR_SYNTAX` |
+| Whitespace inside a key | `{ a b: 1 }` | `ERR_INVALID_IDENTIFIER` |
+| Missing `:` after key | `{ a 1 }` | `ERR_MISSING_COLON` |
+| Missing value after `:` | `{ a: }` | `ERR_SYNTAX` |
+| Missing `,` between members | `{ a:1 b:2 }` | `ERR_MISSING_COMMA` |
+| Consecutive commas | `{ a:1,, b:2 }`, `[1,,2]` | `ERR_MISSING_COMMA` |
+| Leading comma | `{ , a:1 }`, `[,1]` | `ERR_MISSING_COMMA` |
+| Duplicate key, any depth | `{ a:1, a:2 }` | `ERR_DUPLICATE_KEY` |
+| Unterminated object or array | `{ a: 1`, `{a:[1}` | `ERR_UNTERMINATED` |
+| Nesting beyond the limit | 65 nested objects | `ERR_NESTING_DEPTH` |
+| Trailing comma | `{a:1,}`, `[1,]` | **valid** |
+
+<h3 id="errors-2-3-numbers">2.3 Numbers</h3>
+
+A number literal **MUST NOT** be immediately followed by an identifier character
+(`[A-Za-z0-9_-]`) or `.`; see spec §7.4.
+
+| Condition | Example | Code |
+| :--- | :--- | :--- |
+| Leading `+` | `{a: +1}` | `ERR_INVALID_NUMBER` |
+| Leading zero | `{a: 0123}` | `ERR_INVALID_NUMBER` |
+| Missing integer part | `{a: .5}` | `ERR_INVALID_NUMBER` |
+| Trailing decimal point | `{a: 1.}` | `ERR_INVALID_NUMBER` |
+| Missing exponent digits | `{a: 1e}`, `{a: 1e+}` | `ERR_INVALID_NUMBER` |
+| Sign with no digits | `{a: -}` | `ERR_INVALID_NUMBER` |
+| Hexadecimal / octal / binary | `{a: 0x10}` | `ERR_INVALID_NUMBER` |
+| Digit separator | `{a: 1_000}` | `ERR_INVALID_NUMBER` |
+| Magnitude exceeds finite binary64 | `{a: 1e400}` | `ERR_NUMBER_OVERFLOW` |
+| Underflow to zero | `{a: 1e-400}` | **valid**, yields `0.0` |
+| Negative zero | `{a: -0}` | **valid**, distinct from `0` |
+| Precision loss past 2^53 | `{a: 9007199254740993}` | **valid**, yields `…992` |
+
+<h3 id="errors-2-4-literals">2.4 Literals</h3>
+
+A `T`, `F`, or `N` literal **MUST NOT** be immediately followed by an identifier character.
+
+| Condition | Example | Code |
+| :--- | :--- | :--- |
+| Lowercase literal | `{a: t}`, `{a: n}` | `ERR_SYNTAX` |
+| Spelled-out literal | `{a: true}`, `{a: null}` | `ERR_SYNTAX` |
+| Mixed case | `{a: True}` | `ERR_SYNTAX` |
+| `NaN` | `{a: NaN}` | `ERR_SYNTAX` |
+| `Infinity` | `{a: Infinity}` | `ERR_SYNTAX` |
+
+<h3 id="errors-2-5-strings">2.5 Strings</h3>
+
+| Condition | Example | Code |
+| :--- | :--- | :--- |
+| Unterminated raw string | `` \{a: `hi} `` | `ERR_UNTERMINATED` |
+| Unterminated interpreted string | `{a: "hi}` | `ERR_UNTERMINATED` |
+| Literal LF or CR in interpreted string | an actual newline between the quotes | `ERR_INVALID_STRING` |
+| Unrecognized escape | `{a: "\x41"}`, `{a: "\U0041"}` | `ERR_INVALID_STRING` |
+| `\u` without 4 hex digits | `{a: "\u41"}` | `ERR_INVALID_STRING` |
+| Unpaired high surrogate | `{a: "\uD800"}` | `ERR_INVALID_STRING` |
+| Lone low surrogate | `{a: "\uDC00"}` | `ERR_INVALID_STRING` |
+| Valid surrogate pair | `{a: "\uD83D\uDE00"}` | **valid**, yields `😀` |
+| Literal non-ASCII in a string | `` \{a: `😀`\} `` | **valid**, no escaping required |
+| Backtick inside raw string | `` \{a: `x`y`} `` | `ERR_MISSING_COMMA` |
+| Literal LF in raw string | an actual newline between the backticks | **valid**, preserved |
+| `\u0000` escape | `{a: "\u0000"}` | **valid**, U+0000 is legal string content |
+
+<h3 id="errors-2-6-constructors-general">2.6 Constructors — general</h3>
+
+| Condition | Example | Code |
+| :--- | :--- | :--- |
+| Whitespace before `(` | `{a: DATE (2026-01-15)}` | `ERR_SYNTAX` |
+| Reserved name, not an STF 1.0 constructor | `{a: CUSTOM(1)}`, `{a: TIME(1)}` | `ERR_UNKNOWN_CONSTRUCTOR` |
+| Uppercase-initial name before `(` | `{a: Date(…)}`, `{a: BigNumber(…)}` | `ERR_UNKNOWN_CONSTRUCTOR` |
+| Case-insensitive match of a constructor | `{a: date(…)}`, `{a: binary(…)}` | `ERR_UNKNOWN_CONSTRUCTOR` |
+| Non-reserved identifier before `(` | `{a: foo(1)}` | `ERR_SYNTAX` |
+| `(` inside payload | `{a: DATE(DATE(x))}` | `ERR_NESTED_CONSTRUCTOR` |
+| End of input before `)` | `{a: DATE(2026-01-15}` | `ERR_UNTERMINATED` |
+| Uppercase word used as a key | `{ DATE: 1 }` | **valid** — key, not constructor |
+
+<h3 id="errors-2-7-decimal">2.7 `DECIMAL`</h3>
+
+| Condition | Example | Code |
+| :--- | :--- | :--- |
+| Empty payload | `DECIMAL()` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Exponent notation | `DECIMAL(1.5e3)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Trailing decimal point | `DECIMAL(1.)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Leading `+` | `DECIMAL(+1.5)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Leading zeros | `DECIMAL(01.5)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| `NaN` / `Infinity` / hex / underscore / whitespace | `DECIMAL(NaN)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| More than 34 significant digits | 35-digit coefficient | `ERR_DECIMAL_OVERFLOW` |
+| Scale greater than 6143 | — | `ERR_DECIMAL_OVERFLOW` |
+| Integer form | `DECIMAL(15)` | **valid**, scale 0 |
+| Leading zeros in the fraction | `DECIMAL(0.0…01)`, 38 fraction digits | **valid**, 1 significant digit |
+| Trailing zeros | `DECIMAL(1.50)` | **valid**, scale 2, ≠ `DECIMAL(1.5)` |
+
+<h3 id="errors-2-8-bigint">2.8 `BIGINT`</h3>
+
+| Condition | Example | Code |
+| :--- | :--- | :--- |
+| Empty payload | `BIGINT()` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Non-digit character | `BIGINT(123a)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Fractional or exponent form | `BIGINT(12.34)`, `BIGINT(1e3)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Leading `+` | `BIGINT(+1)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Leading zeros | `BIGINT(007)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Negative zero | `BIGINT(-0)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Arbitrarily large magnitude | 100-digit integer | **valid** |
+
+<h3 id="errors-2-9-date-and-timestamp">2.9 `DATE` and `TIMESTAMP`</h3>
+
+| Condition | Example | Code |
+| :--- | :--- | :--- |
+| Wrong shape or not zero-padded | `DATE(2026-1-5)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Month out of range | `DATE(2026-13-01)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Day out of range for that month | `DATE(2026-02-31)`, `DATE(2026-04-31)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Day `00` | `DATE(2026-01-00)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Non-leap 29 February | `DATE(2025-02-29)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Leap 29 February | `DATE(2024-02-29)` | **valid** |
+| Time component in `DATE` | `DATE(2026-01-15T10:00:00Z)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Missing UTC offset | `TIMESTAMP(2026-01-15T10:30:00)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Space instead of `T` | `TIMESTAMP(2026-01-15 10:30:00Z)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Lowercase `t` or `z` | `TIMESTAMP(2026-01-15t10:30:00z)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Hour / minute / second out of range | `TIMESTAMP(2026-01-15T99:30:00Z)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Leap second | `TIMESTAMP(2026-01-15T23:59:60Z)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Offset out of range | `TIMESTAMP(…+99:00)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Fraction with 0 or >9 digits | `TIMESTAMP(…T10:30:00.Z)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Negative offset | `TIMESTAMP(2026-01-15T10:30:00-05:00)` | **valid** |
+| Nanosecond precision | `TIMESTAMP(…T10:30:00.123456789+05:30)` | **valid** |
+
+<h3 id="errors-2-10-binary">2.10 `BINARY`</h3>
+
+| Condition | Example | Code |
+| :--- | :--- | :--- |
+| Length not a multiple of 4 | `BINARY(SGVsbG8)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Character outside the standard alphabet | `BINARY(SGVsb-8=)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| `=` other than as final padding | `BINARY(SG=sbG8=)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Non-canonical trailing bits | `BINARY(Zh==)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Internal whitespace | `BINARY(SGVs bG8=)` | `ERR_INVALID_CONSTRUCTOR_PAYLOAD` |
+| Empty payload | `BINARY()` | **valid**, empty octet sequence |
+| No padding needed | `BINARY(SGVsbG9X)` | **valid** |
+
+<h3 id="errors-2-11-serialization">2.11 Serialization</h3>
+
+| Condition | Code |
+| :--- | :--- |
+| Host number is `NaN` or infinite | `ERR_UNREPRESENTABLE` |
+| Map key is empty or not a valid identifier | `ERR_UNREPRESENTABLE` |
+| Host value has no data-model equivalent | `ERR_UNREPRESENTABLE` |
+
+---
+
+<h2 id="errors-3-changes-from-pre-release-drafts">3. Changes from Pre-Release Drafts</h2>
+
+| Change | Notes |
+| :--- | :--- |
+| Added `ERR_INVALID_UTF8` | Spec §2 required rejection but defined no code. |
+| Added `ERR_NUMBER_OVERFLOW` | Replaces producing `Infinity` on overflow. |
+| Added `ERR_TRAILING_CONTENT` | Was already emitted by several implementations but undocumented. |
+| Added `ERR_UNREPRESENTABLE` | Serializers previously had no way to fail. |
+| `ERR_NESTED_CONSTRUCTOR` given a precise trigger | Now defined as `(` encountered while scanning a payload. |
+| `ERR_DOCUMENT_SIZE`, `ERR_PAYLOAD_SIZE` marked OPTIONAL | Previously listed with no limits and no implementation. |
+| Condition → code table added | Substituted codes are now non-conformant. |
+

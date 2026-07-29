@@ -1,6 +1,9 @@
 // Screenshots every route, light and dark, against a running dev server.
 //
-// `bun run shots` — start `bun run dev` first, or pass a base URL as the first argument.
+// `tsr shots` from the repository root — start `bun run dev` in website/ first, or pass a base URL
+// as the first argument. Playwright is a devDependency of the workspace root, not of website/: the
+// Cloudflare deploy installs only website/, and a browser automation library has no business on a
+// build host that will never open a browser.
 //
 // This exists because reasoning about CSS is not the same as looking at it. The specification page
 // shipped with two navbars, and nothing in the pre-rendered HTML said so: the markup was valid, the
@@ -16,10 +19,16 @@
 
 import { chromium } from "playwright";
 import { mkdirSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const BASE = process.argv[2] ?? "http://localhost:3001";
 const CHROME = process.env.CHROME ?? "/usr/bin/chromium";
-const OUT = "screenshots";
+
+// Resolved from this file, not from the working directory. `tsr` executes a task's command
+// directly rather than through a shell, so `cd website && …` is not a command it can run — and a
+// script that only works from one directory is a script that works until someone moves.
+const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "screenshots");
 
 const ROUTES = [
   ["home", "/"],
@@ -56,7 +65,7 @@ for (const theme of ["light", "dark"]) {
     if (wide) problems.push(`${theme}: ${path} scrolls horizontally`);
 
     await page.screenshot({ path: `${OUT}/${name}-${theme}.png` });
-    console.log(`  ${OUT}/${name}-${theme}.png`);
+    console.log(`  website/screenshots/${name}-${theme}.png`);
   }
   await context.close();
 }

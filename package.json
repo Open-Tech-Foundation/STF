@@ -11,6 +11,10 @@
     "test:python": "python3 -m unittest discover -s tests -t . --start-directory ref-impl/python/tests",
     "test:go": "cd ref-impl/go && go test ./...",
     "corpus": "python3 tests/conformance/build_corpus.py",
-    "test:vscode": "npm --prefix vscode-stf test"
+    "test:vscode": "npm --prefix vscode-stf test",
+    "shots": "node website/scripts/shots.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.0"
   }
 }
