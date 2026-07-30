@@ -268,6 +268,13 @@ the reference implementations may change incompatibly at any time.
   no `=`. An empty payload, `BINARY()`, is now valid and denotes the empty octet sequence.
 - `ERR_NESTED_CONSTRUCTOR` has a precise trigger: `(` encountered while scanning a payload.
 - `ERR_DOCUMENT_SIZE` and `ERR_PAYLOAD_SIZE` are marked OPTIONAL with no default limit.
+- **The website's framework packages move to `@opentf/web` 0.25.0, `@opentf/web-docs` 0.22.0, and
+  `@opentf/web-cli` 1.23.1** (from 0.24.0, 0.21.0, and 1.22.0). The static build, the `lib` unit
+  tests, `tsr spec-check`, and a `--frozen-lockfile` install all pass on the new versions, and
+  `bun.lock` stays at `lockfileVersion: 1` so the deploy host can still read it. The update fixes
+  nothing visible here: the three hydration errors in the pre-rendered output — a mismatched `<h3>`
+  on `/spec`, a mismatched region marker and a null `output` read on `/playground` — reproduce
+  byte-for-byte on both the old and new versions, and remain open.
 
 ### Removed
 
