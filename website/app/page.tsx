@@ -316,10 +316,17 @@ const SAMPLE = `# comments are part of the format
   price_cap: DECIMAL(199.00),   # scale is data
   account_id: BIGINT(9007199254740993),
   signing_key: BINARY(SGVsbG8=),
-  boundary: Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]]),
+  boundary: Geometry("Polygon", [
+    [
+      [80.27, 13.08],
+      [80.28, 13.08],
+      [80.28, 13.09],
+      [80.27, 13.08]
+    ]
+  ]),
   opens: Time("09:30"),
   ttl: Duration("PT45M"),
-  regions: [\`eu-west-1\`, \`us-east-1\`],
+  regions: [\`eu-west-1\`, \`us-east-1\`]
 }`;
 
 // Kept narrow so the panel never clips at the hero's column width.
@@ -333,8 +340,9 @@ const STREAM = `@version(1.0)
 // it replaced a second copy of STREAM — the hero panel shows that now, and the same three lines
 // twice on one page taught nothing the second time.
 //
-// The line is deliberately left to scroll. Canonical form *is* one long line, and wrapping it for
-// presentation would misrepresent the one property the panel is there to show.
+// Canonical form is one long line by spec; the hero's second panel leaves it to scroll so the
+// property is honest, and the SAMPLE above wraps its Geometry across two lines so the hero
+// document tab never clips at the column width.
 const CANONICAL_SAMPLE = `{account_id:BIGINT(9007199254740993),boundary:Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]]),deploy_after:TIMESTAMP(2026-01-15T10:30:00Z),enabled:T,launch_on:DATE(2026-02-01),opens:Time("09:30"),price_cap:DECIMAL(199.00),regions:["eu-west-1","us-east-1"],service:"checkout-api",signing_key:BINARY(SGVsbG8=),ttl:Duration("PT45M")}`;
 
 // A glyph on its own is not an answer to a screen reader, hence the label. The middle label tracks

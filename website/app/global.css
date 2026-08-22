@@ -289,6 +289,7 @@ body {
  * height. Equalising only the outer box would still have let that rule jump seven lines. */
 .codeblock-pane pre {
   flex: 1;
+  min-width: 0;
 }
 
 /* Hidden but still laid out — and still in the markup, so the stream example stays in the static
@@ -311,10 +312,14 @@ body {
   margin: 0;
   padding: 1.1rem 1.25rem 1.35rem;
   overflow-x: auto;
+  overflow-y: hidden;
+  white-space: pre;
   color: #cbd5e1;
   font-family: var(--otfw-mono);
   font-size: 0.8rem;
   line-height: 1.75;
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
 }
 
 .codeblock .cm {

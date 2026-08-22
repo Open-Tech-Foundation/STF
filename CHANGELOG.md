@@ -18,6 +18,7 @@ the reference implementations may change incompatibly at any time.
 ### Fixed
 
 - **Rust `constructor_framing` test** — `TIME` is now a valid constructor, so the unknown-constructor case now asserts `CLOCK(10:00)` instead of `TIME(10:00:00)` (`ref-impl/rust/src/lib.rs`).
+- **Landing hero demo line cut** — `website/app/page.tsx` `SAMPLE` now prettier-formatted: `Geometry("Polygon", [...])` wraps each coordinate on its own line with spaces after commas (no trailing comma in JSON payload), and `website/app/global.css` ensures `pre` scrolls (`min-width:0`, `overflow-y:hidden`, thin scrollbar) so hero tab never clips.
 
 ### Added
 
