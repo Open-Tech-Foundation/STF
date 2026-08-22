@@ -189,8 +189,8 @@ export const CONTENTS: SpecGroup[] = [
         "sub": true
       },
       {
-        "id": "10-6-geometry-geographic-spatial-geometry",
-        "text": "10.6 `Geometry(...)` — Geographic / Spatial Geometry",
+        "id": "10-6-geometry-generic-coordinate-geometry",
+        "text": "10.6 `Geometry(...)` — Generic Coordinate Geometry",
         "sub": true
       },
       {

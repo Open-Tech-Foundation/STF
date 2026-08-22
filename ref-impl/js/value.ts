@@ -226,8 +226,8 @@ export type STFGeometryType =
 /**
  * Native STF Geometry primitive (new.txt §6).
  *
- * Coordinates use WGS84 longitude/latitude ordering [x, y] = [longitude, latitude]
- * and are stored as native numbers.
+ * Generic [x, y] coordinates in an arbitrary coordinate space
+ * (geo, screen, CAD, game, etc.) — no CRS baked in.
  */
 export class STFGeometry {
   readonly type: STFGeometryType;

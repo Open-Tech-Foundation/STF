@@ -453,7 +453,7 @@ func validateGeometry(ty GeometryType, coords interface{}) *payloadError {
 	switch ty {
 	case GeometryPoint:
 		if !isValidPosition(coords) {
-			return badPayload("Point coordinates must be [longitude, latitude]")
+			return badPayload("Point coordinates must be [x, y]")
 		}
 	case GeometryLineString:
 		arr, ok := coords.([]interface{})

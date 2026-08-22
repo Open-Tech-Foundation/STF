@@ -90,30 +90,26 @@ TIMESTAMP(2026-01-15T10:30:00.123456789+05:30)
   time libraries cannot represent it and admitting it would make round-tripping
   implementation-dependent.
 
-### `Geometry` — geographic / spatial geometry
+### `Geometry` — generic coordinate geometry
 
-Native, not GeoJSON internally — GeoJSON is one output format.
+Generic, not GIS — GeoJSON/WKT/WKB are interoperability outputs, not the definition. `Geometry` represents points/shapes in an arbitrary `[x,y]` space (geo, screen/UI, CAD, game, graphics).
 
 ```stf
-Geometry("Point", [80.2707, 13.0827])
-Geometry("LineString", [[80.27,13.08],[80.28,13.09]])
-Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]])
-Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]], [[80.273,13.083],[80.275,13.083],[80.275,13.085],[80.273,13.083]]])
-Geometry("MultiPoint", [[80.27,13.08],[80.28,13.09]])
-Geometry("MultiLineString", [[[80.27,13.08],[80.28,13.09]], [[80.29,13.09],[80.30,13.10]]])
-Geometry("MultiPolygon", [[[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]], [[[80.30,13.10],[80.31,13.10],[80.31,13.11],[80.30,13.10]]]])
+Geometry("Point", [120, 80])
+Geometry("LineString", [[0,0],[10,5],[20,15]])
+Geometry("Polygon", [[[0,0],[100,0],[100,80],[0,80],[0,0]]])
+Geometry("MultiPoint", [[10,20],[30,40]])
+Geometry("MultiLineString", [[[0,0],[10,10]], [[20,0],[30,10]]])
+Geometry("MultiPolygon", [[[[0,0],[10,0],[10,10],[0,0]]], [[[20,20],[30,20],[30,30],[20,20]]]])
 ```
 
-Payload is a quoted type plus JSON coordinates: `Geometry("Point", [lon,lat])`. Types are
+Payload is a quoted type plus JSON coordinates: `Geometry("Point", [x,y])`. Types are
 `Point|LineString|Polygon|MultiPoint|MultiLineString|MultiPolygon` exactly; `GeometryCollection`
-is reserved. Coordinates are **WGS84 `[longitude, latitude]`** — explicitly `[x,y]` to avoid
-`[lat,lon]` bugs. `GEOMETRY(...)` is accepted as an alias. Validation is primitive-level:
+is reserved. Coordinates are **generic `[x, y]`** — no CRS baked in (`[120,80]` is not implicitly lon/lat). `GEOMETRY(...)` is accepted as an alias. Validation is primitive-level:
 finite numbers, correct nesting, `LineString` ≥2, `Polygon` ring ≥4 and closed `first==last`,
-`Multi*` non-empty.
+`Multi*` non-empty. No winding-direction assumption.
 
-`toJSON()` emits GeoJSON `{"type":"Point","coordinates":[…]}`; plain `{type,coordinates}` objects
-are recognised as `Geometry` only when inference is opted in via `encode(value,{infer:true})` — the
-hot path `encode(value)` does no semantic inference.
+`toJSON()` / `toGeoJSON()` / `toGeo()` emits GeoJSON `{"type":"Point","coordinates":[…]}` for Geometry; there is no inference — plain `{type,coordinates}` objects remain plain Objects. Call `toGeo(geometry)` to produce GeoJSON for consumption.
 
 ### `Time` — time of day
 

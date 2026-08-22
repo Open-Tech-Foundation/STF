@@ -20,14 +20,9 @@ fn unrepresentable<T>(msg: impl Into<String>) -> Result<T> {
 }
 
 /// Converts a JSON document to STF. The root must be a JSON object.
-/// When `infer` is true, GeoJSON geometry objects are recognized as Geometry.
 pub fn from_json(json: &Json) -> Result<Value> {
-    from_json_with_infer(json, false)
-}
-
-pub fn from_json_with_infer(json: &Json, infer: bool) -> Result<Value> {
     match json {
-        Json::Object(_) => convert_from(json, "$", infer),
+        Json::Object(_) => convert_from(json, "$"),
         other => unrepresentable(format!(
             "an STF document root must be an object, but this JSON root is {}",
             json_kind(other)
@@ -46,17 +41,7 @@ fn json_kind(json: &Json) -> &'static str {
     }
 }
 
-fn is_geojson_geometry(map: &serde_json::Map<String, Json>) -> bool {
-    if map.len() != 2 { return false; }
-    match (map.get("type"), map.get("coordinates")) {
-        (Some(Json::String(t)), Some(Json::Array(_))) => {
-            matches!(t.as_str(), "Point"|"LineString"|"Polygon"|"MultiPoint"|"MultiLineString"|"MultiPolygon")
-        }
-        _ => false,
-    }
-}
-
-fn convert_from(json: &Json, path: &str, infer: bool) -> Result<Value> {
+fn convert_from(json: &Json, path: &str) -> Result<Value> {
     match json {
         Json::Null => Ok(Value::Null),
         Json::Bool(b) => Ok(Value::Bool(*b)),
@@ -90,19 +75,11 @@ fn convert_from(json: &Json, path: &str, infer: bool) -> Result<Value> {
         Json::Array(items) => {
             let mut out = Vec::with_capacity(items.len());
             for (i, item) in items.iter().enumerate() {
-                out.push(convert_from(item, &format!("{}[{}]", path, i), infer)?);
+                out.push(convert_from(item, &format!("{}[{}]", path, i))?);
             }
             Ok(Value::Array(out))
         }
         Json::Object(map) => {
-            if infer && is_geojson_geometry(map) {
-                let t = map.get("type").unwrap().as_str().unwrap().to_string();
-                let coords = map.get("coordinates").unwrap().clone();
-                let payload = format!("\"{}\", {}", t, coords);
-                if let Ok(g) = crate::constructors::geometry(&payload) {
-                    return Ok(Value::Geometry(g));
-                }
-            }
             let mut out = Object::with_capacity(map.len());
             for (key, item) in map {
                 if key.is_empty() {
@@ -114,7 +91,7 @@ fn convert_from(json: &Json, path: &str, infer: bool) -> Result<Value> {
                         path, key
                     ));
                 }
-                let child = convert_from(item, &format!("{}.{}", path, key), infer)?;
+                let child = convert_from(item, &format!("{}.{}", path, key))?;
                 if !out.insert(key.clone(), child) {
                     return unrepresentable(format!("{}: duplicate key `{}`", path, key));
                 }
@@ -134,9 +111,22 @@ pub enum TypedValuePolicy {
     PayloadAsString,
 }
 
-/// Converts an STF value to JSON.
+/// Converts an STF value to JSON. Geometry is emitted as GeoJSON.
 pub fn to_json(value: &Value, policy: TypedValuePolicy) -> Result<Json> {
     convert_to(value, "$", policy)
+}
+
+/// Converts an STF Geometry value to a GeoJSON object.
+pub fn to_geojson(geometry: &crate::value::Geometry) -> Json {
+    let mut map = serde_json::Map::new();
+    map.insert("type".to_string(), Json::String(geometry.ty.as_str().to_string()));
+    map.insert("coordinates".to_string(), geometry.coordinates.clone());
+    Json::Object(map)
+}
+
+/// Alias — explicit GeoJSON output for Geometry.
+pub fn to_geo(geometry: &crate::value::Geometry) -> Json {
+    to_geojson(geometry)
 }
 
 fn convert_to(value: &Value, path: &str, policy: TypedValuePolicy) -> Result<Json> {

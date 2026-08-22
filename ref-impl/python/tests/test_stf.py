@@ -259,6 +259,111 @@ class JsonInterop(unittest.TestCase):
         )
 
 
+class Geometry(unittest.TestCase):
+    def test_point(self):
+        v = stf.parse('{p: Geometry("Point", [80.27,13.08])}')
+        self.assertEqual(stf.kind_of(v["p"]), "Geometry")
+        self.assertEqual(v["p"].type, "Point")
+        self.assertEqual(stf.serialize(v, stf.COMPACT), '{p:Geometry("Point", [80.27, 13.08])}')
+
+    def test_linestring(self):
+        v = stf.parse('{l: Geometry("LineString", [[80.27,13.08],[80.28,13.09]])}')
+        self.assertEqual(v["l"].type, "LineString")
+
+    def test_polygon(self):
+        v = stf.parse('{p: Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]])}')
+        self.assertEqual(v["p"].type, "Polygon")
+
+    def test_polygon_with_hole(self):
+        v = stf.parse('{p: Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]], [[80.273,13.083],[80.275,13.083],[80.275,13.085],[80.273,13.083]]])}')
+        self.assertEqual(len(v["p"].coordinates), 2)
+
+    def test_multipoint(self):
+        self.assertEqual(stf.parse('{p: Geometry("MultiPoint", [[80.27,13.08],[80.28,13.09]])}')["p"].type, "MultiPoint")
+
+    def test_multilinestring(self):
+        self.assertEqual(stf.parse('{m: Geometry("MultiLineString", [[[80.27,13.08],[80.28,13.09]], [[80.29,13.09],[80.30,13.10]]])}')["m"].type, "MultiLineString")
+
+    def test_multipolygon(self):
+        v = stf.parse('{m: Geometry("MultiPolygon", [[[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]], [[[80.30,13.10],[80.31,13.10],[80.31,13.11],[80.30,13.10]]]])}')
+        self.assertEqual(v["m"].type, "MultiPolygon")
+
+    def test_upper_alias(self):
+        self.assertEqual(stf.parse('{p: GEOMETRY("Point", [1,2])}')["p"].type, "Point")
+
+    def test_rejects_invalid(self):
+        for bad in [
+            '{p: Geometry("Point", [80])}',
+            '{p: Geometry("Unknown", [1,2])}',
+            '{p: Geometry("Point", ["a","b"])}',
+            '{p: Geometry("LineString", [[80,13]])}',
+            '{p: Geometry("Polygon", [[[0,0],[1,0],[1,1]]])}',
+            '{p: Geometry("Polygon", [[[0,0],[1,0],[1,1],[0,1]]])}',
+            '{p: Geometry("MultiPoint", [])}',
+        ]:
+            self.assertEqual(code(bad), "ERR_INVALID_CONSTRUCTOR_PAYLOAD", bad)
+
+    def test_round_trips(self):
+        for txt in ['{p: Geometry("Point", [1,2])}', '{p: Geometry("LineString", [[0,0],[1,1]])}', '{p: Geometry("Polygon", [[[0,0],[1,0],[1,1],[0,0]]])}']:
+            v = stf.parse(txt)
+            self.assertTrue(stf.equal(stf.parse(stf.serialize(v, stf.COMPACT)), v))
+
+
+class TimeTests(unittest.TestCase):
+    def test_valid(self):
+        for txt in ['Time("00:00")','Time("09:30")','Time("23:59:59")','Time("09:30:00.123")']:
+            v = stf.parse("{t: %s}" % txt)
+            self.assertEqual(stf.kind_of(v["t"]), "Time")
+            self.assertTrue(stf.equal(stf.parse(stf.serialize(v, stf.COMPACT)), v))
+        self.assertEqual(stf.parse('{t: TIME("09:30")}')["t"].payload, "09:30")
+
+    def test_invalid(self):
+        for bad in ['Time("24:00")','Time("12:60")','Time("09:60:00")','Time("abc")','Time("")']:
+            self.assertEqual(code("{t: %s}" % bad), "ERR_INVALID_CONSTRUCTOR_PAYLOAD", bad)
+
+
+class DurationTests(unittest.TestCase):
+    def test_valid(self):
+        for txt in ['Duration("PT30S")','Duration("PT45M")','Duration("PT2H30M")','Duration("P1D")','Duration("P1Y")','DURATION("PT2H")']:
+            v = stf.parse("{d: %s}" % txt)
+            self.assertEqual(stf.kind_of(v["d"]), "Duration")
+            self.assertTrue(stf.equal(stf.parse(stf.serialize(v, stf.COMPACT)), v))
+
+    def test_invalid(self):
+        for bad in ['Duration("invalid")','Duration("P")','Duration("PT")','Duration("")','Duration("P1DT")']:
+            self.assertEqual(code("{d: %s}" % bad), "ERR_INVALID_CONSTRUCTOR_PAYLOAD", bad)
+
+
+class GeometryJson(unittest.TestCase):
+    def test_to_json_emits_geojson(self):
+        v = stf.parse('{g: Geometry("Point", [80.27,13.08])}')
+        j = stf.to_json(v["g"])
+        self.assertEqual(j["type"], "Point")
+        self.assertEqual(j["coordinates"], [80.27,13.08])
+
+    def test_to_geo_emit(self):
+        g = stf.parse('{g: Geometry("Point", [80.27,13.08])}')["g"]
+        self.assertEqual(stf.to_geo(g), {"type": "Point", "coordinates": [80.27,13.08]})
+        self.assertEqual(stf.to_geojson(g), {"type": "Point", "coordinates": [80.27,13.08]})
+        self.assertEqual(stf.to_geo(g), stf.to_json(g))
+
+    def test_from_json_no_infer(self):
+        gj = {"type":"Point","coordinates":[1,2]}
+        v = stf.from_json({"x": gj})
+        self.assertEqual(stf.kind_of(v["x"]), "Object")
+        self.assertEqual(v["x"]["type"], "Point")
+
+
+class MixedObject(unittest.TestCase):
+    def test_realistic(self):
+        txt = '{name:`Chennai`, population:7000000, active:T, boundary:Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]]), opens:Time("09:30"), ttl:Duration("PT45M"), founded:DATE(2026-01-15)}'
+        v = stf.parse(txt)
+        self.assertEqual(stf.kind_of(v["boundary"]), "Geometry")
+        self.assertEqual(stf.kind_of(v["opens"]), "Time")
+        self.assertEqual(stf.kind_of(v["ttl"]), "Duration")
+        self.assertTrue(stf.equal(stf.parse(stf.serialize(v, stf.COMPACT)), v))
+
+
 class PublicHelpers(unittest.TestCase):
     def test_decimal_payload_keeps_its_scale(self):
         self.assertEqual(stf.STFDecimal(False, 150, 2).payload, "1.50")

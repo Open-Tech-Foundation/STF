@@ -23,7 +23,7 @@ An STF value is exactly one of **fourteen** kinds.
 | Date | A wall date, with no time and no offset. |
 | Timestamp | An absolute instant, with a mandatory UTC offset. |
 | Binary | A finite sequence of octets, possibly empty. |
-| Geometry | Geographic/spatial geometry — Point, LineString, Polygon, MultiPoint, MultiLineString, MultiPolygon — WGS84 `[longitude, latitude]`. |
+| Geometry | Generic coordinate geometry — Point, LineString, Polygon, MultiPoint, MultiLineString, MultiPolygon — arbitrary `[x, y]` (screen/CAD/game/geo). |
 | Time | Wall time of day without date or offset — `HH:mm` with optional `:ss` and `.fraction`. |
 | Duration | ISO-8601 duration — `P…` / `PT…`, calendar and clock components. |
 
@@ -61,7 +61,7 @@ three different values, and comparing across kinds is always unequal.
 | Decimal | **Scale-sensitive**: equal only if coefficient *and* scale match. |
 | Date, Timestamp | Equality of the written fields — the offset is preserved data. |
 | Binary | Equality of the octet sequence; the base64 spelling is not data. |
-| Geometry | Equality of `type` and deep `coordinates` — `[lon,lat]` numeric. |
+| Geometry | Equality of `type` and deep `coordinates` — generic numeric `[x,y]`. |
 | Time | Equality of hour/minute/second/fraction fields — `Time("09:30")` ≠ `Time("09:30:00")`. |
 | Duration | Equality of the payload string — `Duration("P1Y")` ≠ `Duration("P12M")`. |
 | Array | Equal length, pairwise-equal elements, in order. |

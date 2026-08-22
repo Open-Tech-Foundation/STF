@@ -207,9 +207,23 @@ func convertToJSON(v Value, path string, policy TypedValuePolicy) (any, error) {
 		return typed(value.Payload(), "timestamp")
 	case []byte:
 		return typed(BinaryToBase64(value), "binary")
+	case *Geometry:
+		return ToGeoJSON(value), nil
+	case Time:
+		return typed(value.Payload(), "time")
+	case Duration:
+		return typed(value.Payload(), "duration")
 	}
 	return nil, unrepresentable("%s: %T has no JSON representation", path, v)
 }
+
+// ToGeoJSON converts an STF Geometry value to a GeoJSON object.
+func ToGeoJSON(g *Geometry) map[string]any {
+	return map[string]any{"type": string(g.Type), "coordinates": g.Coordinates}
+}
+
+// ToGeo is an alias for ToGeoJSON — explicit GeoJSON output for Geometry.
+func ToGeo(g *Geometry) map[string]any { return ToGeoJSON(g) }
 
 // FormatIntegral renders an integral float64 without a decimal point or exponent.
 func FormatIntegral(n float64) string {
@@ -271,6 +285,14 @@ func TaggedJSON(v Value) (any, error) {
 		return tag("ts", value.Payload()), nil
 	case []byte:
 		return tag("bin", BinaryToBase64(value)), nil
+	case *Geometry:
+		// Tagged as GeoJSON string for conformance corpus.
+		m, _ := json.Marshal(ToGeoJSON(value))
+		return tag("geo", string(m)), nil
+	case Time:
+		return tag("time", value.Payload()), nil
+	case Duration:
+		return tag("dur", value.Payload()), nil
 	}
 	return nil, unrepresentable("%T has no tagged-JSON encoding", v)
 }

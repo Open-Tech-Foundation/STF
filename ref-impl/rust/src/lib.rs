@@ -299,7 +299,7 @@ mod tests {
     fn constructor_framing() {
         assert_eq!(code("{a: DATE (2026-01-15)}"), Code::Syntax);
         assert_eq!(code("{a: CUSTOM(1)}"), Code::UnknownConstructor);
-        assert_eq!(code("{a: TIME(10:00:00)}"), Code::UnknownConstructor);
+        assert_eq!(code("{a: CLOCK(10:00)}"), Code::UnknownConstructor);
         assert_eq!(code("{a: MY_TYPE(1)}"), Code::UnknownConstructor);
         assert_eq!(code("{a: date(2026-01-15)}"), Code::UnknownConstructor);
         assert_eq!(code("{a: Date(2026-01-15)}"), Code::UnknownConstructor);

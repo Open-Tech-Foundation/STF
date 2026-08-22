@@ -150,7 +150,7 @@ class STFTimestamp:
 class STFGeometry:
     """Native STF Geometry primitive (new.txt §6).
 
-    Coordinates use WGS84 longitude/latitude ordering [x, y] = [longitude, latitude].
+    Coordinates are generic [x, y] in an arbitrary coordinate space — no CRS baked in.
     """
 
     type: str

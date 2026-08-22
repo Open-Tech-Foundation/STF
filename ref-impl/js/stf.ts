@@ -76,6 +76,8 @@ export {
   fromJSON,
   fromJSONText,
   toJSON,
+  toGeoJSON,
+  toGeo,
   toTaggedJSON,
   type TypedValuePolicy,
 } from "./json.ts";

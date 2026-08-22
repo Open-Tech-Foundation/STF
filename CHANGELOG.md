@@ -10,6 +10,15 @@ the reference implementations may change incompatibly at any time.
 
 ## [Unreleased]
 
+### Changed
+
+- **Geometry is now generic coordinate geometry** — `doc/spec.md` §3/§10.6, `website/app/docs/data-model` and `constructors`, and all reference implementations (`ref-impl/js`, `ref-impl/python`, `ref-impl/rust`, `ref-impl/go`) treat `Geometry` as arbitrary `[x, y]` (screen/UI, CAD, game, geo) with no WGS84/EPSG:4326 or lon/lat assumption, no baked CRS, and spec note `parse(serialize(v))≡v` with no quantization.
+- **JSON interchange `infer` removed; `toGeo` only** — `ref-impl/js`, `ref-impl/python`, `ref-impl/rust`, `ref-impl/go` no longer infer `Geometry` from plain GeoJSON objects (`fromJSON({type,coordinates})` stays `Object`). GeoJSON is produced one-way via `toJSON(geometry)` / `toGeoJSON(geometry)` / `toGeo(geometry)` (`ToGeoJSON`/`ToGeo`/`to_geo`), `doc/spec.md` §13.7 interoperability note updated, site docs regenerated via `bun website/scripts/gen-spec.ts` (4 docs, 114 sections).
+
+### Fixed
+
+- **Rust `constructor_framing` test** — `TIME` is now a valid constructor, so the unknown-constructor case now asserts `CLOCK(10:00)` instead of `TIME(10:00:00)` (`ref-impl/rust/src/lib.rs`).
+
 ### Added
 
 - **STF Primitive Extensions — Geometry, Time, Duration** (`new.txt`): three new native semantic primitives preserving human-readability, fast parsing, and GeoJSON/ISO-8601 interoperability. Each implementation (`ref-impl/js`, `ref-impl/python`, `ref-impl/rust`, `ref-impl/go`) now offers `Geometry("Point"|"LineString"|"Polygon"|"MultiPoint"|"MultiLineString"|"MultiPolygon", coordinates)` (WGS84 `[lon,lat]`, closed rings, validation for nesting/closure), `Time("HH:mm"[:ss[.fraction]])` (00-23/00-59, no zone) and `Duration("P…")` (ISO-8601 `P[nY][nM][nW][nD][T[nH][nM][nS]]`). Serialization round-trips (`parse(serialize(v))≡v`), `toJSON()` emits GeoJSON `{type,coordinates}` for Geometry and payload strings for Time/Duration, and `fromJSON(...,{infer:true})`/`from_json(...,infer=True)`/`from_json_with_infer(...,true)` opt-in discovers GeoJSON geometry objects without cost on the hot path. Tagged JSON adds `$geo/$time/$dur`.

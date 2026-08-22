@@ -336,6 +336,143 @@ describe("JSON interchange", () => {
   });
 });
 
+describe("Geometry (new.txt §2-6)", () => {
+  it("parses Point", () => {
+    const v = parse('{p: Geometry("Point", [80.2707,13.0827])}');
+    assert.equal(kindOf(v.p), "Geometry");
+    assert.equal(v.p.type, "Point");
+    assert.deepEqual(v.p.coordinates, [80.2707, 13.0827]);
+    assert.equal(serialize(v, COMPACT), '{p:Geometry("Point", [80.2707,13.0827])}');
+  });
+  it("parses LineString", () => {
+    const v = parse('{l: Geometry("LineString", [[80.27,13.08],[80.28,13.09],[80.29,13.10]])}');
+    assert.equal(v.l.type, "LineString");
+    assert.equal(v.l.coordinates.length, 3);
+  });
+  it("parses Polygon", () => {
+    const v = parse('{poly: Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]])}');
+    assert.equal(v.poly.type, "Polygon");
+  });
+  it("parses Polygon with hole", () => {
+    const v = parse('{poly: Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]], [[80.273,13.083],[80.275,13.083],[80.275,13.085],[80.273,13.083]]])}');
+    assert.equal(v.poly.coordinates.length, 2);
+  });
+  it("parses MultiPoint", () => {
+    assert.equal(parse('{p: Geometry("MultiPoint", [[80.27,13.08],[80.28,13.09]])}').p.type, "MultiPoint");
+  });
+  it("parses MultiLineString", () => {
+    assert.equal(parse('{m: Geometry("MultiLineString", [[[80.27,13.08],[80.28,13.09]], [[80.29,13.09],[80.30,13.10]]])}').m.type, "MultiLineString");
+  });
+  it("parses MultiPolygon", () => {
+    const v = parse('{m: Geometry("MultiPolygon", [[[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]], [[[80.30,13.10],[80.31,13.10],[80.31,13.11],[80.30,13.10]]]])}');
+    assert.equal(v.m.type, "MultiPolygon");
+  });
+  it("accepts GEOMETRY upper alias", () => {
+    assert.equal(parse('{p: GEOMETRY("Point", [1,2])}').p.type, "Point");
+    assert.equal(parse('{p: Geometry("Point", [1,2])}').p.type, "Point");
+  });
+  it("rejects invalid geometry", () => {
+    assert.equal(code('{p: Geometry("Point", [80])}'), "ERR_INVALID_CONSTRUCTOR_PAYLOAD");
+    assert.equal(code('{p: Geometry("Unknown", [1,2])}'), "ERR_INVALID_CONSTRUCTOR_PAYLOAD");
+    assert.equal(code('{p: Geometry("Point", ["a","b"])}'), "ERR_INVALID_CONSTRUCTOR_PAYLOAD");
+    assert.equal(code('{p: Geometry("LineString", [[80,13]])}'), "ERR_INVALID_CONSTRUCTOR_PAYLOAD"); // insufficient
+    assert.equal(code('{p: Geometry("Polygon", [[[80,13],[81,13],[81,14]]])}'), "ERR_INVALID_CONSTRUCTOR_PAYLOAD"); // unclosed+ <4?
+    assert.equal(code('{p: Geometry("Polygon", [[[0,0],[1,0],[1,1],[0,1]]])}'), "ERR_INVALID_CONSTRUCTOR_PAYLOAD"); // open ring
+    assert.equal(code('{p: Geometry("MultiPoint", [])}'), "ERR_INVALID_CONSTRUCTOR_PAYLOAD");
+  });
+  it("round-trips geometry through serialize/parse and equals", () => {
+    for (const txt of [
+      '{p: Geometry("Point", [1,2])}',
+      '{p: Geometry("LineString", [[0,0],[1,1]])}',
+      '{p: Geometry("Polygon", [[[0,0],[1,0],[1,1],[0,0]]])}',
+      '{p: Geometry("MultiPolygon", [[[[0,0],[1,0],[1,1],[0,0]]]])}',
+    ]) {
+      const v = parse(txt);
+      assert.ok(equals(parse(serialize(v, COMPACT)), v));
+    }
+  });
+});
+
+describe("Time (new.txt §16-17)", () => {
+  it("parses valid times", () => {
+    for (const txt of ['Time("00:00")','Time("09:30")','Time("23:59:59")','Time("09:30:00.123")','Time("09:30:00.123456789")']) {
+      const v = parse(`{t: ${txt}}`);
+      assert.equal(kindOf(v.t), "Time");
+      assert.ok(equals(parse(serialize(v, COMPACT)), v));
+    }
+    assert.equal(parse('{t: TIME("09:30")}').t.payload, "09:30");
+  });
+  it("rejects invalid times", () => {
+    for (const bad of ['Time("24:00")','Time("12:60")','Time("09:60:00")','Time("abc")','Time("09:30:60")','Time("")']) {
+      assert.equal(code(`{t: ${bad}}`), "ERR_INVALID_CONSTRUCTOR_PAYLOAD", bad);
+    }
+  });
+});
+
+describe("Duration (new.txt §18-19)", () => {
+  it("parses valid durations", () => {
+    for (const txt of ['Duration("PT30S")','Duration("PT45M")','Duration("PT2H30M")','Duration("P1D")','Duration("P1Y")','Duration("P1Y2M3DT4H5M6S")','DURATION("PT2H")']) {
+      const v = parse(`{d: ${txt}}`);
+      assert.equal(kindOf(v.d), "Duration");
+      assert.ok(equals(parse(serialize(v, COMPACT)), v));
+    }
+  });
+  it("rejects invalid durations", () => {
+    for (const bad of ['Duration("invalid")','Duration("P")','Duration("PT")','Duration("")','Duration("P1DT")']) {
+      assert.equal(code(`{d: ${bad}}`), "ERR_INVALID_CONSTRUCTOR_PAYLOAD", bad);
+    }
+  });
+});
+
+describe("Geometry JSON (new.txt §7-9)", () => {
+  it("toJSON emits GeoJSON", () => {
+    const v = parse('{g: Geometry("Point", [80.27,13.08])}');
+    const j = toJSON(v.g) as { type: string; coordinates: number[] };
+    assert.equal(j.type, "Point");
+    assert.deepEqual(j.coordinates, [80.27, 13.08]);
+    assert.deepEqual(toJSON(parse('{g: Geometry("Polygon", [[[0,0],[1,0],[1,1],[0,0]]])}').g) as any, { type: "Polygon", coordinates: [[[0,0],[1,0],[1,1],[0,0]]] });
+  });
+  it("toGeo / toGeoJSON emits GeoJSON for Geometry", async () => {
+    const { toGeo, toGeoJSON } = await import("./json.ts");
+    const g = parse('{g: Geometry("Point", [80.27,13.08])}').g;
+    assert.deepEqual(toGeo(g as any), { type: "Point", coordinates: [80.27, 13.08] });
+    assert.deepEqual(toGeoJSON(g as any), { type: "Point", coordinates: [80.27, 13.08] });
+    assert.deepEqual(toGeo(g as any), toJSON(g));
+  });
+  it("fromJSON does not infer Geometry — plain object stays Object", () => {
+    const gj = { type: "Point", coordinates: [1,2] };
+    const v = fromJSON({ x: gj as never });
+    assert.equal(kindOf(v.x), "Object");
+  });
+  it("Array[Geometry] vs MultiPolygon are distinct", () => {
+    const arr = parse('{a: [Geometry("Polygon", [[[0,0],[1,0],[1,1],[0,0]]]), Geometry("Polygon", [[[2,2],[3,2],[3,3],[2,2]]])]}');
+    const multi = parse('{m: Geometry("MultiPolygon", [[[[0,0],[1,0],[1,1],[0,0]]], [[[2,2],[3,2],[3,3],[2,2]]]])}');
+    assert.equal(kindOf(arr.a), "Array");
+    assert.equal(kindOf(multi.m), "Geometry");
+    assert.ok(!equals(arr.a, multi.m));
+  });
+});
+
+describe("Mixed object (new.txt §28)", () => {
+  it("round-trips a realistic app object with all new primitives", () => {
+    const txt = '{name:`Chennai`, population:7000000, active:T, boundary:Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]]), opens:Time("09:30"), ttl:Duration("PT45M"), founded:DATE(2026-01-15)}';
+    const v = parse(txt);
+    assert.equal(kindOf(v.boundary), "Geometry");
+    assert.equal(kindOf(v.opens), "Time");
+    assert.equal(kindOf(v.ttl), "Duration");
+    assert.ok(equals(parse(serialize(v, COMPACT)), v));
+    assert.ok(equals(parse(serialize(v, CANONICAL)), v));
+  });
+  it("plain GeoJSON stays Object — no inference", () => {
+    const gj = { type: "Point", coordinates: [80.27,13.08] };
+    const plain = { name: "Chennai", boundary: gj, count: 1 };
+    const v = fromJSON(plain as never);
+    assert.equal(kindOf(v.boundary), "Object");
+    assert.equal(v.name, "Chennai");
+    assert.equal(v.count, 1);
+  });
+});
+
 describe("public helpers", () => {
   it("builds a decimal whose payload keeps its scale", () => {
     assert.equal(new STFDecimal(false, 150n, 2).payload, "1.50");

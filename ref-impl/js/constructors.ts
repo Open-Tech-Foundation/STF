@@ -354,7 +354,7 @@ function validateGeometry(type: string, coords: unknown): void {
   }
   switch (type) {
     case "Point": {
-      if (!isValidPosition(coords)) bad("Point coordinates must be [longitude, latitude]");
+      if (!isValidPosition(coords)) bad("Point coordinates must be [x, y]");
       break;
     }
     case "LineString": {

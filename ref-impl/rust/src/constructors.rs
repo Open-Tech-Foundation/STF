@@ -375,7 +375,7 @@ fn validate_geometry(ty: GeometryType, coords: &serde_json::Value) -> Result<(),
     match ty {
         GeometryType::Point => {
             if !is_valid_position(coords) {
-                return Err(bad("Point coordinates must be [longitude, latitude]"));
+                return Err(bad("Point coordinates must be [x, y]"));
             }
         }
         GeometryType::LineString => {

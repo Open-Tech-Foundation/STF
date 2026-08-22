@@ -32,6 +32,8 @@ from .json_interop import (
     REJECT,
     from_json,
     from_json_text,
+    to_geo,
+    to_geojson,
     to_json,
     to_tagged_json,
 )

@@ -94,7 +94,7 @@ An STF **value** is exactly one of fourteen kinds:
 | **Date** | A wall date with no time and no offset. |
 | **Timestamp** | An absolute instant with a mandatory UTC offset. |
 | **Binary** | A finite sequence of octets, possibly empty. |
-| **Geometry** | A geographic/spatial geometry (Point, LineString, Polygon, MultiPoint, MultiLineString, MultiPolygon) with WGS84 `[longitude, latitude]` coordinates. See §10.6. |
+| **Geometry** | A generic coordinate geometry (Point, LineString, Polygon, MultiPoint, MultiLineString, MultiPolygon) in an arbitrary coordinate space. See §10.6. |
 | **Time** | A wall time of day without date or offset. See §10.7. |
 | **Duration** | An ISO-8601 duration. See §10.8. |
 
@@ -130,7 +130,7 @@ performed: `Number(1)`, `BigInt(1)`, and `Decimal(1)` are three distinct values.
   and `TIMESTAMP(2026-01-15T15:30:00+05:30)` denote the same instant but are **not equal** as
   STF values, because the offset is preserved data.
 * **Binary**: equality of the octet sequence. The base64 spelling is not data (§10.5).
-* **Geometry**: equality of `type` and `coordinates` (deep, numeric equality; `Point` coordinates are `[lon, lat]`). See §10.6.
+* **Geometry**: equality of `type` and `coordinates` (deep, numeric equality). See §10.6.
 * **Time**: equality of `hour`, `minute`, `second`, and `fraction` fields. `Time("09:30")` ≠ `Time("09:30:00")`.
 * **Duration**: equality of the canonical payload string. `Duration("P1Y")` ≠ `Duration("P12M")` even where calendar-equivalent.
 * **Array**: equal length and pairwise-equal elements, in order.
@@ -612,20 +612,20 @@ BINARY(SGVsbG8=)      BINARY(SGVsbG9X)      BINARY()   # empty octet sequence
   text serialization. Two payloads that decode to the same octets are equal — but note that
   canonicality means each octet sequence has exactly one legal spelling.
 
-### 10.6 `Geometry(...)` — Geographic / Spatial Geometry
+### 10.6 `Geometry(...)` — Generic Coordinate Geometry
 
-Geometry is a native STF primitive, independent of GeoJSON. GeoJSON is an **interoperability**
-output format, not the internal representation.
+Geometry is a **generic** coordinate-geometry primitive, independent of GeoJSON, WKT/WKB, or any GIS-specific CRS. It represents points and shapes in an **arbitrary coordinate space** — geographic, screen/UI, CAD, game-world, graphics, robotics, or engineering. If CRS/reference-system metadata is ever needed, it will be designed separately from Geometry.
 
 ```stf
-Geometry("Point", [80.2707, 13.0827])
-Geometry("LineString", [[80.2707,13.0827],[80.2750,13.0850]])
-Geometry("Polygon", [[[80.2700,13.0800],[80.2800,13.0800],[80.2800,13.0900],[80.2700,13.0800]]])
-Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]], [[80.273,13.083],[80.275,13.083],[80.275,13.085],[80.273,13.083]]])
-Geometry("MultiPoint", [[80.27,13.08],[80.28,13.09]])
-Geometry("MultiLineString", [[[80.27,13.08],[80.28,13.09]], [[80.29,13.09],[80.30,13.10]]])
-Geometry("MultiPolygon", [[[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]], [[[80.30,13.10],[80.31,13.10],[80.31,13.11],[80.30,13.10]]]])
+Geometry("Point", [120, 80])
+Geometry("LineString", [[0,0],[10,5],[20,15]])
+Geometry("Polygon", [[[0,0],[100,0],[100,80],[0,80],[0,0]]])
+Geometry("MultiPoint", [[10,20],[30,40],[50,60]])
+Geometry("MultiLineString", [[[0,0],[10,10]], [[20,0],[30,10]]])
+Geometry("MultiPolygon", [[[[0,0],[10,0],[10,10],[0,0]]], [[[20,20],[30,20],[30,30],[20,20]]]])
 ```
+
+Geographic examples also map naturally, e.g. `Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]])` may serialize to GeoJSON `{"type":"Polygon","coordinates":[...]}` — but GeoJSON is one interoperability output, not the definition.
 
 **Payload grammar (informal):**
 
@@ -639,25 +639,27 @@ coordinates_json = JSON array of numbers/arrays (GeoJSON-compatible nesting)
 * Type spelling is case-sensitive and must be one of the six types above exactly.
 * `GeometryCollection` is reserved for a future version and **MUST** be rejected with `ERR_INVALID_CONSTRUCTOR_PAYLOAD` if used today.
 
-**Coordinate convention (normative):**
+**Coordinate semantics (normative):**
 
-* `[x, y] = [longitude, latitude]`. This is explicit to avoid `[latitude, longitude]` bugs.
-* WGS84 / EPSG:4326 is the initial CRS. No CRS parameter is supported in this version; a future extension may add one.
+* Coordinates are **generic numeric coordinates** `[x, y]` (and for 3D, `[x, y, z]` if later added). `Geometry("Point", [120, 80])` does **not** imply `longitude=120, latitude=80`.
+* No CRS is baked into Geometry. The coordinate space may be geographic, screen, CAD, game, graphics, or any application-defined system.
+* No CRS parameter is supported in this version; a future extension may add CRS metadata **separately** from Geometry.
 
 **Validation (primitive-level, all `ERR_INVALID_CONSTRUCTOR_PAYLOAD` unless noted):**
 
 * Known geometry type (unknown type is payload error).
-* Valid JSON for coordinates; every position is exactly two finite numbers `[lon, lat]`.
+* Valid JSON for coordinates; every position is exactly two finite numbers `[x, y]`.
 * Correct nesting depth per type:
-  * `Point`: `[lon, lat]`
+  * `Point`: `[x, y]`
   * `LineString`: at least 2 positions
   * `Polygon`: at least one ring; each ring at least 4 positions and **closed** (`first == last`)
   * `MultiPoint`: at least 1 position
   * `MultiLineString`: at `least 1` line, each line ≥2 positions
   * `MultiPolygon`: at `least 1` polygon, each polygon ≥1 ring, each ring ≥4 and closed
 * The whole Geometry is rejected as `ERR_UNKNOWN_CONSTRUCTOR` if the constructor name is not `Geometry`/`GEOMETRY` and in the reserved namespace.
+* Do **not** assume winding direction or geographic-specific polygon rules.
 
-Geometry **MUST NOT** be designed as "compressed GeoJSON" — it is a native semantic value whose GeoJSON encoding is just one external representation.
+Geometry **MUST NOT** be designed as "compressed GeoJSON" — it is a native generic value whose GeoJSON/WKT/WKB encodings are just external representations. Serialization **MUST** preserve coordinates exactly (no quantization; `parse(serialize(v)) ≡ v`).
 
 ### 10.7 `Time(...)` — Time of Day
 
@@ -869,13 +871,15 @@ including fractional-second trailing zeros and the offset spelling. `Binary` MUS
 in canonical base64 (§10.5). `Geometry` MUST be emitted as `Geometry("Type", <JSON>)` with
 the GeoJSON-compatible coordinate nesting and the exact type spelling; `Time` and `Duration`
 MUST be emitted as `Time("<payload>")` / `Duration("<payload>")` with the quoted canonical
-form. `toJSON()` for Geometry is the GeoJSON object `{"type":…, "coordinates":…}`; for
-Time/Duration it is the payload string (documented as lossy without STF type metadata).
+form. `toJSON()` / `toGeoJSON()` / `toGeo()` for Geometry is the GeoJSON object
+`{"type":…, "coordinates":…}`; for Time/Duration it is the payload string (documented as
+lossy without STF type metadata).
 
-**Interoperability note (§10.6 / new.txt §7-9):** STF is *not* GeoJSON internally. GeoJSON
-is one external serialization of `Geometry`. When inference is enabled (`encode(value, {infer:true})`),
-plain objects `{type:"Point",coordinates:[…]}` **MAY** be recognised as `Geometry`; with the
-default `encode(value)` they **MUST NOT** be inferred (opt-in per new.txt §10 for the hot path).
+**Interoperability note (§10.6):** STF is *not* GeoJSON internally. GeoJSON is one external
+serialization of `Geometry`. There is no inference from plain JSON objects
+`{type:"Point",coordinates:[…]}` to `Geometry` — such objects remain plain STF Objects.
+To produce GeoJSON, call `toGeoJSON(geometry)` / `toGeo(geometry)` (or `toJSON` on a value
+containing Geometry); the output is consumed as GeoJSON directly.
 
 ---
 

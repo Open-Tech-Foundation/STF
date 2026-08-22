@@ -6,7 +6,7 @@
  * `"1.5"` is the in-band sentinel spec §3.1 forbids.
  */
 
-import { binaryToBase64, parseGeometry } from "./constructors.ts";
+import { binaryToBase64 } from "./constructors.ts";
 import { STFError } from "./errors.ts";
 import { formatNumber } from "./serialize.ts";
 import {
@@ -32,13 +32,13 @@ function unrepresentable(detail: string): never {
 const IDENTIFIER = /^[A-Za-z0-9_-]+$/;
 
 /** Converts a JSON document to STF. The root must be a JSON object. */
-export function fromJSON(json: Json, opts: { infer?: boolean } = {}): STFObject {
+export function fromJSON(json: Json): STFObject {
   if (json === null || typeof json !== "object" || Array.isArray(json)) {
     unrepresentable(
       `an STF document root must be an object, but this JSON root is ${jsonKind(json)}`,
     );
   }
-  return convertFrom(json, "$", opts) as STFObject;
+  return convertFrom(json, "$") as STFObject;
 }
 
 function jsonKind(json: Json): string {
@@ -52,41 +52,23 @@ function jsonKind(json: Json): string {
   }
 }
 
-const GEO_TYPES = new Set(["Point", "LineString", "Polygon", "MultiPoint", "MultiLineString", "MultiPolygon"]);
-
-function isGeoJSONGeometry(obj: Record<string, Json>): boolean {
-  if (typeof obj.type !== "string" || !GEO_TYPES.has(obj.type)) return false;
-  if (!Array.isArray(obj.coordinates)) return false;
-  return true;
-}
-
-function convertFrom(json: Json, path: string, opts: { infer?: boolean } = {}): STFValue {
+function convertFrom(json: Json, path: string): STFValue {
   if (json === null) return null;
   if (typeof json === "boolean" || typeof json === "string") return json;
   if (typeof json === "number") {
     if (!Number.isFinite(json)) unrepresentable(`${path}: ${json} is not an STF Number`);
     return json;
   }
-  if (Array.isArray(json)) return json.map((item, i) => convertFrom(item, `${path}[${i}]`, opts));
+  if (Array.isArray(json)) return json.map((item, i) => convertFrom(item, `${path}[${i}]`));
 
   const obj = json as Record<string, Json>;
-  // Inference: GeoJSON geometry objects become STF Geometry (new.txt §11)
-  if (opts.infer && isGeoJSONGeometry(obj) && Object.keys(obj).length === 2) {
-    const type = obj.type as string;
-    const coords = obj.coordinates as unknown;
-    try {
-      const payload = `"${type}", ${JSON.stringify(coords)}`;
-      return parseGeometry(payload);
-    } catch { /* fall through to plain object if validation fails */ }
-  }
-
   const entries: Array<[string, STFValue]> = [];
   for (const key of Object.keys(json)) {
     if (key.length === 0) unrepresentable(`${path}: an STF key must not be empty`);
     if (!IDENTIFIER.test(key)) {
       unrepresentable(`${path}: key \`${key}\` is not a valid STF identifier ([A-Za-z0-9_-]+)`);
     }
-    entries.push([key, convertFrom(json[key], `${path}.${key}`, opts)]);
+    entries.push([key, convertFrom(json[key], `${path}.${key}`)]);
   }
   return makeObject(entries);
 }
@@ -148,10 +130,18 @@ function findOversizedInteger(text: string): string | null {
 /** How to handle STF kinds that JSON has no equivalent for. */
 export type TypedValuePolicy = "reject" | "payload-as-string";
 
-/** Converts an STF value to JSON. */
+/** Converts an STF value to JSON. Geometry is emitted as GeoJSON. */
 export function toJSON(value: STFValue, policy: TypedValuePolicy = "reject"): Json {
   return convertTo(value, "$", policy);
 }
+
+/** Converts an STF Geometry value to a GeoJSON object. Alias for the Geometry branch of `toJSON`. */
+export function toGeoJSON(value: STFGeometry): Json {
+  return { type: value.type, coordinates: value.coordinates } as unknown as Json;
+}
+
+/** Alias of `toGeoJSON` — explicit GeoJSON output for Geometry. */
+export const toGeo = toGeoJSON;
 
 function convertTo(value: STFValue, path: string, policy: TypedValuePolicy): Json {
   const typed = (payload: string, what: string): Json => {

@@ -311,7 +311,7 @@ def _validate_geometry(type_str: str, coords) -> None:
         raise _bad(f"Geometry type `{type_str}` is not supported")
     if type_str == "Point":
         if not _is_valid_position(coords):
-            raise _bad("Point coordinates must be [longitude, latitude]")
+            raise _bad("Point coordinates must be [x, y]")
     elif type_str == "LineString":
         if not isinstance(coords, list) or len(coords) < 2:
             raise _bad("LineString requires at least 2 positions")
