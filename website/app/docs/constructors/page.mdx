@@ -1,6 +1,6 @@
 ---
 title: Typed constructors
-description: DECIMAL, BIGINT, DATE, TIMESTAMP, and BINARY — payload grammar and validation.
+description: DECIMAL, BIGINT, DATE, TIMESTAMP, BINARY, Geometry, Time, Duration — payload grammar and validation.
 ---
 
 # Typed constructors
@@ -11,17 +11,23 @@ scanning a payload is `ERR_NESTED_CONSTRUCTOR`.
 
 ```stf
 {
-  price:   DECIMAL(19.99),
-  id:      BIGINT(9007199254740993),
-  created: DATE(2026-01-15),
-  at:      TIMESTAMP(2026-01-15T10:30:00Z),
-  blob:    BINARY(SGVsbG8=),
+  price:    DECIMAL(19.99),
+  id:       BIGINT(9007199254740993),
+  created:  DATE(2026-01-15),
+  at:       TIMESTAMP(2026-01-15T10:30:00Z),
+  blob:     BINARY(SGVsbG8=),
+  place:    Geometry("Point", [80.27, 13.08]),
+  opens:    Time("09:30"),
+  lasts:    Duration("PT45M"),
 }
 ```
 
-STF 1.0 defines exactly these five. Uppercase-initial names are a reserved namespace: an
-unrecognised one, such as `DATETIME(...)`, is `ERR_UNKNOWN_CONSTRUCTOR` rather than a generic
-syntax error, so a document written against a future version fails with a code that says why.
+STF defines **eight** constructors — the five above plus `Geometry` (`GEOMETRY` alias),
+`Time` (`TIME`), and `Duration` (`DURATION`). The canonical spelling for the three new ones is
+`Geometry`/`Time`/`Duration`; upper-case aliases are accepted. Uppercase-initial names are a
+reserved namespace: an unrecognised one, such as `DATETIME(...)`, is `ERR_UNKNOWN_CONSTRUCTOR`
+rather than a generic syntax error, so a document written against a future version fails with a
+code that says why.
 
 ## `DECIMAL` — exact decimal
 
@@ -84,9 +90,58 @@ TIMESTAMP(2026-01-15T10:30:00.123456789+05:30)
   time libraries cannot represent it and admitting it would make round-tripping
   implementation-dependent.
 
-`TIME`, `DURATION`, and offset-less date-times have no constructor in 1.0. Use a string with an
-ISO 8601 convention; note that `TIME(...)` is in the reserved namespace and currently raises
-`ERR_UNKNOWN_CONSTRUCTOR`.
+### `Geometry` — geographic / spatial geometry
+
+Native, not GeoJSON internally — GeoJSON is one output format.
+
+```stf
+Geometry("Point", [80.2707, 13.0827])
+Geometry("LineString", [[80.27,13.08],[80.28,13.09]])
+Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]])
+Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]], [[80.273,13.083],[80.275,13.083],[80.275,13.085],[80.273,13.083]]])
+Geometry("MultiPoint", [[80.27,13.08],[80.28,13.09]])
+Geometry("MultiLineString", [[[80.27,13.08],[80.28,13.09]], [[80.29,13.09],[80.30,13.10]]])
+Geometry("MultiPolygon", [[[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]], [[[80.30,13.10],[80.31,13.10],[80.31,13.11],[80.30,13.10]]]])
+```
+
+Payload is a quoted type plus JSON coordinates: `Geometry("Point", [lon,lat])`. Types are
+`Point|LineString|Polygon|MultiPoint|MultiLineString|MultiPolygon` exactly; `GeometryCollection`
+is reserved. Coordinates are **WGS84 `[longitude, latitude]`** — explicitly `[x,y]` to avoid
+`[lat,lon]` bugs. `GEOMETRY(...)` is accepted as an alias. Validation is primitive-level:
+finite numbers, correct nesting, `LineString` ≥2, `Polygon` ring ≥4 and closed `first==last`,
+`Multi*` non-empty.
+
+`toJSON()` emits GeoJSON `{"type":"Point","coordinates":[…]}`; plain `{type,coordinates}` objects
+are recognised as `Geometry` only when inference is opted in via `encode(value,{infer:true})` — the
+hot path `encode(value)` does no semantic inference.
+
+### `Time` — time of day
+
+```stf
+Time("09:30")
+Time("09:30:00")
+Time("09:30:00.123456789")
+```
+
+Quoted `HH:mm` with optional `:ss` and `.<1-9 fraction>`, or bare `HH:mm` for ergonomics; canonical is
+quoted. `00-23:00-59[:00-59]`, no zone — timezone-aware values belong to `TIMESTAMP`. Bare `TIME(...)`
+is the upper-case alias. Invalid: `Time("24:00")`, `Time("12:60")`, `Time("abc")`.
+
+### `Duration` — elapsed time
+
+```stf
+Duration("PT30S")
+Duration("PT45M")
+Duration("PT2H30M")
+Duration("P1D")
+Duration("P1Y")
+```
+
+Quoted ISO-8601 duration `P[nY][nM][nW][nD][T[nH][nM][nS]]` (bare `P…` also accepted; canonical quotes).
+At least one component is required (`P`/`PT` alone rejected); `Y/M/W/D` integers, `S` may be decimal;
+`H/S` only after `T`. Calendar durations `P1Y`/`P1M` are not reduced to seconds. Invalid:
+`Duration("invalid")`, `Duration("P1DT")`. `TIME` vs `Duration` vs `Timestamp` → *time of day* vs
+*how long* vs *when*.
 
 ## `BINARY` — octet sequence
 

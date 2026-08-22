@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 
 from .constructors import binary_to_base64
 from .errors import STFError
-from .value import STFDate, STFDecimal, STFDocument, STFTimestamp, kind_of
+from .value import STFDate, STFDecimal, STFDocument, STFDuration, STFGeometry, STFTimestamp, STFTime, kind_of
 
 _IDENTIFIER = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -92,6 +92,14 @@ def _write_value(value, fmt: Format, level: int, out: list[str]) -> None:
         out.append(f"TIMESTAMP({value.payload})")
     elif kind == "Binary":
         out.append(f"BINARY({binary_to_base64(bytes(value))})")
+    elif kind == "Geometry":
+        import json as _json
+
+        out.append(f'Geometry("{value.type}", {_json.dumps(value.coordinates)})')
+    elif kind == "Time":
+        out.append(f'Time("{value.payload}")')
+    elif kind == "Duration":
+        out.append(f'Duration("{value.payload}")')
 
 
 def _write_array(items: list, fmt: Format, level: int, out: list[str]) -> None:

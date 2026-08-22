@@ -26,9 +26,9 @@ export default function Home() {
               Every value says <span class="grad">what it is</span>.
             </h1>
             <p class="lede">
-              Dates, timestamps, decimals, big integers, and binary are part of the grammar — not
-              conventions agreed in a README. The same rules hold for a single document and for a
-              record stream.
+              Dates, timestamps, decimals, big integers, binary, geometry, time-of-day, and
+              durations are part of the grammar — not conventions agreed in a README. The same
+              rules hold for a single document and for a record stream.
             </p>
             <div class="cta-row">
               <a href="/spec" class="btn btn-primary">
@@ -316,6 +316,9 @@ const SAMPLE = `# comments are part of the format
   price_cap: DECIMAL(199.00),   # scale is data
   account_id: BIGINT(9007199254740993),
   signing_key: BINARY(SGVsbG8=),
+  boundary: Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]]),
+  opens: Time("09:30"),
+  ttl: Duration("PT45M"),
   regions: [\`eu-west-1\`, \`us-east-1\`],
 }`;
 
@@ -332,7 +335,7 @@ const STREAM = `@version(1.0)
 //
 // The line is deliberately left to scroll. Canonical form *is* one long line, and wrapping it for
 // presentation would misrepresent the one property the panel is there to show.
-const CANONICAL_SAMPLE = `{account_id:BIGINT(9007199254740993),deploy_after:TIMESTAMP(2026-01-15T10:30:00Z),enabled:T,launch_on:DATE(2026-02-01),price_cap:DECIMAL(199.00),regions:["eu-west-1","us-east-1"],service:"checkout-api",signing_key:BINARY(SGVsbG8=)}`;
+const CANONICAL_SAMPLE = `{account_id:BIGINT(9007199254740993),boundary:Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]]),deploy_after:TIMESTAMP(2026-01-15T10:30:00Z),enabled:T,launch_on:DATE(2026-02-01),opens:Time("09:30"),price_cap:DECIMAL(199.00),regions:["eu-west-1","us-east-1"],service:"checkout-api",signing_key:BINARY(SGVsbG8=),ttl:Duration("PT45M")}`;
 
 // A glyph on its own is not an answer to a screen reader, hence the label. The middle label tracks
 // the legend: Ion's canonical form is a sibling specification rather than an implementation
@@ -350,7 +353,7 @@ const REASONS = [
   {
     icon: "🏷️",
     title: "Types in the syntax",
-    body: "DATE, TIMESTAMP, DECIMAL, BIGINT, and BINARY are grammar, so a reader never infers a type from a key name.",
+    body: "DATE, TIMESTAMP, DECIMAL, BIGINT, BINARY, Geometry, Time, and Duration are grammar, so a reader never infers a type from a key name.",
   },
   {
     // Promoted from sixth. It is the one capability no other text format specifies, so burying it
@@ -391,7 +394,7 @@ const NORMATIVE = [
   {
     ref: "§3",
     href: "/spec#3-data-model",
-    body: "eleven value kinds, defined independently of any host language.",
+    body: "fourteen value kinds, defined independently of any host language.",
   },
   {
     ref: "§13",

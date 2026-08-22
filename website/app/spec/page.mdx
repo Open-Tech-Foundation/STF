@@ -93,7 +93,7 @@ To maintain simplicity and predictability, the following are **NOT** goals of th
 This section is **normative**. It defines what a parsed STF document *is*, independently
 of any host language.
 
-An STF **value** is exactly one of eleven kinds:
+An STF **value** is exactly one of fourteen kinds:
 
 | Kind | Description |
 | :--- | :--- |
@@ -108,15 +108,18 @@ An STF **value** is exactly one of eleven kinds:
 | **Date** | A wall date with no time and no offset. |
 | **Timestamp** | An absolute instant with a mandatory UTC offset. |
 | **Binary** | A finite sequence of octets, possibly empty. |
+| **Geometry** | A geographic/spatial geometry (Point, LineString, Polygon, MultiPoint, MultiLineString, MultiPolygon) with WGS84 `[longitude, latitude]` coordinates. See §10.6. |
+| **Time** | A wall time of day without date or offset. See §10.7. |
+| **Duration** | An ISO-8601 duration. See §10.8. |
 
 ### 3.1 Type Distinctness (Critical)
 
-These eleven kinds are **mutually distinct**. In particular:
+These fourteen kinds are **mutually distinct**. In particular:
 
 * A **String MUST NOT be represented as, or be indistinguishable from, any other kind**,
   and no other kind may be represented as a String.
-* Implementations **MUST NOT** encode `BigInt`, `Decimal`, `Date`, `Timestamp`, or `Binary`
-  as strings carrying a marker prefix or any other in-band sentinel.
+* Implementations **MUST NOT** encode `BigInt`, `Decimal`, `Date`, `Timestamp`, `Binary`,
+  `Geometry`, `Time`, or `Duration` as strings carrying a marker prefix or any other in-band sentinel.
 
 > **Rationale.** An in-band sentinel (for example representing `DECIMAL(1.5)` as the string
 > `"$decimal:1.5"`) makes a user-authored string indistinguishable from a typed value, causes
@@ -141,6 +144,9 @@ performed: `Number(1)`, `BigInt(1)`, and `Decimal(1)` are three distinct values.
   and `TIMESTAMP(2026-01-15T15:30:00+05:30)` denote the same instant but are **not equal** as
   STF values, because the offset is preserved data.
 * **Binary**: equality of the octet sequence. The base64 spelling is not data (§10.5).
+* **Geometry**: equality of `type` and `coordinates` (deep, numeric equality; `Point` coordinates are `[lon, lat]`). See §10.6.
+* **Time**: equality of `hour`, `minute`, `second`, and `fraction` fields. `Time("09:30")` ≠ `Time("09:30:00")`.
+* **Duration**: equality of the canonical payload string. `Duration("P1Y")` ≠ `Duration("P12M")` even where calendar-equivalent.
 * **Array**: equal length and pairwise-equal elements, in order.
 * **Object**: equal key sets with pairwise-equal values. **Member order does not affect equality**
   (but is preserved — see §11.2).
@@ -476,17 +482,21 @@ payload     = { char_not_paren } ;
 
 **Constructor names and the reserved namespace.**
 
-The five names defined by STF 1.0 are `BIGINT`, `DECIMAL`, `DATE`, `TIMESTAMP`, `BINARY`.
+The eight names defined by STF are `BIGINT`, `DECIMAL`, `DATE`, `TIMESTAMP`, `BINARY`,
+`Geometry` (alias `GEOMETRY`), `Time` (alias `TIME`), and `Duration` (alias `DURATION`).
+For backwards compatibility the upper-case aliases `GEOMETRY`/`TIME`/`DURATION` are also
+recognised; the canonical spelling for the three new primitives is `Geometry`/`Time`/`Duration`.
 
-* Names are matched **byte-for-byte**. Parsers **MUST NOT** case-fold. `Date(…)`, `date(…)`,
+* Names are matched **byte-for-byte** against the canonical set. Parsers **MUST** also accept
+  the upper-case aliases for `Geometry`, `Time`, and `Duration`. `Date(…)`, `date(…)`,
   `BigNumber(…)`, and `Binary(…)` are **not** aliases.
 * An identifier immediately followed by `(` in value position is in the **reserved namespace**
   if either:
   1. it begins with an ASCII uppercase letter (`A–Z`), or
-  2. it is an ASCII case-insensitive match of one of the five names above.
+  2. it is an ASCII case-insensitive match of one of the eight names above.
 
-  A reserved name that is not a byte-for-byte match of one of the five **MUST** be rejected with
-  `ERR_UNKNOWN_CONSTRUCTOR`. Rule 1 covers `CUSTOM(…)`, `MY_TYPE(…)`, `Date(…)`, and
+  A reserved name that is not a byte-for-byte match of one of the eight (including aliases)
+  **MUST** be rejected with `ERR_UNKNOWN_CONSTRUCTOR`. Rule 1 covers `CUSTOM(…)`, `MY_TYPE(…)`, `Date(…)`, and
   `BigNumber(…)`; rule 2 additionally covers `date(…)` and `binary(…)`, so a near-miss of
   spelling is reported as a wrong constructor rather than as generic syntax.
 * Any other identifier immediately followed by `(` in value position is `ERR_SYNTAX`
@@ -592,10 +602,6 @@ TIMESTAMP(2026-01-15T10:30:00.123456789+05:30)
   preserved (`.100` ≠ `.1`), as is the offset spelling (`+00:00` ≠ `Z`).
 * The date part is subject to the same calendar validation as `DATE`.
 
-> `TIME`, `DURATION`, and naive (offset-less) date-times have no constructor in STF 1.0. Use a
-> string with an ISO 8601 convention. Note that `TIME(...)` is in the reserved namespace and
-> currently raises `ERR_UNKNOWN_CONSTRUCTOR`.
-
 ### 10.5 `BINARY(...)` — Octet Sequence
 
 Binary data encoded with the standard Base64 alphabet, RFC 4648 §4.
@@ -619,6 +625,106 @@ BINARY(SGVsbG8=)      BINARY(SGVsbG9X)      BINARY()   # empty octet sequence
 * **Encoding is not data.** The value is the decoded octet sequence; base64 is only its
   text serialization. Two payloads that decode to the same octets are equal — but note that
   canonicality means each octet sequence has exactly one legal spelling.
+
+### 10.6 `Geometry(...)` — Geographic / Spatial Geometry
+
+Geometry is a native STF primitive, independent of GeoJSON. GeoJSON is an **interoperability**
+output format, not the internal representation.
+
+```stf
+Geometry("Point", [80.2707, 13.0827])
+Geometry("LineString", [[80.2707,13.0827],[80.2750,13.0850]])
+Geometry("Polygon", [[[80.2700,13.0800],[80.2800,13.0800],[80.2800,13.0900],[80.2700,13.0800]]])
+Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]], [[80.273,13.083],[80.275,13.083],[80.275,13.085],[80.273,13.083]]])
+Geometry("MultiPoint", [[80.27,13.08],[80.28,13.09]])
+Geometry("MultiLineString", [[[80.27,13.08],[80.28,13.09]], [[80.29,13.09],[80.30,13.10]]])
+Geometry("MultiPolygon", [[[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]], [[[80.30,13.10],[80.31,13.10],[80.31,13.11],[80.30,13.10]]]])
+```
+
+**Payload grammar (informal):**
+
+```
+geometry_payload = quoted_type "," ws coordinates_json
+quoted_type      = '"' ("Point" | "LineString" | "Polygon" | "MultiPoint" | "MultiLineString" | "MultiPolygon") '"'
+coordinates_json = JSON array of numbers/arrays (GeoJSON-compatible nesting)
+```
+
+* `GEOMETRY(...)` is accepted as an alias for `Geometry(...)`.
+* Type spelling is case-sensitive and must be one of the six types above exactly.
+* `GeometryCollection` is reserved for a future version and **MUST** be rejected with `ERR_INVALID_CONSTRUCTOR_PAYLOAD` if used today.
+
+**Coordinate convention (normative):**
+
+* `[x, y] = [longitude, latitude]`. This is explicit to avoid `[latitude, longitude]` bugs.
+* WGS84 / EPSG:4326 is the initial CRS. No CRS parameter is supported in this version; a future extension may add one.
+
+**Validation (primitive-level, all `ERR_INVALID_CONSTRUCTOR_PAYLOAD` unless noted):**
+
+* Known geometry type (unknown type is payload error).
+* Valid JSON for coordinates; every position is exactly two finite numbers `[lon, lat]`.
+* Correct nesting depth per type:
+  * `Point`: `[lon, lat]`
+  * `LineString`: at least 2 positions
+  * `Polygon`: at least one ring; each ring at least 4 positions and **closed** (`first == last`)
+  * `MultiPoint`: at least 1 position
+  * `MultiLineString`: at `least 1` line, each line ≥2 positions
+  * `MultiPolygon`: at `least 1` polygon, each polygon ≥1 ring, each ring ≥4 and closed
+* The whole Geometry is rejected as `ERR_UNKNOWN_CONSTRUCTOR` if the constructor name is not `Geometry`/`GEOMETRY` and in the reserved namespace.
+
+Geometry **MUST NOT** be designed as "compressed GeoJSON" — it is a native semantic value whose GeoJSON encoding is just one external representation.
+
+### 10.7 `Time(...)` — Time of Day
+
+A time of day without date or offset — distinct from `Timestamp` (§10.4).
+
+```stf
+Time("09:30")
+Time("09:30:00")
+Time("09:30:00.123456789")
+```
+
+Payload is a quoted string `HH:mm` with optional `:ss` and optional `.<fraction>`, or the bare form `HH:mm` (both accepted for ergonomics; canonical serialization uses the quoted form).
+
+* Valid ranges: `hour 00-23`, `minute 00-59`, `second 00-59` when present.
+* Fractional part, if present, has **1-9 digits**; trailing zeros are preserved (`.100` ≠ `.1`).
+* No timezone/offset is permitted — timezone-aware values belong to `TIMESTAMP` or a future primitive.
+* `GEOMETRY`/`Time` bare `09:30` outside a quoted string is also accepted by this version's parser for backwards compatibility.
+
+Examples of **invalid**: `Time("24:00")`, `Time("12:60")`, `Time("09:30:60")`, `Time("abc")`, empty payload — all `ERR_INVALID_CONSTRUCTOR_PAYLOAD`.
+
+### 10.8 `Duration(...)` — Elapsed Time
+
+An amount of elapsed time, ISO-8601 compatible.
+
+```stf
+Duration("PT30S")
+Duration("PT45M")
+Duration("PT2H30M")
+Duration("P1D")
+Duration("P1Y")
+```
+
+Payload is a quoted ISO-8601 duration string (bare `P…` also accepted; canonical serialization quotes it):
+
+```
+duration = "P" ( date_part | time_part | date_part time_part )
+date_part = [ n "Y" ] [ n "M" ] [ n "W" ] [ n "D" ]
+time_part = "T" [ n "H" ] [ n "M" ] [ n ["." n] "S" ]
+n = 1*DIGIT
+```
+
+* At `least one` component must be present (`P` / `PT` alone rejected).
+* `Y/M/W/D` must be integers, `S` may be decimal. `H`/`S` (and time `M`) may only appear after `T`; `Y/W/D` may not appear after `T`.
+* Calendar-based durations `P1Y`/`P1M` are **not** reduced to seconds — they have no fixed second count.
+* `Duration("invalid")`, `Duration("P")`, `Duration("P1DT")` (empty time section) are `ERR_INVALID_CONSTRUCTOR_PAYLOAD`.
+
+**Time vs Duration vs Timestamp:**
+
+| Kind | Meaning |
+| :--- | :--- |
+| `Timestamp` | *when* (instant with offset) |
+| `Time` | *time of day* (no date) |
+| `Duration` | *how long* (elapsed) |
 
 ---
 
@@ -679,7 +785,8 @@ value              = number | boolean | null | raw_string | interpreted_string
                    | array | object | constructor ;
 
 constructor        = constructor_name "(" payload ")" ;
-constructor_name   = "BIGINT" | "DECIMAL" | "DATE" | "TIMESTAMP" | "BINARY" ;
+constructor_name   = "BIGINT" | "DECIMAL" | "DATE" | "TIMESTAMP" | "BINARY"
+                   | "Geometry" | "GEOMETRY" | "Time" | "TIME" | "Duration" | "DURATION" ;
 payload            = { char_not_paren } ;
 
 raw_string         = "`" { char_not_backtick } "`" ;
@@ -714,7 +821,7 @@ char_not_line_terminator  = ? any Unicode scalar except U+000A and U+000D ? ;
 ```
 
 The grammar alone is not sufficient for conformance: constructor payloads are further
-constrained by §10.2–§10.5, and the rules in §5, §8.3, and §11.2–§11.3 are context-sensitive.
+constrained by §10.2–§10.8, and the rules in §5, §8.3, and §11.2–§11.3 are context-sensitive.
 
 ---
 
@@ -773,7 +880,16 @@ other character is not representable; the serializer **MUST** fail with `ERR_UNR
 `Decimal` **MUST** be emitted with its exact coefficient and scale — normalizing `1.50` to
 `1.5` is **non-conformant**. `Date` and `Timestamp` MUST preserve the recorded fields,
 including fractional-second trailing zeros and the offset spelling. `Binary` MUST be emitted
-in canonical base64 (§10.5).
+in canonical base64 (§10.5). `Geometry` MUST be emitted as `Geometry("Type", <JSON>)` with
+the GeoJSON-compatible coordinate nesting and the exact type spelling; `Time` and `Duration`
+MUST be emitted as `Time("<payload>")` / `Duration("<payload>")` with the quoted canonical
+form. `toJSON()` for Geometry is the GeoJSON object `{"type":…, "coordinates":…}`; for
+Time/Duration it is the payload string (documented as lossy without STF type metadata).
+
+**Interoperability note (§10.6 / new.txt §7-9):** STF is *not* GeoJSON internally. GeoJSON
+is one external serialization of `Geometry`. When inference is enabled (`encode(value, {infer:true})`),
+plain objects `{type:"Point",coordinates:[…]}` **MAY** be recognised as `Geometry`; with the
+default `encode(value)` they **MUST NOT** be inferred (opt-in per new.txt §10 for the hot path).
 
 ---
 

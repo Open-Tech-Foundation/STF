@@ -189,6 +189,21 @@ export const CONTENTS: SpecGroup[] = [
         "sub": true
       },
       {
+        "id": "10-6-geometry-geographic-spatial-geometry",
+        "text": "10.6 `Geometry(...)` — Geographic / Spatial Geometry",
+        "sub": true
+      },
+      {
+        "id": "10-7-time-time-of-day",
+        "text": "10.7 `Time(...)` — Time of Day",
+        "sub": true
+      },
+      {
+        "id": "10-8-duration-elapsed-time",
+        "text": "10.8 `Duration(...)` — Elapsed Time",
+        "sub": true
+      },
+      {
         "id": "11-arrays-and-objects",
         "text": "11. Arrays and Objects",
         "sub": false

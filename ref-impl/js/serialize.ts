@@ -12,6 +12,9 @@ import {
   kindOf,
   STFDate,
   STFDecimal,
+  STFDuration,
+  STFGeometry,
+  STFTime,
   STFTimestamp,
   type STFDocument,
   type STFObject,
@@ -106,6 +109,17 @@ function writeValue(value: STFValue, format: Format, level: number, out: string[
       return;
     case "Binary":
       out.push("BINARY(", binaryToBase64(value as Uint8Array), ")");
+      return;
+    case "Geometry": {
+      const g = value as STFGeometry;
+      out.push("Geometry(\"", g.type, "\", ", JSON.stringify(g.coordinates), ")");
+      return;
+    }
+    case "Time":
+      out.push("Time(\"", (value as STFTime).payload, "\")");
+      return;
+    case "Duration":
+      out.push("Duration(\"", (value as STFDuration).payload, "\")");
       return;
   }
 }

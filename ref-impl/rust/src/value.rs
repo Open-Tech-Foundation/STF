@@ -21,6 +21,9 @@ pub enum Kind {
     Date,
     Timestamp,
     Binary,
+    Geometry,
+    Time,
+    Duration,
 }
 
 impl Kind {
@@ -37,6 +40,9 @@ impl Kind {
             Kind::Date => "Date",
             Kind::Timestamp => "Timestamp",
             Kind::Binary => "Binary",
+            Kind::Geometry => "Geometry",
+            Kind::Time => "Time",
+            Kind::Duration => "Duration",
         }
     }
 }
@@ -61,6 +67,9 @@ pub enum Value {
     Date(Date),
     Timestamp(Timestamp),
     Binary(Vec<u8>),
+    Geometry(Geometry),
+    Time(Time),
+    Duration(Duration),
 }
 
 impl Value {
@@ -77,6 +86,9 @@ impl Value {
             Value::Date(_) => Kind::Date,
             Value::Timestamp(_) => Kind::Timestamp,
             Value::Binary(_) => Kind::Binary,
+            Value::Geometry(_) => Kind::Geometry,
+            Value::Time(_) => Kind::Time,
+            Value::Duration(_) => Kind::Duration,
         }
     }
 
@@ -105,6 +117,9 @@ impl PartialEq for Value {
             (Value::Date(a), Value::Date(b)) => a == b,
             (Value::Timestamp(a), Value::Timestamp(b)) => a == b,
             (Value::Binary(a), Value::Binary(b)) => a == b,
+            (Value::Geometry(a), Value::Geometry(b)) => a == b,
+            (Value::Time(a), Value::Time(b)) => a == b,
+            (Value::Duration(a), Value::Duration(b)) => a == b,
             _ => false,
         }
     }
@@ -334,6 +349,106 @@ impl Timestamp {
 impl fmt::Display for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.payload())
+    }
+}
+
+/// Geometry type (new.txt §3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GeometryType {
+    Point,
+    LineString,
+    Polygon,
+    MultiPoint,
+    MultiLineString,
+    MultiPolygon,
+}
+
+impl GeometryType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            GeometryType::Point => "Point",
+            GeometryType::LineString => "LineString",
+            GeometryType::Polygon => "Polygon",
+            GeometryType::MultiPoint => "MultiPoint",
+            GeometryType::MultiLineString => "MultiLineString",
+            GeometryType::MultiPolygon => "MultiPolygon",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "Point" => Some(GeometryType::Point),
+            "LineString" => Some(GeometryType::LineString),
+            "Polygon" => Some(GeometryType::Polygon),
+            "MultiPoint" => Some(GeometryType::MultiPoint),
+            "MultiLineString" => Some(GeometryType::MultiLineString),
+            "MultiPolygon" => Some(GeometryType::MultiPolygon),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for GeometryType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Native STF Geometry primitive.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Geometry {
+    pub ty: GeometryType,
+    pub coordinates: serde_json::Value,
+}
+
+impl Geometry {
+    pub fn new(ty: GeometryType, coordinates: serde_json::Value) -> Self {
+        Geometry { ty, coordinates }
+    }
+}
+
+/// Time of day without a date (new.txt §16).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Time {
+    pub hour: u8,
+    pub minute: u8,
+    pub second: Option<u8>,
+    pub fraction: Option<String>,
+}
+
+impl Time {
+    pub fn payload(&self) -> String {
+        let mut s = format!("{:02}:{:02}", self.hour, self.minute);
+        if let Some(sec) = self.second {
+            s.push_str(&format!(":{:02}", sec));
+            if let Some(frac) = &self.fraction {
+                s.push('.');
+                s.push_str(frac);
+            }
+        }
+        s
+    }
+}
+
+impl fmt::Display for Time {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.payload())
+    }
+}
+
+/// ISO-8601 duration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Duration(pub String);
+
+impl Duration {
+    pub fn payload(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for Duration {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
     }
 }
 

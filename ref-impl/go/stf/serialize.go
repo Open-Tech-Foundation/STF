@@ -1,6 +1,7 @@
 package stf
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -127,6 +128,24 @@ func writeValue(v Value, f Format, level int, sb *strings.Builder) error {
 		sb.WriteString("BINARY(")
 		sb.WriteString(BinaryToBase64(value))
 		sb.WriteByte(')')
+	case *Geometry:
+		sb.WriteString("Geometry(\"")
+		sb.WriteString(string(value.Type))
+		sb.WriteString("\", ")
+		if b, err := json.Marshal(value.Coordinates); err == nil {
+			sb.Write(b)
+		} else {
+			sb.WriteString("null")
+		}
+		sb.WriteByte(')')
+	case Time:
+		sb.WriteString("Time(\"")
+		sb.WriteString(value.Payload())
+		sb.WriteString("\")")
+	case Duration:
+		sb.WriteString("Duration(\"")
+		sb.WriteString(string(value))
+		sb.WriteString("\")")
 	default:
 		return unrepresentable("%T has no STF representation", v)
 	}

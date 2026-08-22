@@ -130,6 +130,23 @@ fn write_value(value: &Value, format: &Format, level: usize, out: &mut String) -
             out.push_str(&constructors::binary_to_base64(b));
             out.push(')');
         }
+        Value::Geometry(g) => {
+            out.push_str("Geometry(\"");
+            out.push_str(g.ty.as_str());
+            out.push_str("\", ");
+            out.push_str(&g.coordinates.to_string());
+            out.push(')');
+        }
+        Value::Time(t) => {
+            out.push_str("Time(\"");
+            out.push_str(&t.payload());
+            out.push_str("\")");
+        }
+        Value::Duration(d) => {
+            out.push_str("Duration(\"");
+            out.push_str(d.payload());
+            out.push_str("\")");
+        }
     }
     Ok(())
 }

@@ -25,7 +25,7 @@ export interface Token {
   kind: TokenKind;
 }
 
-const CONSTRUCTORS = ["BIGINT", "DECIMAL", "DATE", "TIMESTAMP", "BINARY"];
+const CONSTRUCTORS = ["BIGINT", "DECIMAL", "DATE", "TIMESTAMP", "BINARY", "Geometry", "GEOMETRY", "Time", "TIME", "Duration", "DURATION"];
 
 const isIdent = (c: string) => /[A-Za-z0-9_-]/.test(c);
 const isDigit = (c: string) => c >= "0" && c <= "9";

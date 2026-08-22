@@ -1,13 +1,14 @@
 package stf
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
 )
 
-// ConstructorNames are the five constructor names of STF 1.0, matched byte-for-byte.
-var ConstructorNames = [5]string{"BIGINT", "DECIMAL", "DATE", "TIMESTAMP", "BINARY"}
+// ConstructorNames are the constructor names (original five plus Geometry/Time/Duration).
+var ConstructorNames = [11]string{"BIGINT", "DECIMAL", "DATE", "TIMESTAMP", "BINARY", "GEOMETRY", "TIME", "DURATION", "Geometry", "Time", "Duration"}
 
 const (
 	// maxSignificantDigits is decimal128 coefficient precision (spec §10.2).
@@ -63,7 +64,8 @@ func IsReservedConstructor(name string) bool {
 }
 
 func buildConstructor(name, payload string) (Value, *payloadError) {
-	switch name {
+	upper := strings.ToUpper(name)
+	switch upper {
 	case "DECIMAL":
 		return ParseDecimal(payload)
 	case "BIGINT":
@@ -74,8 +76,14 @@ func buildConstructor(name, payload string) (Value, *payloadError) {
 		return ParseTimestamp(payload)
 	case "BINARY":
 		return ParseBinary(payload)
+	case "GEOMETRY":
+		return ParseGeometry(payload)
+	case "TIME":
+		return ParseTime(payload)
+	case "DURATION":
+		return ParseDuration(payload)
 	}
-	return nil, &payloadError{ErrUnknownConstructor, fmt.Sprintf("`%s` is not an STF 1.0 constructor", name)}
+	return nil, &payloadError{ErrUnknownConstructor, fmt.Sprintf("`%s` is not an STF constructor", name)}
 }
 
 func isDigit(c byte) bool { return c >= '0' && c <= '9' }
@@ -396,6 +404,330 @@ func ParseBinary(payload string) ([]byte, *payloadError) {
 		}
 	}
 	return out, nil
+}
+
+func isValidPosition(v interface{}) bool {
+	arr, ok := v.([]interface{})
+	if !ok || len(arr) != 2 {
+		return false
+	}
+	for _, x := range arr {
+		switch x.(type) {
+		case float64:
+		case float32:
+			// JSON numbers decode as float64; float32 not expected but handle.
+		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		default:
+			return false
+		}
+		var f float64
+		switch n := x.(type) {
+		case float64:
+			f = n
+		case float32:
+			f = float64(n)
+		case int:
+			f = float64(n)
+		case int64:
+			f = float64(n)
+		case uint64:
+			f = float64(n)
+		default:
+			f = 0
+		}
+		if f != f { // NaN
+			return false
+		}
+		// JSON never yields Inf, but guard anyway.
+		if f > 1e308 || f < -1e308 {
+			// large finite is okay; only Inf would be isInf. Check via math.
+			if f > 1e308*1.000001 || f < -1e308*1.000001 {
+				// keep as valid finite; math.IsInf will catch real Inf.
+			}
+		}
+	}
+	return true
+}
+
+func validateGeometry(ty GeometryType, coords interface{}) *payloadError {
+	switch ty {
+	case GeometryPoint:
+		if !isValidPosition(coords) {
+			return badPayload("Point coordinates must be [longitude, latitude]")
+		}
+	case GeometryLineString:
+		arr, ok := coords.([]interface{})
+		if !ok || len(arr) < 2 {
+			return badPayload("LineString requires at least 2 positions")
+		}
+		for _, p := range arr {
+			if !isValidPosition(p) {
+				return badPayload("LineString coordinates must be positions")
+			}
+		}
+	case GeometryPolygon:
+		rings, ok := coords.([]interface{})
+		if !ok || len(rings) == 0 {
+			return badPayload("Polygon requires at least one ring")
+		}
+		for _, ring := range rings {
+			arr, ok := ring.([]interface{})
+			if !ok || len(arr) < 4 {
+				return badPayload("Polygon ring must have at least 4 positions")
+			}
+			for _, p := range arr {
+				if !isValidPosition(p) {
+					return badPayload("Polygon ring coordinates must be positions")
+				}
+			}
+			if fmt.Sprintf("%v", arr[0]) != fmt.Sprintf("%v", arr[len(arr)-1]) {
+				return badPayload("Polygon ring must be closed (first == last)")
+			}
+		}
+	case GeometryMultiPoint:
+		arr, ok := coords.([]interface{})
+		if !ok || len(arr) == 0 {
+			return badPayload("MultiPoint requires at least one position")
+		}
+		for _, p := range arr {
+			if !isValidPosition(p) {
+				return badPayload("MultiPoint coordinates must be positions")
+			}
+		}
+	case GeometryMultiLineString:
+		lines, ok := coords.([]interface{})
+		if !ok || len(lines) == 0 {
+			return badPayload("MultiLineString requires at least one line")
+		}
+		for _, line := range lines {
+			arr, ok := line.([]interface{})
+			if !ok || len(arr) < 2 {
+				return badPayload("MultiLineString line requires at least 2 positions")
+			}
+			for _, p := range arr {
+				if !isValidPosition(p) {
+					return badPayload("MultiLineString coordinates must be positions")
+				}
+			}
+		}
+	case GeometryMultiPolygon:
+		polys, ok := coords.([]interface{})
+		if !ok || len(polys) == 0 {
+			return badPayload("MultiPolygon requires at least one polygon")
+		}
+		for _, poly := range polys {
+			rings, ok := poly.([]interface{})
+			if !ok || len(rings) == 0 {
+				return badPayload("MultiPolygon polygon requires at least one ring")
+			}
+			for _, ring := range rings {
+				arr, ok := ring.([]interface{})
+				if !ok || len(arr) < 4 {
+					return badPayload("MultiPolygon ring must have at least 4 positions")
+				}
+				for _, p := range arr {
+					if !isValidPosition(p) {
+						return badPayload("MultiPolygon ring coordinates must be positions")
+					}
+				}
+				if fmt.Sprintf("%v", arr[0]) != fmt.Sprintf("%v", arr[len(arr)-1]) {
+					return badPayload("MultiPolygon ring must be closed")
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func ParseGeometry(payload string) (*Geometry, *payloadError) {
+	trimmed := strings.TrimSpace(payload)
+	if trimmed == "" {
+		return nil, badPayload("Geometry payload is empty")
+	}
+	if trimmed[0] != '"' && trimmed[0] != '\'' {
+		return nil, badPayload("Geometry payload must start with quoted type string")
+	}
+	q := trimmed[0]
+	end := -1
+	for i := 1; i < len(trimmed); i++ {
+		if trimmed[i] == q && trimmed[i-1] != '\\' {
+			end = i
+			break
+		}
+	}
+	if end == -1 {
+		return nil, badPayload("Geometry type string is unterminated")
+	}
+	// Parse type string as JSON
+	typeRaw := trimmed[:end+1]
+	var typeStr string
+	if err := json.Unmarshal([]byte(typeRaw), &typeStr); err != nil {
+		return nil, badPayload("Geometry type string is not valid JSON")
+	}
+	var ty GeometryType
+	switch typeStr {
+	case "Point":
+		ty = GeometryPoint
+	case "LineString":
+		ty = GeometryLineString
+	case "Polygon":
+		ty = GeometryPolygon
+	case "MultiPoint":
+		ty = GeometryMultiPoint
+	case "MultiLineString":
+		ty = GeometryMultiLineString
+	case "MultiPolygon":
+		ty = GeometryMultiPolygon
+	default:
+		return nil, badPayload("Geometry type `%s` is not supported", typeStr)
+	}
+	rest := strings.TrimSpace(trimmed[end+1:])
+	if !strings.HasPrefix(rest, ",") {
+		return nil, badPayload("Geometry payload requires a comma after the type")
+	}
+	coordText := strings.TrimSpace(rest[1:])
+	if coordText == "" {
+		return nil, badPayload("Geometry payload missing coordinates")
+	}
+	var coords interface{}
+	if err := json.Unmarshal([]byte(coordText), &coords); err != nil {
+		return nil, badPayload("Geometry coordinates are not valid JSON")
+	}
+	if err := validateGeometry(ty, coords); err != nil {
+		return nil, err
+	}
+	return &Geometry{Type: ty, Coordinates: coords}, nil
+}
+
+func ParseTime(payload string) (Time, *payloadError) {
+	trimmed := strings.TrimSpace(payload)
+	if trimmed == "" {
+		return Time{}, badPayload("Time payload is empty")
+	}
+	inner := trimmed
+	if (strings.HasPrefix(trimmed, "\"") && strings.HasSuffix(trimmed, "\"")) || (strings.HasPrefix(trimmed, "'") && strings.HasSuffix(trimmed, "'")) {
+		var s string
+		if err := json.Unmarshal([]byte(trimmed), &s); err != nil {
+			return Time{}, badPayload("Time payload string is not valid")
+		}
+		inner = s
+	} else if strings.HasPrefix(trimmed, "\"") || strings.HasPrefix(trimmed, "'") {
+		return Time{}, badPayload("Time payload string is unterminated")
+	}
+	// Validate HH:mm[:ss[.fraction]]
+	parts := strings.Split(inner, ":")
+	if len(parts) < 2 || len(parts) > 3 {
+		return Time{}, badPayload("Time \"%s\" is not valid", inner)
+	}
+	if len(parts[0]) != 2 || len(parts[1]) != 2 {
+		return Time{}, badPayload("Time \"%s\" is not valid", inner)
+	}
+	var hour, minute int
+	if _, err := fmt.Sscanf(parts[0], "%02d", &hour); err != nil || hour > 23 {
+		return Time{}, badPayload("Time \"%s\" is not valid", inner)
+	}
+	if _, err := fmt.Sscanf(parts[1], "%02d", &minute); err != nil || minute > 59 {
+		return Time{}, badPayload("Time \"%s\" is not valid", inner)
+	}
+	var secPtr *int
+	var frac string
+	if len(parts) == 3 {
+		secPart := parts[2]
+		dot := strings.Index(secPart, ".")
+		secStr := secPart
+		if dot != -1 {
+			secStr = secPart[:dot]
+			frac = secPart[dot+1:]
+			if frac == "" || len(frac) > 9 {
+				return Time{}, badPayload("Time \"%s\" is not valid", inner)
+			}
+			for _, c := range frac {
+				if c < '0' || c > '9' {
+					return Time{}, badPayload("Time \"%s\" is not valid", inner)
+				}
+			}
+		}
+		if len(secStr) != 2 {
+			return Time{}, badPayload("Time \"%s\" is not valid", inner)
+		}
+		var sec int
+		if _, err := fmt.Sscanf(secStr, "%02d", &sec); err != nil || sec > 59 {
+			return Time{}, badPayload("Time \"%s\" is not valid", inner)
+		}
+		secPtr = &sec
+	}
+	return Time{Hour: hour, Minute: minute, Second: secPtr, Fraction: frac}, nil
+}
+
+func ParseDuration(payload string) (Duration, *payloadError) {
+	trimmed := strings.TrimSpace(payload)
+	if trimmed == "" {
+		return "", badPayload("Duration payload is empty")
+	}
+	inner := trimmed
+	if (strings.HasPrefix(trimmed, "\"") && strings.HasSuffix(trimmed, "\"")) || (strings.HasPrefix(trimmed, "'") && strings.HasSuffix(trimmed, "'")) {
+		var s string
+		if err := json.Unmarshal([]byte(trimmed), &s); err != nil {
+			return "", badPayload("Duration payload string is not valid")
+		}
+		inner = s
+	} else if strings.HasPrefix(trimmed, "\"") || strings.HasPrefix(trimmed, "'") {
+		return "", badPayload("Duration payload string is unterminated")
+	}
+	if inner == "P" || inner == "PT" {
+		return "", badPayload("Duration \"%s\" must contain at least one component", inner)
+	}
+	if !strings.HasPrefix(inner, "P") {
+		return "", badPayload("Duration \"%s\" is not valid ISO-8601", inner)
+	}
+	hasDate, hasTime := false, false
+	sawT := false
+	// Very lightweight validation: must match P[0-9Y M W D][T[0-9H M S]]
+	// Ensure at least one digit and valid units order roughly
+	numStart := 1
+	for i := 1; i < len(inner); i++ {
+		c := inner[i]
+		if c == 'T' {
+			if sawT {
+				return "", badPayload("Duration \"%s\" is not valid ISO-8601", inner)
+			}
+			sawT = true
+			numStart = i + 1
+			continue
+		}
+		if c >= '0' && c <= '9' || c == '.' {
+			continue
+		}
+		if c == 'Y' || c == 'M' || c == 'W' || c == 'D' || c == 'H' || c == 'S' {
+			if i == numStart {
+				return "", badPayload("Duration \"%s\" is not valid ISO-8601", inner)
+			}
+			if (c == 'H' || c == 'S') && !sawT {
+				return "", badPayload("Duration \"%s\" is not valid ISO-8601", inner)
+			}
+			if c == 'Y' && sawT {
+				return "", badPayload("Duration \"%s\" is not valid ISO-8601", inner)
+			}
+			if sawT {
+				hasTime = true
+			} else {
+				hasDate = true
+			}
+			numStart = i + 1
+			continue
+		}
+		return "", badPayload("Duration \"%s\" is not valid ISO-8601", inner)
+	}
+	if !hasDate && !hasTime {
+		return "", badPayload("Duration \"%s\" must contain at least one component", inner)
+	}
+	if sawT && !hasTime {
+		return "", badPayload("Duration \"%s\" has empty time section after T", inner)
+	}
+	if numStart != len(inner) {
+		return "", badPayload("Duration \"%s\" is not valid ISO-8601", inner)
+	}
+	return Duration(inner), nil
 }
 
 // BinaryToBase64 encodes octets as canonical base64, for serialization (spec §13.7).

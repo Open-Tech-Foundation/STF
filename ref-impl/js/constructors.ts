@@ -6,10 +6,32 @@
  */
 
 import type { STFErrorCode } from "./errors.ts";
-import { STFDate, STFDecimal, STFTimestamp, type STFOffset, type STFValue } from "./value.ts";
+import {
+  STFDate,
+  STFDecimal,
+  STFDuration,
+  STFGeometry,
+  type STFGeometryType,
+  STFTime,
+  STFTimestamp,
+  type STFOffset,
+  type STFValue,
+} from "./value.ts";
 
-/** The five constructor names of STF 1.0, matched byte-for-byte. */
-export const CONSTRUCTOR_NAMES = ["BIGINT", "DECIMAL", "DATE", "TIMESTAMP", "BINARY"] as const;
+/** The constructor names — original five plus Geometry/Time/Duration extensions. */
+export const CONSTRUCTOR_NAMES = [
+  "BIGINT",
+  "DECIMAL",
+  "DATE",
+  "TIMESTAMP",
+  "BINARY",
+  "GEOMETRY",
+  "TIME",
+  "DURATION",
+  "Geometry",
+  "Time",
+  "Duration",
+] as const;
 
 /** decimal128 coefficient precision (spec §10.2). */
 const MAX_SIGNIFICANT_DIGITS = 34;
@@ -56,7 +78,8 @@ export function isReservedConstructor(name: string): boolean {
 }
 
 export function buildConstructor(name: string, payload: string): STFValue {
-  switch (name) {
+  const canonical = name.toUpperCase();
+  switch (canonical) {
     case "DECIMAL":
       return parseDecimal(payload);
     case "BIGINT":
@@ -67,10 +90,16 @@ export function buildConstructor(name: string, payload: string): STFValue {
       return parseTimestamp(payload);
     case "BINARY":
       return parseBinary(payload);
+    case "GEOMETRY":
+      return parseGeometry(payload);
+    case "TIME":
+      return parseTime(payload);
+    case "DURATION":
+      return parseDuration(payload);
     default:
       throw new PayloadError({
         code: "ERR_UNKNOWN_CONSTRUCTOR",
-        detail: `\`${name}\` is not an STF 1.0 constructor`,
+        detail: `\`${name}\` is not an STF constructor`,
       });
   }
 }
@@ -295,6 +324,159 @@ export function parseBinary(payload: string): Uint8Array {
     }
   }
   return out;
+}
+
+/* ───────────────── Geometry / Time / Duration (extensions) ───────────────── */
+
+const GEOMETRY_TYPES: STFGeometryType[] = [
+  "Point",
+  "LineString",
+  "Polygon",
+  "MultiPoint",
+  "MultiLineString",
+  "MultiPolygon",
+];
+
+function isValidPosition(p: unknown): boolean {
+  return (
+    Array.isArray(p) &&
+    p.length === 2 &&
+    typeof p[0] === "number" &&
+    typeof p[1] === "number" &&
+    Number.isFinite(p[0]) &&
+    Number.isFinite(p[1])
+  );
+}
+
+function validateGeometry(type: string, coords: unknown): void {
+  if (!GEOMETRY_TYPES.includes(type as STFGeometryType)) {
+    bad(`Geometry type \`${type}\` is not supported`);
+  }
+  switch (type) {
+    case "Point": {
+      if (!isValidPosition(coords)) bad("Point coordinates must be [longitude, latitude]");
+      break;
+    }
+    case "LineString": {
+      if (!Array.isArray(coords) || coords.length < 2) bad("LineString requires at least 2 positions");
+      for (const p of coords as unknown[]) if (!isValidPosition(p)) bad("LineString coordinates must be positions");
+      break;
+    }
+    case "Polygon": {
+      if (!Array.isArray(coords) || coords.length === 0) bad("Polygon requires at least one ring");
+      for (const ring of coords as unknown[]) {
+        if (!Array.isArray(ring) || ring.length < 4) bad("Polygon ring must have at least 4 positions");
+        for (const p of ring as unknown[]) if (!isValidPosition(p)) bad("Polygon ring coordinates must be positions");
+        const first = (ring as unknown[])[0] as number[];
+        const last = (ring as unknown[])[(ring as unknown[]).length - 1] as number[];
+        if (first[0] !== last[0] || first[1] !== last[1]) bad("Polygon ring must be closed (first == last)");
+      }
+      break;
+    }
+    case "MultiPoint": {
+      if (!Array.isArray(coords) || coords.length === 0) bad("MultiPoint requires at least one position");
+      for (const p of coords as unknown[]) if (!isValidPosition(p)) bad("MultiPoint coordinates must be positions");
+      break;
+    }
+    case "MultiLineString": {
+      if (!Array.isArray(coords) || coords.length === 0) bad("MultiLineString requires at least one line");
+      for (const line of coords as unknown[]) {
+        if (!Array.isArray(line) || line.length < 2) bad("MultiLineString line requires at least 2 positions");
+        for (const p of line as unknown[]) if (!isValidPosition(p)) bad("MultiLineString coordinates must be positions");
+      }
+      break;
+    }
+    case "MultiPolygon": {
+      if (!Array.isArray(coords) || coords.length === 0) bad("MultiPolygon requires at least one polygon");
+      for (const poly of coords as unknown[]) {
+        if (!Array.isArray(poly) || poly.length === 0) bad("MultiPolygon polygon requires at least one ring");
+        for (const ring of poly as unknown[]) {
+          if (!Array.isArray(ring) || ring.length < 4) bad("MultiPolygon ring must have at least 4 positions");
+          for (const p of ring as unknown[]) if (!isValidPosition(p)) bad("MultiPolygon ring coordinates must be positions");
+          const first = (ring as unknown[])[0] as number[];
+          const last = (ring as unknown[])[(ring as unknown[]).length - 1] as number[];
+          if (first[0] !== last[0] || first[1] !== last[1]) bad("MultiPolygon ring must be closed");
+        }
+      }
+      break;
+    }
+  }
+}
+
+/**
+ * Parses Geometry payload: `"Type", <coordinates_json>`
+ * Example: `"Point", [80.27, 13.08]`
+ */
+export function parseGeometry(payload: string): STFGeometry {
+  const trimmed = payload.trim();
+  if (trimmed.length === 0) bad("Geometry payload is empty");
+  // First char must be a quote for the type string.
+  const quote = trimmed.charCodeAt(0);
+  if (quote !== 34 && quote !== 39) bad("Geometry payload must start with quoted type string");
+  const q = String.fromCharCode(quote);
+  let end = -1;
+  for (let i = 1; i < trimmed.length; i++) {
+    if (trimmed[i] === q && trimmed[i - 1] !== "\\") { end = i; break; }
+  }
+  if (end === -1) bad("Geometry type string is unterminated");
+  const typeStr = JSON.parse(trimmed.slice(0, end + 1) as string) as string;
+  const rest = trimmed.slice(end + 1).trim();
+  if (!rest.startsWith(",")) bad("Geometry payload requires a comma after the type");
+  const coordText = rest.slice(1).trim();
+  if (coordText.length === 0) bad("Geometry payload missing coordinates");
+  let coords: unknown;
+  try {
+    coords = JSON.parse(coordText);
+  } catch {
+    bad("Geometry coordinates are not valid JSON");
+  }
+  validateGeometry(typeStr, coords);
+  return new STFGeometry(typeStr as STFGeometryType, coords);
+}
+
+export function parseTime(payload: string): STFTime {
+  const trimmed = payload.trim();
+  if (trimmed.length === 0) bad("Time payload is empty");
+  let inner = trimmed;
+  // Support both quoted "09:30" and bare 09:30
+  if ((inner[0] === '"' && inner[inner.length - 1] === '"') || (inner[0] === "'" && inner[inner.length - 1] === "'")) {
+    try { inner = JSON.parse(inner) as string; } catch { bad("Time payload string is not valid"); }
+  } else if (inner[0] === '"' || inner[0] === "'") {
+    bad("Time payload string is unterminated");
+  }
+  const m = inner.match(/^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.(\d{1,9}))?)?$/);
+  if (!m) bad(`Time "${inner}" is not valid (expected HH:mm[:ss[.fraction]])`);
+  const hour = Number(m[1]);
+  const minute = Number(m[2]);
+  const second = m[3] !== undefined ? Number(m[3]) : null;
+  const fraction = m[4] ?? null;
+  return new STFTime(hour, minute, second, fraction);
+}
+
+const DURATION_RE = /^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/;
+
+export function parseDuration(payload: string): STFDuration {
+  const trimmed = payload.trim();
+  if (trimmed.length === 0) bad("Duration payload is empty");
+  let inner = trimmed;
+  if ((inner[0] === '"' && inner[inner.length - 1] === '"') || (inner[0] === "'" && inner[inner.length - 1] === "'")) {
+    try { inner = JSON.parse(inner) as string; } catch { bad("Duration payload string is not valid"); }
+  } else if (inner[0] === '"' || inner[0] === "'") {
+    bad("Duration payload string is unterminated");
+  }
+  if (inner === "P" || inner === "PT") bad(`Duration "${inner}" must contain at least one component`);
+  const m = inner.match(DURATION_RE);
+  if (!m) bad(`Duration "${inner}" is not valid ISO-8601`);
+  // Must have at least one numeric component
+  if (!m.slice(1).some((v) => v !== undefined)) bad(`Duration "${inner}" must contain at least one component`);
+  // If T is present but no time component follows, it's invalid (e.g. "P1DT")
+  if (inner.includes("T") && !/[0-9][HMS]/.test(inner.split("T")[1] ?? "")) {
+    // Allow date-only durations without T; if T present, require at least one H/M/S.
+    // The regex already allows empty T section, so we enforce here.
+    const afterT = inner.split("T")[1];
+    if (afterT === "" ) bad(`Duration "${inner}" has empty time section after T`);
+  }
+  return new STFDuration(inner);
 }
 
 /** Encodes octets as canonical base64, for serialization (spec §13.7). */

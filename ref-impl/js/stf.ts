@@ -30,6 +30,9 @@ export {
   parseBinary,
   parseDate,
   parseDecimal,
+  parseDuration,
+  parseGeometry,
+  parseTime,
   parseTimestamp,
 } from "./constructors.ts";
 export {
@@ -58,9 +61,13 @@ export {
   ORDER,
   STFDate,
   STFDecimal,
+  STFDuration,
+  STFGeometry,
+  STFTime,
   STFTimestamp,
   type STFDirective,
   type STFDocument,
+  type STFGeometryType,
   type STFKind,
   type STFObject,
   type STFOffset,

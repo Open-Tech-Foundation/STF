@@ -4,11 +4,23 @@
 //! character sequence between the parentheses.
 
 use crate::error::Code;
-use crate::value::{Date, Decimal, Offset, Timestamp, Value};
+use crate::value::{Date, Decimal, Duration, Geometry, GeometryType, Offset, Time, Timestamp, Value};
 use num_bigint::{BigInt, BigUint};
 
-/// The five constructor names defined by STF 1.0, matched byte-for-byte.
-pub const NAMES: [&str; 5] = ["BIGINT", "DECIMAL", "DATE", "TIMESTAMP", "BINARY"];
+/// Constructor names — original five plus Geometry/Time/Duration.
+pub const NAMES: [&str; 11] = [
+    "BIGINT",
+    "DECIMAL",
+    "DATE",
+    "TIMESTAMP",
+    "BINARY",
+    "GEOMETRY",
+    "TIME",
+    "DURATION",
+    "Geometry",
+    "Time",
+    "Duration",
+];
 
 /// decimal128 coefficient precision (spec §10.2).
 const MAX_SIGNIFICANT_DIGITS: usize = 34;
@@ -32,13 +44,17 @@ pub fn is_reserved(name: &str) -> bool {
 }
 
 pub fn build(name: &str, payload: &str) -> Result<Value, BuildError> {
-    match name {
+    let upper = name.to_ascii_uppercase();
+    match upper.as_str() {
         "DECIMAL" => decimal(payload).map(Value::Decimal),
         "BIGINT" => bigint(payload).map(Value::BigInt),
         "DATE" => date(payload).map(Value::Date),
         "TIMESTAMP" => timestamp(payload).map(Value::Timestamp),
         "BINARY" => binary(payload).map(Value::Binary),
-        _ => Err((Code::UnknownConstructor, format!("`{}` is not an STF 1.0 constructor", name))),
+        "GEOMETRY" => geometry(payload).map(Value::Geometry),
+        "TIME" => time(payload).map(Value::Time),
+        "DURATION" => duration(payload).map(Value::Duration),
+        _ => Err((Code::UnknownConstructor, format!("`{}` is not an STF constructor", name))),
     }
 }
 
@@ -337,6 +353,334 @@ pub fn binary(payload: &str) -> Result<Vec<u8>, BuildError> {
         }
     }
     Ok(out)
+}
+
+fn is_valid_position(v: &serde_json::Value) -> bool {
+    if let serde_json::Value::Array(arr) = v {
+        if arr.len() != 2 {
+            return false;
+        }
+        for x in arr {
+            if !x.is_number() || !x.as_f64().map_or(false, |n| n.is_finite()) {
+                return false;
+            }
+        }
+        true
+    } else {
+        false
+    }
+}
+
+fn validate_geometry(ty: GeometryType, coords: &serde_json::Value) -> Result<(), BuildError> {
+    match ty {
+        GeometryType::Point => {
+            if !is_valid_position(coords) {
+                return Err(bad("Point coordinates must be [longitude, latitude]"));
+            }
+        }
+        GeometryType::LineString => {
+            if let serde_json::Value::Array(arr) = coords {
+                if arr.len() < 2 {
+                    return Err(bad("LineString requires at least 2 positions"));
+                }
+                for p in arr {
+                    if !is_valid_position(p) {
+                        return Err(bad("LineString coordinates must be positions"));
+                    }
+                }
+            } else {
+                return Err(bad("LineString requires at least 2 positions"));
+            }
+        }
+        GeometryType::Polygon => {
+            if let serde_json::Value::Array(rings) = coords {
+                if rings.is_empty() {
+                    return Err(bad("Polygon requires at least one ring"));
+                }
+                for ring in rings {
+                    if let serde_json::Value::Array(arr) = ring {
+                        if arr.len() < 4 {
+                            return Err(bad("Polygon ring must have at least 4 positions"));
+                        }
+                        for p in arr {
+                            if !is_valid_position(p) {
+                                return Err(bad("Polygon ring coordinates must be positions"));
+                            }
+                        }
+                        if arr.first() != arr.last() {
+                            return Err(bad("Polygon ring must be closed (first == last)"));
+                        }
+                    } else {
+                        return Err(bad("Polygon ring must be an array"));
+                    }
+                }
+            } else {
+                return Err(bad("Polygon requires at least one ring"));
+            }
+        }
+        GeometryType::MultiPoint => {
+            if let serde_json::Value::Array(arr) = coords {
+                if arr.is_empty() {
+                    return Err(bad("MultiPoint requires at least one position"));
+                }
+                for p in arr {
+                    if !is_valid_position(p) {
+                        return Err(bad("MultiPoint coordinates must be positions"));
+                    }
+                }
+            } else {
+                return Err(bad("MultiPoint requires at least one position"));
+            }
+        }
+        GeometryType::MultiLineString => {
+            if let serde_json::Value::Array(lines) = coords {
+                if lines.is_empty() {
+                    return Err(bad("MultiLineString requires at least one line"));
+                }
+                for line in lines {
+                    if let serde_json::Value::Array(arr) = line {
+                        if arr.len() < 2 {
+                            return Err(bad("MultiLineString line requires at least 2 positions"));
+                        }
+                        for p in arr {
+                            if !is_valid_position(p) {
+                                return Err(bad("MultiLineString coordinates must be positions"));
+                            }
+                        }
+                    } else {
+                        return Err(bad("MultiLineString line must be an array"));
+                    }
+                }
+            } else {
+                return Err(bad("MultiLineString requires at least one line"));
+            }
+        }
+        GeometryType::MultiPolygon => {
+            if let serde_json::Value::Array(polys) = coords {
+                if polys.is_empty() {
+                    return Err(bad("MultiPolygon requires at least one polygon"));
+                }
+                for poly in polys {
+                    if let serde_json::Value::Array(rings) = poly {
+                        if rings.is_empty() {
+                            return Err(bad("MultiPolygon polygon requires at least one ring"));
+                        }
+                        for ring in rings {
+                            if let serde_json::Value::Array(arr) = ring {
+                                if arr.len() < 4 {
+                                    return Err(bad("MultiPolygon ring must have at least 4 positions"));
+                                }
+                                for p in arr {
+                                    if !is_valid_position(p) {
+                                        return Err(bad("MultiPolygon ring coordinates must be positions"));
+                                    }
+                                }
+                                if arr.first() != arr.last() {
+                                    return Err(bad("MultiPolygon ring must be closed"));
+                                }
+                            } else {
+                                return Err(bad("MultiPolygon ring must be an array"));
+                            }
+                        }
+                    } else {
+                        return Err(bad("MultiPolygon polygon requires at least one ring"));
+                    }
+                }
+            } else {
+                return Err(bad("MultiPolygon requires at least one polygon"));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn geometry(payload: &str) -> Result<Geometry, BuildError> {
+    let trimmed = payload.trim();
+    if trimmed.is_empty() {
+        return Err(bad("Geometry payload is empty"));
+    }
+    let q = trimmed.chars().next().unwrap();
+    if q != '"' && q != '\'' {
+        return Err(bad("Geometry payload must start with quoted type string"));
+    }
+    // Find closing quote (not escaped)
+    let mut end = None;
+    let chars: Vec<char> = trimmed.chars().collect();
+    for i in 1..chars.len() {
+        if chars[i] == q && chars[i - 1] != '\\' {
+            end = Some(i);
+            break;
+        }
+    }
+    let end = end.ok_or_else(|| bad("Geometry type string is unterminated"))?;
+    let type_raw = &trimmed[..=end];
+    let type_str: String = serde_json::from_str(type_raw).map_err(|_| bad("Geometry type string is not valid JSON"))?;
+    let ty = GeometryType::parse(&type_str).ok_or_else(|| bad(format!("Geometry type `{}` is not supported", type_str)))?;
+    let rest = trimmed[end + 1..].trim();
+    if !rest.starts_with(',') {
+        return Err(bad("Geometry payload requires a comma after the type"));
+    }
+    let coord_text = rest[1..].trim();
+    if coord_text.is_empty() {
+        return Err(bad("Geometry payload missing coordinates"));
+    }
+    let coords: serde_json::Value = serde_json::from_str(coord_text).map_err(|_| bad("Geometry coordinates are not valid JSON"))?;
+    validate_geometry(ty, &coords)?;
+    Ok(Geometry::new(ty, coords))
+}
+
+pub fn time(payload: &str) -> Result<Time, BuildError> {
+    let trimmed = payload.trim();
+    if trimmed.is_empty() {
+        return Err(bad("Time payload is empty"));
+    }
+    let inner = if (trimmed.starts_with('"') && trimmed.ends_with('"')) || (trimmed.starts_with('\'') && trimmed.ends_with('\'')) {
+        let v: String = serde_json::from_str(trimmed).map_err(|_| bad("Time payload string is not valid"))?;
+        v
+    } else if trimmed.starts_with('"') || trimmed.starts_with('\'') {
+        return Err(bad("Time payload string is unterminated"));
+    } else {
+        trimmed.to_string()
+    };
+    // Validate HH:mm[:ss[.fraction]]
+    let parts: Vec<&str> = inner.split(':').collect();
+    if parts.len() < 2 || parts.len() > 3 {
+        return Err(bad(format!("Time \"{}\" is not valid", inner)));
+    }
+    let hour: u8 = parts[0].parse().map_err(|_| bad(format!("Time \"{}\" is not valid", inner)))?;
+    let minute: u8 = parts[1].parse().map_err(|_| bad(format!("Time \"{}\" is not valid", inner)))?;
+    if hour > 23 || minute > 59 {
+        return Err(bad(format!("Time \"{}\" is not valid", inner)));
+    }
+    if parts[0].len() != 2 || parts[1].len() != 2 {
+        return Err(bad(format!("Time \"{}\" is not valid", inner)));
+    }
+    let mut second: Option<u8> = None;
+    let mut fraction: Option<String> = None;
+    if parts.len() == 3 {
+        let sec_part = parts[2];
+        let (sec_str, frac_str) = if let Some(dot) = sec_part.find('.') {
+            (&sec_part[..dot], Some(&sec_part[dot + 1..]))
+        } else {
+            (sec_part, None)
+        };
+        if sec_str.len() != 2 {
+            return Err(bad(format!("Time \"{}\" is not valid", inner)));
+        }
+        let sec: u8 = sec_str.parse().map_err(|_| bad(format!("Time \"{}\" is not valid", inner)))?;
+        if sec > 59 {
+            return Err(bad(format!("Time \"{}\" is not valid", inner)));
+        }
+        second = Some(sec);
+        if let Some(f) = frac_str {
+            if f.is_empty() || f.len() > 9 || !f.chars().all(|c| c.is_ascii_digit()) {
+                return Err(bad(format!("Time \"{}\" is not valid", inner)));
+            }
+            fraction = Some(f.to_string());
+        }
+    }
+    Ok(Time { hour, minute, second, fraction })
+}
+
+pub fn duration(payload: &str) -> Result<Duration, BuildError> {
+    let trimmed = payload.trim();
+    if trimmed.is_empty() {
+        return Err(bad("Duration payload is empty"));
+    }
+    let inner = if (trimmed.starts_with('"') && trimmed.ends_with('"')) || (trimmed.starts_with('\'') && trimmed.ends_with('\'')) {
+        let v: String = serde_json::from_str(trimmed).map_err(|_| bad("Duration payload string is not valid"))?;
+        v
+    } else if trimmed.starts_with('"') || trimmed.starts_with('\'') {
+        return Err(bad("Duration payload string is unterminated"));
+    } else {
+        trimmed.to_string()
+    };
+    if inner == "P" || inner == "PT" {
+        return Err(bad(format!("Duration \"{}\" must contain at least one component", inner)));
+    }
+    if !inner.starts_with('P') {
+        return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+    }
+    // Validate ISO-8601 duration without regex: P[nY][nM][nW][nD][T[nH][nM][nS]]
+    let bytes = inner.as_bytes();
+    let mut i = 1usize;
+    let mut has_date = false;
+    let mut has_time = false;
+    let mut saw_t = false;
+    // Helper to parse number + unit
+    let mut expect_number = true;
+    let mut num_start = i;
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        if c == 'T' {
+            if saw_t {
+                return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+            }
+            if expect_number && i != num_start {
+                return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+            }
+            saw_t = true;
+            i += 1;
+            num_start = i;
+            expect_number = true;
+            continue;
+        }
+        if c.is_ascii_digit() || c == '.' {
+            // digits inside number
+            i += 1;
+            continue;
+        }
+        if matches!(c, 'Y' | 'M' | 'W' | 'D' | 'H' | 'S') {
+            if i == num_start {
+                return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+            }
+            let num_str = &inner[num_start..i];
+            // S may be decimal, others must be integer
+            if c != 'S' && num_str.contains('.') {
+                return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+            }
+            if c == 'S' && num_str.matches('.').count() > 1 {
+                return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+            }
+            // Validate number format is digits with optional fraction
+            if num_str.is_empty() || num_str == "." {
+                return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+            }
+            // Time components must be after T
+            if matches!(c, 'H' | 'M' | 'S') && c != 'M' {
+                // H,S must be after T; M ambiguous
+            }
+            if matches!(c, 'H' | 'S') && !saw_t {
+                return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+            }
+            if c == 'Y' && saw_t {
+                return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+            }
+            if c == 'W' && saw_t {
+                return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+            }
+            if c == 'D' && saw_t {
+                return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+            }
+            if saw_t { has_time = true; } else { has_date = true; }
+            i += 1;
+            num_start = i;
+            expect_number = true;
+            continue;
+        }
+        return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+    }
+    if has_date == false && has_time == false {
+        return Err(bad(format!("Duration \"{}\" must contain at least one component", inner)));
+    }
+    if saw_t && !has_time {
+        return Err(bad(format!("Duration \"{}\" has empty time section after T", inner)));
+    }
+    // Trailing number without unit
+    if num_start != bytes.len() {
+        return Err(bad(format!("Duration \"{}\" is not valid ISO-8601", inner)));
+    }
+    Ok(Duration(inner))
 }
 
 /// Encodes octets as canonical base64, for serialization (spec §13.7).

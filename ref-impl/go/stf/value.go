@@ -1,6 +1,7 @@
 package stf
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -23,6 +24,9 @@ const (
 	KindDate      Kind = "Date"
 	KindTimestamp Kind = "Timestamp"
 	KindBinary    Kind = "Binary"
+	KindGeometry  Kind = "Geometry"
+	KindTime      Kind = "Time"
+	KindDuration  Kind = "Duration"
 )
 
 // Value is any STF value.
@@ -41,6 +45,9 @@ const (
 //	Date       Date
 //	Timestamp  Timestamp
 //	Binary     []byte
+//	Geometry   *Geometry
+//	Time       Time
+//	Duration   Duration
 type Value interface{}
 
 // KindOf reports the STF kind of a host value.
@@ -68,6 +75,12 @@ func KindOf(v Value) Kind {
 		return KindTimestamp
 	case []byte:
 		return KindBinary
+	case *Geometry:
+		return KindGeometry
+	case Time:
+		return KindTime
+	case Duration:
+		return KindDuration
 	}
 	return Kind(fmt.Sprintf("<%T>", v))
 }
@@ -247,6 +260,50 @@ func (t Timestamp) Payload() string {
 
 func (t Timestamp) String() string { return t.Payload() }
 
+// GeometryType enumerates GeoJSON geometry types.
+type GeometryType string
+
+const (
+	GeometryPoint           GeometryType = "Point"
+	GeometryLineString      GeometryType = "LineString"
+	GeometryPolygon         GeometryType = "Polygon"
+	GeometryMultiPoint      GeometryType = "MultiPoint"
+	GeometryMultiLineString GeometryType = "MultiLineString"
+	GeometryMultiPolygon    GeometryType = "MultiPolygon"
+)
+
+// Geometry is a native STF spatial value.
+type Geometry struct {
+	Type        GeometryType `json:"type"`
+	Coordinates interface{}  `json:"coordinates"`
+}
+
+// Time is a wall time without date or offset.
+type Time struct {
+	Hour     int
+	Minute   int
+	Second   *int
+	Fraction string
+}
+
+// Payload returns HH:mm[:ss[.fraction]].
+func (t Time) Payload() string {
+	if t.Second == nil {
+		return fmt.Sprintf("%02d:%02d", t.Hour, t.Minute)
+	}
+	if t.Fraction != "" {
+		return fmt.Sprintf("%02d:%02d:%02d.%s", t.Hour, t.Minute, *t.Second, t.Fraction)
+	}
+	return fmt.Sprintf("%02d:%02d:%02d", t.Hour, t.Minute, *t.Second)
+}
+func (t Time) String() string { return t.Payload() }
+
+// Duration is an ISO-8601 duration string.
+type Duration string
+
+func (d Duration) Payload() string { return string(d) }
+func (d Duration) String() string  { return string(d) }
+
 // Directive is a document-level directive (spec §5.1). Metadata, not data.
 type Directive struct {
 	Name    string
@@ -322,6 +379,19 @@ func Equal(a, b Value) bool {
 			}
 		}
 		return true
+	case KindGeometry:
+		x, y := a.(*Geometry), b.(*Geometry)
+		if x.Type != y.Type {
+			return false
+		}
+		// Compare coordinates via JSON marshaling for simplicity.
+		xb, _ := json.Marshal(x.Coordinates)
+		yb, _ := json.Marshal(y.Coordinates)
+		return string(xb) == string(yb)
+	case KindTime:
+		return a.(Time) == b.(Time)
+	case KindDuration:
+		return a.(Duration) == b.(Duration)
 	}
 	return false
 }

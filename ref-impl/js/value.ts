@@ -17,7 +17,10 @@ export type STFKind =
   | "Decimal"
   | "Date"
   | "Timestamp"
-  | "Binary";
+  | "Binary"
+  | "Geometry"
+  | "Time"
+  | "Duration";
 
 export type STFObject = { [key: string]: STFValue };
 
@@ -32,7 +35,10 @@ export type STFValue =
   | STFDecimal
   | STFDate
   | STFTimestamp
-  | Uint8Array;
+  | Uint8Array
+  | STFGeometry
+  | STFTime
+  | STFDuration;
 
 /**
  * Authored member order for an object.
@@ -206,6 +212,101 @@ function pad(n: number, width: number): string {
   return String(n).padStart(width, "0");
 }
 
+/**
+ * Geometry type names as defined by GeoJSON / STF new.txt §3.
+ */
+export type STFGeometryType =
+  | "Point"
+  | "LineString"
+  | "Polygon"
+  | "MultiPoint"
+  | "MultiLineString"
+  | "MultiPolygon";
+
+/**
+ * Native STF Geometry primitive (new.txt §6).
+ *
+ * Coordinates use WGS84 longitude/latitude ordering [x, y] = [longitude, latitude]
+ * and are stored as native numbers.
+ */
+export class STFGeometry {
+  readonly type: STFGeometryType;
+  readonly coordinates: unknown;
+
+  constructor(type: STFGeometryType, coordinates: unknown) {
+    this.type = type;
+    this.coordinates = coordinates;
+  }
+
+  /** GeoJSON-compatible representation for `toJSON()`. */
+  toJSON(): { type: STFGeometryType; coordinates: unknown } {
+    return { type: this.type, coordinates: this.coordinates };
+  }
+
+  equals(other: unknown): boolean {
+    if (!(other instanceof STFGeometry)) return false;
+    if (other.type !== this.type) return false;
+    return JSON.stringify(other.coordinates) === JSON.stringify(this.coordinates);
+  }
+
+  toString(): string {
+    return `Geometry("${this.type}", ${JSON.stringify(this.coordinates)})`;
+  }
+}
+
+/**
+ * Time of day without a date (new.txt §16).
+ * Stored as validated payload string and decomposed fields.
+ */
+export class STFTime {
+  readonly hour: number;
+  readonly minute: number;
+  readonly second: number | null;
+  readonly fraction: string | null;
+
+  constructor(hour: number, minute: number, second: number | null, fraction: string | null) {
+    this.hour = hour;
+    this.minute = minute;
+    this.second = second;
+    this.fraction = fraction;
+  }
+
+  get payload(): string {
+    const base = `${pad(this.hour, 2)}:${pad(this.minute, 2)}`;
+    if (this.second === null) return base;
+    const sec = `:${pad(this.second, 2)}`;
+    const frac = this.fraction === null ? "" : `.${this.fraction}`;
+    return `${base}${sec}${frac}`;
+  }
+
+  equals(other: unknown): boolean {
+    return other instanceof STFTime && other.payload === this.payload;
+  }
+
+  toString(): string {
+    return this.payload;
+  }
+}
+
+/**
+ * ISO-8601 duration. The raw payload is preserved (e.g. "PT45M", "P1D").
+ */
+export class STFDuration {
+  readonly payload: string;
+
+  constructor(payload: string) {
+    this.payload = payload;
+  }
+
+  equals(other: unknown): boolean {
+    return other instanceof STFDuration && other.payload === this.payload;
+  }
+
+  toString(): string {
+    return this.payload;
+  }
+}
+
 /** A document-level directive (spec §5.1). Metadata, not data. */
 export interface STFDirective {
   name: string;
@@ -235,6 +336,9 @@ export function kindOf(value: STFValue): STFKind {
   if (value instanceof STFDecimal) return "Decimal";
   if (value instanceof STFTimestamp) return "Timestamp";
   if (value instanceof STFDate) return "Date";
+  if (value instanceof STFGeometry) return "Geometry";
+  if (value instanceof STFTime) return "Time";
+  if (value instanceof STFDuration) return "Duration";
   return "Object";
 }
 
@@ -289,5 +393,11 @@ export function equals(a: STFValue, b: STFValue): boolean {
       }
       return true;
     }
+    case "Geometry":
+      return (a as STFGeometry).equals(b);
+    case "Time":
+      return (a as STFTime).equals(b);
+    case "Duration":
+      return (a as STFDuration).equals(b);
   }
 }

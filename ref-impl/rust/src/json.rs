@@ -20,9 +20,14 @@ fn unrepresentable<T>(msg: impl Into<String>) -> Result<T> {
 }
 
 /// Converts a JSON document to STF. The root must be a JSON object.
+/// When `infer` is true, GeoJSON geometry objects are recognized as Geometry.
 pub fn from_json(json: &Json) -> Result<Value> {
+    from_json_with_infer(json, false)
+}
+
+pub fn from_json_with_infer(json: &Json, infer: bool) -> Result<Value> {
     match json {
-        Json::Object(_) => convert_from(json, "$"),
+        Json::Object(_) => convert_from(json, "$", infer),
         other => unrepresentable(format!(
             "an STF document root must be an object, but this JSON root is {}",
             json_kind(other)
@@ -41,14 +46,22 @@ fn json_kind(json: &Json) -> &'static str {
     }
 }
 
-fn convert_from(json: &Json, path: &str) -> Result<Value> {
+fn is_geojson_geometry(map: &serde_json::Map<String, Json>) -> bool {
+    if map.len() != 2 { return false; }
+    match (map.get("type"), map.get("coordinates")) {
+        (Some(Json::String(t)), Some(Json::Array(_))) => {
+            matches!(t.as_str(), "Point"|"LineString"|"Polygon"|"MultiPoint"|"MultiLineString"|"MultiPolygon")
+        }
+        _ => false,
+    }
+}
+
+fn convert_from(json: &Json, path: &str, infer: bool) -> Result<Value> {
     match json {
         Json::Null => Ok(Value::Null),
         Json::Bool(b) => Ok(Value::Bool(*b)),
         Json::Number(n) => {
             if let Some(i) = n.as_i64() {
-                // §7.2 makes STF numbers binary64. Rounding an integer that does not fit
-                // would change the document's meaning, so it is refused.
                 if (i as f64) as i64 != i {
                     return unrepresentable(format!(
                         "{}: integer {} is not exactly representable as binary64; \
@@ -69,8 +82,6 @@ fn convert_from(json: &Json, path: &str) -> Result<Value> {
                 return Ok(Value::Number(u as f64));
             }
             match n.as_f64() {
-                // Serde rejects NaN and infinity when reading JSON, so this only guards
-                // programmatically-built input.
                 Some(f) if f.is_finite() => Ok(Value::Number(f)),
                 _ => unrepresentable(format!("{}: {} is not an STF Number", path, n)),
             }
@@ -79,11 +90,19 @@ fn convert_from(json: &Json, path: &str) -> Result<Value> {
         Json::Array(items) => {
             let mut out = Vec::with_capacity(items.len());
             for (i, item) in items.iter().enumerate() {
-                out.push(convert_from(item, &format!("{}[{}]", path, i))?);
+                out.push(convert_from(item, &format!("{}[{}]", path, i), infer)?);
             }
             Ok(Value::Array(out))
         }
         Json::Object(map) => {
+            if infer && is_geojson_geometry(map) {
+                let t = map.get("type").unwrap().as_str().unwrap().to_string();
+                let coords = map.get("coordinates").unwrap().clone();
+                let payload = format!("\"{}\", {}", t, coords);
+                if let Ok(g) = crate::constructors::geometry(&payload) {
+                    return Ok(Value::Geometry(g));
+                }
+            }
             let mut out = Object::with_capacity(map.len());
             for (key, item) in map {
                 if key.is_empty() {
@@ -95,7 +114,7 @@ fn convert_from(json: &Json, path: &str) -> Result<Value> {
                         path, key
                     ));
                 }
-                let child = convert_from(item, &format!("{}.{}", path, key))?;
+                let child = convert_from(item, &format!("{}.{}", path, key), infer)?;
                 if !out.insert(key.clone(), child) {
                     return unrepresentable(format!("{}: duplicate key `{}`", path, key));
                 }
@@ -167,6 +186,14 @@ fn convert_to(value: &Value, path: &str, policy: TypedValuePolicy) -> Result<Jso
         Value::Date(d) => typed(d.payload(), "date"),
         Value::Timestamp(t) => typed(t.payload(), "timestamp"),
         Value::Binary(b) => typed(constructors::binary_to_base64(b), "binary"),
+        Value::Geometry(g) => {
+            let mut map = serde_json::Map::new();
+            map.insert("type".to_string(), Json::String(g.ty.as_str().to_string()));
+            map.insert("coordinates".to_string(), g.coordinates.clone());
+            return Ok(Json::Object(map));
+        }
+        Value::Time(t) => typed(t.payload(), "time"),
+        Value::Duration(d) => typed(d.payload().to_string(), "duration"),
     }
 }
 
@@ -202,6 +229,14 @@ pub fn to_tagged_json(value: &Value) -> Json {
         Value::Date(d) => tag("date", d.payload()),
         Value::Timestamp(t) => tag("ts", t.payload()),
         Value::Binary(b) => tag("bin", constructors::binary_to_base64(b)),
+        Value::Geometry(g) => {
+            let mut inner = serde_json::Map::new();
+            inner.insert("type".to_string(), Json::String(g.ty.as_str().to_string()));
+            inner.insert("coordinates".to_string(), g.coordinates.clone());
+            tag("geo", Json::Object(inner).to_string())
+        }
+        Value::Time(t) => tag("time", t.payload()),
+        Value::Duration(d) => tag("dur", d.payload().to_string()),
     }
 }
 

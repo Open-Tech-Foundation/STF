@@ -8,7 +8,7 @@ description: The eleven value kinds, why they must stay distinct, and how equali
 The data model is normative and defined independently of any host language. It is what makes
 "the same document" mean the same thing in Rust, JavaScript, Python, and Go.
 
-An STF value is exactly one of **eleven** kinds.
+An STF value is exactly one of **fourteen** kinds.
 
 | Kind | Description |
 | :--- | :--- |
@@ -23,6 +23,9 @@ An STF value is exactly one of **eleven** kinds.
 | Date | A wall date, with no time and no offset. |
 | Timestamp | An absolute instant, with a mandatory UTC offset. |
 | Binary | A finite sequence of octets, possibly empty. |
+| Geometry | Geographic/spatial geometry — Point, LineString, Polygon, MultiPoint, MultiLineString, MultiPolygon — WGS84 `[longitude, latitude]`. |
+| Time | Wall time of day without date or offset — `HH:mm` with optional `:ss` and `.fraction`. |
+| Duration | ISO-8601 duration — `P…` / `PT…`, calendar and clock components. |
 
 ## The kinds are mutually distinct
 
@@ -30,7 +33,7 @@ This is the rule the whole format exists to enforce. A String must not be repres
 indistinguishable from, any other kind — and no other kind may be represented as a String.
 
 In particular, an implementation **must not** encode `BigInt`, `Decimal`, `Date`, `Timestamp`,
-or `Binary` as a string carrying a marker prefix or any other in-band sentinel.
+`Binary`, `Geometry`, `Time`, or `Duration` as a string carrying a marker prefix or any other in-band sentinel.
 
 ```stf
 { price: DECIMAL(1.5) }        # a Decimal
@@ -58,6 +61,9 @@ three different values, and comparing across kinds is always unequal.
 | Decimal | **Scale-sensitive**: equal only if coefficient *and* scale match. |
 | Date, Timestamp | Equality of the written fields — the offset is preserved data. |
 | Binary | Equality of the octet sequence; the base64 spelling is not data. |
+| Geometry | Equality of `type` and deep `coordinates` — `[lon,lat]` numeric. |
+| Time | Equality of hour/minute/second/fraction fields — `Time("09:30")` ≠ `Time("09:30:00")`. |
+| Duration | Equality of the payload string — `Duration("P1Y")` ≠ `Duration("P12M")`. |
 | Array | Equal length, pairwise-equal elements, in order. |
 | Object | Equal key sets with pairwise-equal values. **Member order does not affect equality.** |
 

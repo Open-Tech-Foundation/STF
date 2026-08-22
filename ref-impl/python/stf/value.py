@@ -31,7 +31,20 @@ from dataclasses import dataclass, field
 from typing import Any, Union
 
 STFValue = Union[
-    None, bool, float, str, list, dict, int, "STFDecimal", "STFDate", "STFTimestamp", bytes
+    None,
+    bool,
+    float,
+    str,
+    list,
+    dict,
+    int,
+    "STFDecimal",
+    "STFDate",
+    "STFTimestamp",
+    bytes,
+    "STFGeometry",
+    "STFTime",
+    "STFDuration",
 ]
 
 
@@ -134,6 +147,53 @@ class STFTimestamp:
 
 
 @dataclass(frozen=True)
+class STFGeometry:
+    """Native STF Geometry primitive (new.txt §6).
+
+    Coordinates use WGS84 longitude/latitude ordering [x, y] = [longitude, latitude].
+    """
+
+    type: str
+    coordinates: Any
+
+    def __str__(self) -> str:
+        import json as _json
+
+        return f'Geometry("{self.type}", {_json.dumps(self.coordinates)})'
+
+
+@dataclass(frozen=True)
+class STFTime:
+    """Time of day without a date (new.txt §16)."""
+
+    hour: int
+    minute: int
+    second: int | None
+    fraction: str | None
+
+    @property
+    def payload(self) -> str:
+        base = f"{self.hour:02d}:{self.minute:02d}"
+        if self.second is None:
+            return base
+        frac = "" if self.fraction is None else f".{self.fraction}"
+        return f"{base}:{self.second:02d}{frac}"
+
+    def __str__(self) -> str:
+        return self.payload
+
+
+@dataclass(frozen=True)
+class STFDuration:
+    """ISO-8601 duration. Raw payload preserved (e.g. PT45M)."""
+
+    payload: str
+
+    def __str__(self) -> str:
+        return self.payload
+
+
+@dataclass(frozen=True)
 class STFDirective:
     """A document-level directive (spec §5.1). Metadata, not data."""
 
@@ -170,6 +230,12 @@ def kind_of(value: Any) -> str:
         return "Timestamp"
     if isinstance(value, STFDate):
         return "Date"
+    if isinstance(value, STFGeometry):
+        return "Geometry"
+    if isinstance(value, STFTime):
+        return "Time"
+    if isinstance(value, STFDuration):
+        return "Duration"
     if isinstance(value, list):
         return "Array"
     if isinstance(value, dict):

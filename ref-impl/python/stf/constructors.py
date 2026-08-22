@@ -7,10 +7,22 @@ character sequence between the parentheses.
 from __future__ import annotations
 
 from .errors import STFError
-from .value import STFDate, STFDecimal, STFOffset, STFTimestamp
+from .value import STFDate, STFDecimal, STFDuration, STFGeometry, STFOffset, STFTimestamp, STFTime
 
-#: The five constructor names of STF 1.0, matched byte-for-byte.
-CONSTRUCTOR_NAMES = ("BIGINT", "DECIMAL", "DATE", "TIMESTAMP", "BINARY")
+#: Constructor names — original five plus Geometry/Time/Duration extensions.
+CONSTRUCTOR_NAMES = (
+    "BIGINT",
+    "DECIMAL",
+    "DATE",
+    "TIMESTAMP",
+    "BINARY",
+    "GEOMETRY",
+    "TIME",
+    "DURATION",
+    "Geometry",
+    "Time",
+    "Duration",
+)
 
 #: decimal128 coefficient precision (spec §10.2).
 MAX_SIGNIFICANT_DIGITS = 34
@@ -55,17 +67,24 @@ def is_reserved_constructor(name: str) -> bool:
 
 
 def build(name: str, payload: str):
-    if name == "DECIMAL":
+    upper = name.upper()
+    if upper == "DECIMAL":
         return parse_decimal(payload)
-    if name == "BIGINT":
+    if upper == "BIGINT":
         return parse_bigint(payload)
-    if name == "DATE":
+    if upper == "DATE":
         return parse_date(payload)
-    if name == "TIMESTAMP":
+    if upper == "TIMESTAMP":
         return parse_timestamp(payload)
-    if name == "BINARY":
+    if upper == "BINARY":
         return parse_binary(payload)
-    raise PayloadError("ERR_UNKNOWN_CONSTRUCTOR", f"`{name}` is not an STF 1.0 constructor")
+    if upper == "GEOMETRY":
+        return parse_geometry(payload)
+    if upper == "TIME":
+        return parse_time(payload)
+    if upper == "DURATION":
+        return parse_duration(payload)
+    raise PayloadError("ERR_UNKNOWN_CONSTRUCTOR", f"`{name}` is not an STF constructor")
 
 
 def parse_decimal(payload: str) -> STFDecimal:
@@ -271,6 +290,171 @@ def parse_binary(payload: str) -> bytes:
     return bytes(out)
 
 
+def _is_valid_position(p) -> bool:
+    return (
+        isinstance(p, list)
+        and len(p) == 2
+        and isinstance(p[0], (int, float))
+        and isinstance(p[1], (int, float))
+        and abs(float(p[0])) != float("inf")
+        and abs(float(p[1])) != float("inf")
+        and str(p[0]) != "nan"
+        and str(p[1]) != "nan"
+    )
+
+
+_GEOMETRY_TYPES = ("Point", "LineString", "Polygon", "MultiPoint", "MultiLineString", "MultiPolygon")
+
+
+def _validate_geometry(type_str: str, coords) -> None:
+    if type_str not in _GEOMETRY_TYPES:
+        raise _bad(f"Geometry type `{type_str}` is not supported")
+    if type_str == "Point":
+        if not _is_valid_position(coords):
+            raise _bad("Point coordinates must be [longitude, latitude]")
+    elif type_str == "LineString":
+        if not isinstance(coords, list) or len(coords) < 2:
+            raise _bad("LineString requires at least 2 positions")
+        for p in coords:
+            if not _is_valid_position(p):
+                raise _bad("LineString coordinates must be positions")
+    elif type_str == "Polygon":
+        if not isinstance(coords, list) or len(coords) == 0:
+            raise _bad("Polygon requires at least one ring")
+        for ring in coords:
+            if not isinstance(ring, list) or len(ring) < 4:
+                raise _bad("Polygon ring must have at least 4 positions")
+            for p in ring:
+                if not _is_valid_position(p):
+                    raise _bad("Polygon ring coordinates must be positions")
+            if ring[0] != ring[-1]:
+                raise _bad("Polygon ring must be closed (first == last)")
+    elif type_str == "MultiPoint":
+        if not isinstance(coords, list) or len(coords) == 0:
+            raise _bad("MultiPoint requires at least one position")
+        for p in coords:
+            if not _is_valid_position(p):
+                raise _bad("MultiPoint coordinates must be positions")
+    elif type_str == "MultiLineString":
+        if not isinstance(coords, list) or len(coords) == 0:
+            raise _bad("MultiLineString requires at least one line")
+        for line in coords:
+            if not isinstance(line, list) or len(line) < 2:
+                raise _bad("MultiLineString line requires at least 2 positions")
+            for p in line:
+                if not _is_valid_position(p):
+                    raise _bad("MultiLineString coordinates must be positions")
+    elif type_str == "MultiPolygon":
+        if not isinstance(coords, list) or len(coords) == 0:
+            raise _bad("MultiPolygon requires at least one polygon")
+        for poly in coords:
+            if not isinstance(poly, list) or len(poly) == 0:
+                raise _bad("MultiPolygon polygon requires at least one ring")
+            for ring in poly:
+                if not isinstance(ring, list) or len(ring) < 4:
+                    raise _bad("MultiPolygon ring must have at least 4 positions")
+                for p in ring:
+                    if not _is_valid_position(p):
+                        raise _bad("MultiPolygon ring coordinates must be positions")
+                if ring[0] != ring[-1]:
+                    raise _bad("MultiPolygon ring must be closed")
+
+
+def parse_geometry(payload: str) -> STFGeometry:
+    """Payload: ``\"Type\", <coordinates_json>`` e.g. ``\"Point\", [80.27, 13.08]``."""
+    import json as _json
+
+    trimmed = payload.strip()
+    if not trimmed:
+        raise _bad("Geometry payload is empty")
+    if trimmed[0] not in ('"', "'"):
+        raise _bad("Geometry payload must start with quoted type string")
+    q = trimmed[0]
+    end = -1
+    for i in range(1, len(trimmed)):
+        if trimmed[i] == q and trimmed[i - 1] != "\\":
+            end = i
+            break
+    if end == -1:
+        raise _bad("Geometry type string is unterminated")
+    try:
+        type_str = _json.loads(trimmed[: end + 1])
+    except Exception:
+        raise _bad("Geometry type string is not valid JSON") from None
+    rest = trimmed[end + 1 :].strip()
+    if not rest.startswith(","):
+        raise _bad("Geometry payload requires a comma after the type")
+    coord_text = rest[1:].strip()
+    if not coord_text:
+        raise _bad("Geometry payload missing coordinates")
+    try:
+        coords = _json.loads(coord_text)
+    except Exception:
+        raise _bad("Geometry coordinates are not valid JSON") from None
+    _validate_geometry(type_str, coords)
+    return STFGeometry(type_str, coords)
+
+
+def parse_time(payload: str) -> STFTime:
+    import json as _json
+    import re as _re
+
+    trimmed = payload.strip()
+    if not trimmed:
+        raise _bad("Time payload is empty")
+    inner = trimmed
+    if (inner[0] == '"' and inner[-1] == '"') or (inner[0] == "'" and inner[-1] == "'"):
+        try:
+            inner = _json.loads(inner)
+        except Exception:
+            raise _bad("Time payload string is not valid") from None
+    elif inner[0] in ('"', "'"):
+        raise _bad("Time payload string is unterminated")
+    m = _re.match(r"^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.(\d{1,9}))?)?$", inner)
+    if not m:
+        raise _bad(f'Time "{inner}" is not valid (expected HH:mm[:ss[.fraction]])')
+    hour = int(m.group(1))
+    minute = int(m.group(2))
+    second = int(m.group(3)) if m.group(3) is not None else None
+    fraction = m.group(4)
+    return STFTime(hour, minute, second, fraction)
+
+
+_DURATION_RE = __import__("re").compile(
+    r"^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$"
+)
+
+
+def parse_duration(payload: str) -> STFDuration:
+    import json as _json
+
+    trimmed = payload.strip()
+    if not trimmed:
+        raise _bad("Duration payload is empty")
+    inner = trimmed
+    if (inner[0] == '"' and inner[-1] == '"') or (inner[0] == "'" and inner[-1] == "'"):
+        try:
+            inner = _json.loads(inner)
+        except Exception:
+            raise _bad("Duration payload string is not valid") from None
+    elif inner[0] in ('"', "'"):
+        raise _bad("Duration payload string is unterminated")
+    if inner in ("P", "PT"):
+        raise _bad(f'Duration "{inner}" must contain at least one component')
+    m = _DURATION_RE.match(inner)
+    if not m:
+        raise _bad(f'Duration "{inner}" is not valid ISO-8601')
+    if not any(v is not None for v in m.groups()):
+        raise _bad(f'Duration "{inner}" must contain at least one component')
+    if "T" in inner:
+        after = inner.split("T", 1)[1]
+        if after == "":
+            raise _bad(f'Duration "{inner}" has empty time section after T')
+        if not __import__("re").search(r"\d+[HMS]", after):
+            raise _bad(f'Duration "{inner}" has empty time section after T')
+    return STFDuration(inner)
+
+
 def binary_to_base64(data: bytes) -> str:
     """Encodes octets as canonical base64, for serialization (spec §13.7)."""
     out = []
@@ -299,5 +483,8 @@ __all__ = [
     "parse_binary",
     "parse_date",
     "parse_decimal",
+    "parse_duration",
+    "parse_geometry",
+    "parse_time",
     "parse_timestamp",
 ]

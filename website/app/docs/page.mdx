@@ -23,6 +23,9 @@ cannot disagree. Read here to learn the format; cite there.
   price_cap: DECIMAL(199.00),   # scale is data
   account_id: BIGINT(9007199254740993),
   signing_key: BINARY(SGVsbG8=),
+  boundary: Geometry("Polygon", [[[80.27,13.08],[80.28,13.08],[80.28,13.09],[80.27,13.08]]]),
+  opens: Time("09:30"),
+  ttl: Duration("PT45M"),
   regions: [`eu-west-1`, `us-east-1`],
 }
 ```
@@ -48,6 +51,9 @@ naming rule, or a comment in a wiki. STF puts the answer in the document.
   id: BIGINT(9007199254740993),
   price: DECIMAL(19.99),
   blob: BINARY(SGVsbG8=),
+  boundary: Geometry("Point", [80.27, 13.08]),
+  opens: Time("09:30"),
+  ttl: Duration("P1D"),
 }
 ```
 
@@ -64,8 +70,8 @@ documented code, and there is a canonical byte encoding for hashing and signing.
 ## Where to go next
 
 * **[Syntax](/docs/syntax)** — documents, keys, strings, numbers, comments, directives.
-* **[Data model](/docs/data-model)** — the eleven value kinds and how equality is defined.
-* **[Typed constructors](/docs/constructors)** — `DECIMAL`, `BIGINT`, `DATE`, `TIMESTAMP`, `BINARY`.
+* **[Data model](/docs/data-model)** — the fourteen value kinds and how equality is defined.
+* **[Typed constructors](/docs/constructors)** — `DECIMAL`, `BIGINT`, `DATE`, `TIMESTAMP`, `BINARY`, `Geometry`, `Time`, `Duration`.
 * **[Canonical form](/docs/canonical-form)** — one byte encoding per value, plus resource limits.
 * **[Error codes](/docs/errors)** — the full index.
 * **[Record streams](/docs/streams)** — `.stfs`, for append-only logs.

@@ -6,7 +6,7 @@
  * `"1.5"` is the in-band sentinel spec §3.1 forbids.
  */
 
-import { binaryToBase64 } from "./constructors.ts";
+import { binaryToBase64, parseGeometry } from "./constructors.ts";
 import { STFError } from "./errors.ts";
 import { formatNumber } from "./serialize.ts";
 import {
@@ -15,6 +15,9 @@ import {
   makeObject,
   STFDate,
   STFDecimal,
+  STFDuration,
+  STFGeometry,
+  STFTime,
   STFTimestamp,
   type STFObject,
   type STFValue,
@@ -29,13 +32,13 @@ function unrepresentable(detail: string): never {
 const IDENTIFIER = /^[A-Za-z0-9_-]+$/;
 
 /** Converts a JSON document to STF. The root must be a JSON object. */
-export function fromJSON(json: Json): STFObject {
+export function fromJSON(json: Json, opts: { infer?: boolean } = {}): STFObject {
   if (json === null || typeof json !== "object" || Array.isArray(json)) {
     unrepresentable(
       `an STF document root must be an object, but this JSON root is ${jsonKind(json)}`,
     );
   }
-  return convertFrom(json, "$") as STFObject;
+  return convertFrom(json, "$", opts) as STFObject;
 }
 
 function jsonKind(json: Json): string {
@@ -49,16 +52,33 @@ function jsonKind(json: Json): string {
   }
 }
 
-function convertFrom(json: Json, path: string): STFValue {
+const GEO_TYPES = new Set(["Point", "LineString", "Polygon", "MultiPoint", "MultiLineString", "MultiPolygon"]);
+
+function isGeoJSONGeometry(obj: Record<string, Json>): boolean {
+  if (typeof obj.type !== "string" || !GEO_TYPES.has(obj.type)) return false;
+  if (!Array.isArray(obj.coordinates)) return false;
+  return true;
+}
+
+function convertFrom(json: Json, path: string, opts: { infer?: boolean } = {}): STFValue {
   if (json === null) return null;
   if (typeof json === "boolean" || typeof json === "string") return json;
   if (typeof json === "number") {
-    // JSON.parse already yields binary64, so no precision is lost here that JSON.parse did
-    // not already lose. Non-finite values cannot come from JSON.parse.
     if (!Number.isFinite(json)) unrepresentable(`${path}: ${json} is not an STF Number`);
     return json;
   }
-  if (Array.isArray(json)) return json.map((item, i) => convertFrom(item, `${path}[${i}]`));
+  if (Array.isArray(json)) return json.map((item, i) => convertFrom(item, `${path}[${i}]`, opts));
+
+  const obj = json as Record<string, Json>;
+  // Inference: GeoJSON geometry objects become STF Geometry (new.txt §11)
+  if (opts.infer && isGeoJSONGeometry(obj) && Object.keys(obj).length === 2) {
+    const type = obj.type as string;
+    const coords = obj.coordinates as unknown;
+    try {
+      const payload = `"${type}", ${JSON.stringify(coords)}`;
+      return parseGeometry(payload);
+    } catch { /* fall through to plain object if validation fails */ }
+  }
 
   const entries: Array<[string, STFValue]> = [];
   for (const key of Object.keys(json)) {
@@ -66,7 +86,7 @@ function convertFrom(json: Json, path: string): STFValue {
     if (!IDENTIFIER.test(key)) {
       unrepresentable(`${path}: key \`${key}\` is not a valid STF identifier ([A-Za-z0-9_-]+)`);
     }
-    entries.push([key, convertFrom(json[key], `${path}.${key}`)]);
+    entries.push([key, convertFrom(json[key], `${path}.${key}`, opts)]);
   }
   return makeObject(entries);
 }
@@ -162,6 +182,13 @@ function convertTo(value: STFValue, path: string, policy: TypedValuePolicy): Jso
     case "Date": return typed((value as STFDate).payload, "date");
     case "Timestamp": return typed((value as STFTimestamp).payload, "timestamp");
     case "Binary": return typed(binaryToBase64(value as Uint8Array), "binary");
+    case "Geometry": {
+      const g = value as STFGeometry;
+      // GeoJSON-compatible output for interoperability (new.txt §7)
+      return { type: g.type, coordinates: g.coordinates } as unknown as Json;
+    }
+    case "Time": return typed((value as STFTime).payload, "time");
+    case "Duration": return typed((value as STFDuration).payload, "duration");
   }
 }
 
@@ -174,6 +201,7 @@ function convertTo(value: STFValue, path: string, policy: TypedValuePolicy): Jso
  */
 export function toTaggedJSON(value: STFValue): Json {
   const tag = (name: string, v: string): Json => ({ $: name, v });
+  const tagGeo = (type: string, coords: unknown): Json => ({ $: "geo", v: JSON.stringify({ type, coordinates: coords }) });
   switch (kindOf(value)) {
     case "Null": return null;
     case "Boolean": return value as boolean;
@@ -193,5 +221,11 @@ export function toTaggedJSON(value: STFValue): Json {
     case "Date": return tag("date", (value as STFDate).payload);
     case "Timestamp": return tag("ts", (value as STFTimestamp).payload);
     case "Binary": return tag("bin", binaryToBase64(value as Uint8Array));
+    case "Geometry": {
+      const g = value as STFGeometry;
+      return tagGeo(g.type, g.coordinates);
+    }
+    case "Time": return tag("time", (value as STFTime).payload);
+    case "Duration": return tag("dur", (value as STFDuration).payload);
   }
 }

@@ -11,10 +11,10 @@ import json
 import re
 from typing import Any
 
-from .constructors import binary_to_base64
+from .constructors import binary_to_base64, parse_geometry
 from .errors import STFError
 from .serialize import format_number
-from .value import kind_of
+from .value import STFGeometry, kind_of
 
 _IDENTIFIER = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -26,13 +26,13 @@ def _unrepresentable(detail: str) -> STFError:
     return STFError("ERR_UNREPRESENTABLE", detail)
 
 
-def from_json(data: Any) -> dict:
+def from_json(data: Any, *, infer: bool = False) -> dict:
     """Converts a decoded JSON document to STF. The root must be a JSON object."""
     if not isinstance(data, dict):
         raise _unrepresentable(
             f"an STF document root must be an object, but this JSON root is {_json_kind(data)}"
         )
-    return _convert_from(data, "$")
+    return _convert_from(data, "$", infer)
 
 
 def _json_kind(data: Any) -> str:
@@ -49,12 +49,17 @@ def _json_kind(data: Any) -> str:
     return "an object"
 
 
-def _convert_from(data: Any, path: str):
+_GEO_TYPES = {"Point", "LineString", "Polygon", "MultiPoint", "MultiLineString", "MultiPolygon"}
+
+
+def _is_geojson_geometry(obj: dict) -> bool:
+    return isinstance(obj.get("type"), str) and obj["type"] in _GEO_TYPES and isinstance(obj.get("coordinates"), list)
+
+
+def _convert_from(data: Any, path: str, infer: bool = False):
     if data is None or isinstance(data, (bool, str)):
         return data
     if isinstance(data, int):
-        # §7.2: STF numbers are binary64. Rounding an integer that does not fit would change
-        # the document's meaning, so it is refused with the spelling to use instead.
         if abs(data) > _EXACT_INT_LIMIT:
             raise _unrepresentable(
                 f"{path}: integer {data} is not exactly representable as binary64; "
@@ -66,8 +71,14 @@ def _convert_from(data: Any, path: str):
             raise _unrepresentable(f"{path}: {data} is not an STF Number")
         return data
     if isinstance(data, list):
-        return [_convert_from(item, f"{path}[{i}]") for i, item in enumerate(data)]
+        return [_convert_from(item, f"{path}[{i}]", infer) for i, item in enumerate(data)]
     if isinstance(data, dict):
+        if infer and _is_geojson_geometry(data) and len(data) == 2:
+            try:
+                payload = f'"{data["type"]}", {json.dumps(data["coordinates"])}'
+                return parse_geometry(payload)
+            except Exception:
+                pass
         out: dict = {}
         for key, item in data.items():
             if not isinstance(key, str):
@@ -78,18 +89,18 @@ def _convert_from(data: Any, path: str):
                 raise _unrepresentable(
                     f"{path}: key `{key}` is not a valid STF identifier ([A-Za-z0-9_-]+)"
                 )
-            out[key] = _convert_from(item, f"{path}.{key}")
+            out[key] = _convert_from(item, f"{path}.{key}", infer)
         return out
     raise _unrepresentable(f"{path}: {type(data).__name__} has no STF representation")
 
 
-def from_json_text(text: str) -> dict:
+def from_json_text(text: str, *, infer: bool = False) -> dict:
     """Parses JSON text and converts it.
 
     ``json.loads`` yields Python ``int`` for integer literals, so an oversized integer would
     otherwise be silently narrowed on conversion; :func:`from_json` refuses it instead.
     """
-    return from_json(json.loads(text))
+    return from_json(json.loads(text), infer=infer)
 
 
 #: Refuse typed values (the default), or write their payload as a JSON string (lossy).
@@ -135,6 +146,12 @@ def _convert_to(value, path: str, policy: str):
         return typed(value.payload, "timestamp")
     if kind == "Binary":
         return typed(binary_to_base64(bytes(value)), "binary")
+    if kind == "Geometry":
+        return {"type": value.type, "coordinates": value.coordinates}
+    if kind == "Time":
+        return typed(value.payload, "time")
+    if kind == "Duration":
+        return typed(value.payload, "duration")
     raise _unrepresentable(f"{path}: {kind} has no JSON representation")
 
 
@@ -165,4 +182,12 @@ def to_tagged_json(value):
         return {"$": "ts", "v": value.payload}
     if kind == "Binary":
         return {"$": "bin", "v": binary_to_base64(bytes(value))}
+    if kind == "Geometry":
+        import json as _json
+
+        return {"$": "geo", "v": _json.dumps({"type": value.type, "coordinates": value.coordinates})}
+    if kind == "Time":
+        return {"$": "time", "v": value.payload}
+    if kind == "Duration":
+        return {"$": "dur", "v": value.payload}
     raise _unrepresentable(f"{kind} has no tagged-JSON encoding")

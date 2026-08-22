@@ -12,6 +12,8 @@ the reference implementations may change incompatibly at any time.
 
 ### Added
 
+- **STF Primitive Extensions — Geometry, Time, Duration** (`new.txt`): three new native semantic primitives preserving human-readability, fast parsing, and GeoJSON/ISO-8601 interoperability. Each implementation (`ref-impl/js`, `ref-impl/python`, `ref-impl/rust`, `ref-impl/go`) now offers `Geometry("Point"|"LineString"|"Polygon"|"MultiPoint"|"MultiLineString"|"MultiPolygon", coordinates)` (WGS84 `[lon,lat]`, closed rings, validation for nesting/closure), `Time("HH:mm"[:ss[.fraction]])` (00-23/00-59, no zone) and `Duration("P…")` (ISO-8601 `P[nY][nM][nW][nD][T[nH][nM][nS]]`). Serialization round-trips (`parse(serialize(v))≡v`), `toJSON()` emits GeoJSON `{type,coordinates}` for Geometry and payload strings for Time/Duration, and `fromJSON(...,{infer:true})`/`from_json(...,infer=True)`/`from_json_with_infer(...,true)` opt-in discovers GeoJSON geometry objects without cost on the hot path. Tagged JSON adds `$geo/$time/$dur`.
+- Coordinate handling documented as `[longitude,latitude]` WGS84/EPSG:4326; future CRS support explicitly deferred.
 - **`stf lsp` — a Language Server Protocol server** (`ref-impl/rust/src/lsp.rs`), replacing the
   editor tooling the deleted ESLint and Prettier plugins used to provide, and doing it for every
   LSP-capable editor rather than only JavaScript projects. It speaks LSP 3.17 over stdio and is
